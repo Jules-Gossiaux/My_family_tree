@@ -129,9 +129,9 @@ Les données vivent donc **hors du dépôt**, dans un dossier unique, choisi par
 D:\Genealogie\
 ├── data\famille.db            base SQLite (plus ses -wal et -shm tant qu'elle est ouverte)
 ├── medias\
-│   ├── photos\1923\...        originaux, jamais retouchés
-│   ├── documents\actes\...    scans d'actes, lettres, livrets
-│   └── vignettes\...          générées, supprimables
+│   ├── photos\1923\...        originaux, jamais retouchés, rangés à l'année lue sur le fichier
+│   ├── documents\1923\...     scans d'actes, lettres, livrets — même rangement que les photos
+│   └── vignettes\1923\...     générées par le navigateur, supprimables
 ├── scans_bruts\               les scans tels quels, jamais modifiés
 ├── sauvegardes\               ZIP datés automatiques
 ├── exports\                   posters, livres
@@ -274,7 +274,8 @@ jour de doute sur les clés — mais toutes ne sont pas encore nourries. Ce qui 
 | Table | Écriture |
 |---|---|
 | `person`, `couple`, `parent_child`, `event`, `name_variant` | remplies et lues par l'interface |
-| `branch`, `place`, `note`, `source`, `media`, `media_person` | posées, traversées par l'export JSON, **rien ne les remplit** : les branches colorées viennent en passe 3, les médias en passe 4, les notes et les sources en passe 5 |
+| `media`, `media_person` | **remplies et lues depuis la passe 4** : le bac, la galerie d'une personne, le portrait |
+| `branch`, `place`, `note`, `source` | posées, traversées par l'export JSON, **rien ne les remplit** : les branches colorées viennent en passe 3, les notes et les sources en passe 5 |
 | `media_event` | posée, et absente de l'export : le rattachement d'un média à un événement se joue en passe 5 |
 
 L'export JSON porte donc des listes vides plutôt que de les inventer, et une table vide n'est pas une
@@ -314,8 +315,8 @@ L'écran central. Cliquer sur une personne ouvre **tout** ce qui la concerne, en
 - **comment elle est liée à toi** (« cousine issue de germain, par les Gossiaux »), en une phrase — le
   calculateur de parenté du §4.5 la livre en passe 7 ; en attendant la fiche donne les liens directs
 - événements de sa vie, dans l'ordre
-- toutes ses photos, dans l'ordre chronologique (passe 4)
-- tous ses documents (actes, lettres) (passe 4, rattachés aussi à un événement : passe 5)
+- toutes ses photos et tous ses documents, **dans l'ordre chronologique** — la vie se lit du plus ancien
+  au plus récent, une date inconnue se range à la fin (§8.4 pour l'import)
 - ses notes (passe 5)
 - ses relations (parents, fratrie, unions, enfants) cliquables
 - ses sources et niveaux de confiance (passe 5)
@@ -324,7 +325,10 @@ Ce que la fiche sait déjà faire : un en-tête avec nom, nom de naissance, surn
 sont écrites ; une section « Vie » qui range les événements dans l'ordre ; quatre sections de relations —
 Parents, Unions, Fratrie, Enfants — où chaque nom est cliquable ; un bouton « Rattacher… » pour relier
 deux personnes déjà saisies ; la modification en place ; et la suppression confirmée, y compris par la
-touche Suppr.
+touche Suppr. Depuis la passe 4, elle est aussi une galerie : glisser des fichiers dessus les importe et
+les rattacher à cette personne, chaque vignette s'ouvre en grand dans la visionneuse, la légende et la
+date lue se corrigent là, « Faire le portrait » donne à cette image le visage de la case et de l'en-tête,
+et « Retirer de ce dossier » rend le fichier au bac sans rien effacer.
 
 ### 8.3 L'annuaire
 
@@ -340,9 +344,28 @@ vient avec la passe 7, quand les filtres et les branches lui donnent de quoi êt
 
 Zone où l'on dépose en vrac photos et documents scannés, sans encore savoir qui est dessus.
 Rattachement ultérieur, seul ou par lot (« ajouter Marie à ces 20 photos »).
-Sans cet écran, le projet se bloque dès la première boîte à chaussures. **Passe 4** — c'est le premier
-écran de cette passe, parce que le dépôt en vrac et le rattachement tardif sont deux fonctions différentes
-et que la seconde seule ne sauve personne.
+Sans cet écran, le projet se bloque dès la première boîte à chaussures. **En place** depuis la passe 4.
+
+Ce que l'écran fait aujourd'hui :
+
+- **déposer** — glisser des fichiers sur la zone, ou les choisir par le bouton. Quarante fichiers au
+  plus par passage, et ce qui dépasse est dit plutôt qu'avidé. JPEG, PNG, WebP, GIF et PDF sont pris ;
+  un autre format est refusé en nommant les reconnus ; un fichier de plus de 60 Mo est refusé avant
+  d'être écrit ;
+- **reconnaître un doublon** — la photo déjà dans le dossier n'est pas écrite une seconde fois, et le
+  lot le annonce (« 3 ajoutés, 1 déjà dans le dossier ») au lieu de compter deux fois la même image ;
+- **dater ce qu'on ne sait pas dater** — la date du fichier sur le disque sert de première hypothèse ;
+  elle se corrige ensuite dans la visionneuse, avec les quatre colonnes d'une date floue ;
+- **rattacher par lot** — cocher plusieurs personnes, un seul bouton. Une photo de groupe appartient
+  autant à chacun : c'est la table `media_person`, pas une colonne `person_id` ;
+- **ouvrir en grand** — la visionneuse suit l'image par son identifiant : corriger une date réordonne la
+  galerie chronologiquement, le lecteur reste sur la photo qu'il montrait ;
+- **détacher ou supprimer** — détacher rend le fichier au bac, supprimer est le seul geste de
+  l'application qui efface des octets sur le disque et le demande deux fois.
+
+Le compteur de l'en-tête donne ce qui attend un rattachement. Un document sans vignette — un PDF, ou
+une image que le navigateur n'a pas su décoder — entre sans aperçu, avec son nom en travers : refuser
+une preuve pour un problème d'affichage serait un mauvais échange.
 
 ### 8.5 Questions ouvertes
 
@@ -381,9 +404,10 @@ la même photo peut fournir le portrait de plusieurs personnes, avec des cadrage
 Sans cet outil, un poster avec portraits est impossible à produire proprement.
 
 Les trois colonnes qui stockent le cadrage (`crop_x`, `crop_y`, `crop_size` dans `media_person`) sont déjà
-posées. L'outil, lui, est découpé en deux : la passe 4 importe les photos et choisit un portrait, avec un
-cadrage centré par défaut ; le cadre interactif arrive en **passe 6**, avec le poster qui en a vraiment
-besoin. Le construire avant, ce serait dessiner une poignée pour une porte qui n'existe pas encore.
+posées et restent **vides**. L'outil est découpé en deux : la passe 4, faite, importe les photos et choisit
+le portrait d'une personne — le cadrage centré est alors celui du navigateur (`object-fit: cover`), rien n'est
+mémorisé par personne ; le cadre déplaçable et zoomable arrive en **passe 6**, avec le poster qui en a
+vraiment besoin. Le construire avant, ce serait dessiner une poignée pour une porte qui n'existe pas encore.
 
 ## 9. Ordre de construction
 
@@ -397,7 +421,7 @@ d'utilisable.
 | **1** | Saisie rapide au clavier, dates floues, unions, demi-frères | La famille se saisit pour de vrai | faite |
 | **2** | Sauvegarde automatique en ZIP daté, réglages, export JSON, restauration | Les données ne peuvent plus être perdues | faite |
 | **3** | Arbre de descendance, blocs couples, zoom, recentrer, branches colorées | Le projet devient réel et beau | à faire |
-| **4** | Médias : import, vignettes, bac d'entrée, rattachement par lot, choix du portrait | Les visages arrivent | à faire |
+| **4** | Médias : import, vignettes, bac d'entrée, rattachement par lot, choix du portrait | Les visages arrivent | faite |
 | **5** | Fiche complète : dossier de vie, chronologie, notes, documents | Cliquer sur quelqu'un raconte sa vie | à faire |
 | **6** | Poster : deux modèles, avec portraits ; cadre de recadrage interactif | Un objet à offrir | à faire |
 | **7** | Calculateur de parenté, questions ouvertes, recherche approfondie, filtres, annuaire | L'outil devient confortable | à faire |
@@ -425,6 +449,8 @@ viennent ensuite, sur un v1 qui marche — elles rendent l'outil confortable et 
 | Calculateur de parenté | **Passe 7**, plus la ligne « comment elle est liée à toi » de la fiche (§4.5, §8.2) |
 | GEDCOM | Export en **passe 8**, import en v2 (§8.7) |
 | Vignettes | Générées **côté navigateur** dans un canvas, à l'import. Pas de `sharp` : un second binaire à rebuilder à chaque version de Node (§5) |
+| Import d'un média | **Octets bruts**, original jamais retouché, écrit en `.part` puis renommé sous `medias/<type>/<année>/` ; doublons reconnus à l'empreinte `sha256` ; les fichiers ne sont relus que par leur identifiant, revalidé contre le dossier de données |
+| Sortie d'un média | **Détacher n'est pas supprimer** : détacher rend au bac, supprimer efface les deux fichiers et se confirme deux fois (§8.4) |
 | Tables des unions | Nommées `couple`, avec `couple_id` partout et les membres en `ON DELETE SET NULL` (§7.2) |
 | Recharger une archive | Par `restore.bat`, **application fermée** : contrôle, comparaison, `OUI`, copie de sûreté, échange par renommage (§6.4) |
 

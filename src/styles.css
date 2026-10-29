@@ -961,6 +961,340 @@ input::placeholder {
   white-space: nowrap;
 }
 
+/* ---------- photos et documents ---------- */
+
+.badge {
+  display: inline-block;
+  min-width: 17px;
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--gold);
+  color: #191307;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  vertical-align: 1px;
+}
+
+.dialog-inbox {
+  max-width: 880px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.dropzone {
+  margin-top: 6px;
+  padding: 22px 18px;
+  border: 1px dashed var(--line-2);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dropzone p {
+  margin: 0;
+}
+
+.dropzone.is-dragging,
+.media-drop.is-dragging {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  color: var(--text);
+}
+
+.dropzone input[type='file'],
+.media-drop input[type='file'] {
+  display: none;
+}
+
+.upload-list {
+  max-height: 150px;
+  overflow-y: auto;
+  margin: 12px 0 0;
+  padding: 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.upload-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.upload-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.upload-state {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--dim);
+}
+
+.upload-item.is-busy .upload-state {
+  color: var(--muted);
+}
+
+.upload-item.is-done .upload-state {
+  color: var(--gold);
+}
+
+/* Un doublon n'est pas un échec : rien n'a été écrit une seconde fois. */
+.upload-item.is-dup {
+  background: rgba(154, 143, 130, 0.1);
+}
+
+.upload-item.is-dup .upload-state {
+  color: var(--muted);
+}
+
+.upload-item.is-fail {
+  background: rgba(196, 115, 95, 0.12);
+}
+
+.upload-item.is-fail .upload-state {
+  color: var(--danger);
+}
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.media-tile {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.media-tile:hover {
+  border-color: var(--line-2);
+  background: var(--surface-2);
+}
+
+.media-tile.is-selected,
+.media-tile.is-portrait {
+  border-color: var(--gold);
+}
+
+.media-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.media-open:hover {
+  background: none;
+}
+
+.media-tile img,
+.media-placeholder {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+.media-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.media-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 7px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.media-pick input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+
+.media-flag {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 3px 6px;
+  background: rgba(16, 14, 12, 0.8);
+  color: var(--text);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-tile.is-portrait .media-flag {
+  color: var(--gold);
+}
+
+.media-drop {
+  padding: 4px;
+  margin: 0 -4px;
+  border: 1px dashed transparent;
+  border-radius: 12px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.inbox-attach {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 7, 6, 0.88);
+}
+
+.lightbox-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  max-width: 92vw;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.lightbox-image {
+  display: block;
+  max-width: 100%;
+  max-height: 58vh;
+  border-radius: 10px;
+  background: #000;
+  object-fit: contain;
+}
+
+.lightbox-pdf {
+  width: min(820px, 90vw);
+  height: 58vh;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.lightbox-caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.lightbox-date,
+.lightbox-persons {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lightbox-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.lightbox-count {
+  min-width: 54px;
+  font-size: 12px;
+  color: var(--dim);
+  text-align: center;
+}
+
+.lightbox-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.media-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  flex-basis: 100%;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.media-edit .field {
+  flex: 1 1 190px;
+}
+
+.media-edit-foot {
+  display: flex;
+  flex-basis: 100%;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.media-edit .dialog-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 /* ---------- barres de défilement ---------- */
 
 .sheet::-webkit-scrollbar {
