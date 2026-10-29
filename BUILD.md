@@ -1,6 +1,6 @@
 # Plan de construction
 
-Ce document détaille les passes 0 et 1, et suit l'avancement. La vision et le modèle de données
+Ce document détaille les passes 0, 1 et 2, et suit l'avancement. La vision et le modèle de données
 sont dans [`SPEC.md`](SPEC.md).
 
 ## Principe
@@ -12,7 +12,7 @@ version minuscule mais complète (« balle traçante »), puis on épaissit.
 |---|---|---|
 | 0 | Socle : base, ajout de personnes, arbre minimal, fiche minimale | en cours |
 | 1 | Saisie rapide, dates floues, couples, demi-frères | en cours |
-| 2 | Sauvegarde automatique en ZIP daté | à faire |
+| 2 | Sauvegarde automatique en ZIP daté | en cours |
 | 3 | Arbre de descendance abouti, branches colorées | à faire |
 | 4 | Médias : import, vignettes, bac d'entrée, recadrage portrait | à faire |
 | 5 | Fiche complète : dossier de vie, chronologie, notes | à faire |
@@ -26,7 +26,10 @@ server/          API HTTP + accès SQLite
   config.ts      résolution du dossier de données
   db.ts          ouverture de la base, application du schéma
   dates.ts       analyse des dates floues
+  migrations.ts  ajustements du schéma pour les bases déjà remplies
+  notices.ts     ce que le serveur sait et doit afficher
   relations.ts   rattachement d'une personne à une autre, avec ses refus
+  backup.ts      archive ZIP datée, au démarrage et pendant la session
   index.ts       routes
   schema.sql     schéma complet
 shared/          types partagés serveur / client
@@ -69,11 +72,55 @@ Le serveur sert l'API et, en production, le front compilé par Vite. Un seul pro
 - Un port déjà pris (double démarrage) donne un message en français et un code de sortie non nul,
   que `start.bat` traduit par une fenêtre qui reste lisible au lieu de se refermer.
 
+## Le dossier de données
+
+`server/config.ts` le résout dans cet ordre : variable `FAMILY_DATA_DIR`, puis `config.local.json`
+à la racine du projet, puis `D:\Genealogie` sous Windows (créé au besoin).
+
+Il n'y a **plus de repli sur le dossier du projet**. Écrire une base là où le code est rangé, c'est
+l'exposer à un déplacement, un `git clean`, ou un jour à une version publique du dépôt. Et ouvrir un
+arbre vide sans le dire, c'est se faire peur : on croit ses données perdues alors qu'elles sont
+ailleurs. Sur les systèmes où aucun choix ne peut être deviné, l'application s'arrête en écrivant
+les deux façons d'indiquer le dossier.
+
+Le chemin retenu est affiché au démarrage (`Données : …`) et repris dans l'en-tête de l'interface.
+
+## Sauvegarde des données
+
+| Moment | Ce qui est archivé | Pourquoi |
+|---|---|---|
+| Au démarrage | base + médias + réglages, si la dernière archive a plus de 6 h | ce qu'une session d'hier a écrit ne doit tenir qu'une nuit |
+| Toutes les 30 minutes | idem, seulement si quelque chose a été écrit | une après-midi de saisie ne dépend pas du seul bouton cliqué |
+| Bouton « Sauvegarder » | idem, à la demande | avant une manipulation risquée |
+
+Vingt archives sont gardées, nommées `famille-AAAA-MM-JJ-HHMM-motif.zip`, écrites dans un fichier
+`.part` puis renommées : une coupure laisse l'archive précédente intacte, jamais une archive à
+moitié écrite.
+
+Le compteur `total_changes()` de SQLite décide si la session a vraiment écrit : sans lui, chaque
+vérification produirait une archive identique et chasserait les vingt gardées.
+
+Un échec de sauvegarde n'est pas seulement loggé : il passe par `server/notices.ts` et s'affiche
+en bandeau. Une sauvegarde que l'on croit avoir est pire qu'une sauvegarde refusée.
+
+## Faire évoluer le schéma
+
+`schema.sql` est écrit avec des `CREATE TABLE IF NOT EXISTS` : il pose les tables d'une base neuve
+mais ne rattrape pas une base déjà créée. Les ajustements entre versions passent donc par
+`server/migrations.ts`, et `PRAGMA user_version` sert de calendrier — une migration ne se rejoue
+pas, et une base ancienne traverse les versions dans l'ordre.
+
+**Migration 1 — un couple survit à la suppression d'un de ses membres.** Avant, `partner_a` et
+`partner_b` étaient en `ON DELETE CASCADE` : effacer une personne mal orthographiée détruisait son
+union, ses actes de mariage, et par `SET NULL` la mémoire de l'union dont venaient les enfants. Les
+deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
+`pruneEmptyCouples()` que quand plus rien ne la justifie — ni un enfant, ni un acte, ni un membre.
+
 ## Contrat d'API (passes 0 et 1)
 
 | Méthode | Route | Rôle |
 |---|---|---|
-| GET | `/api/state` | dossier de données, statistiques, personne racine |
+| GET | `/api/state` | dossier de données, statistiques, personne racine, dernière archive, avertissements |
 | GET | `/api/graph` | personnes, couples, liens parent-enfant, en une requête |
 | GET | `/api/persons/:id` | fiche complète : relations et événements |
 | POST | `/api/persons` | création, avec rattachement optionnel |
@@ -133,7 +180,20 @@ rangé dans l'union.
 - [x] branches non rattachées visibles dans l'arbre
 - [x] rattachement de deux personnes déjà existantes, sans union inventée
 - [x] une case par personne, conjoints dessinés de part et d'autre
-- [ ] suppression avec confirmation
+- [x] suppression avec confirmation
+
+## Passe 2 — sauvegarde
+
+- [x] archive ZIP datée : base, médias, réglages, avec mode d'emploi dans l'archive
+- [x] sauvegarde au démarrage si la dernière est trop ancienne
+- [x] sauvegarde pendant la session dès que la base a changé
+- [x] bouton « Sauvegarder » et date de la dernière archive dans l'en-tête
+- [x] avertissements à l'écran quand une sauvegarde échoue ou qu'un réglages est abîmé
+- [x] un couple survit à la suppression d'un de ses membres (migration 1)
+- [ ] écran Réglages : dossier de données, personne de référence, dossier de copie externe
+- [ ] copie de la sauvegarde vers un dossier extérieur (disque ou clé)
+- [ ] export JSON de l'arbre
+- [ ] restauration depuis une archive
 
 ## Limites connues
 
@@ -153,8 +213,17 @@ rangé dans l'union.
 Résolu : une personne ayant plusieurs unions n'apparaît plus qu'une seule fois, ses conjoints étant
 dessinés dans le même bloc `[conjoint] [personne] [conjoint]`.
 
+À assumer, ce n'est pas un bug : supprimer une personne emporte ses liens de parenté. Ses enfants
+gardent l'autre parent et l'union dont ils sont issus, mais le parent effacé ne revient que par une
+sauvegarde.
+
 ## Conventions
 
 - Interface et code en français pour les libellés, anglais pour les noms de variables et de tables
   (cohérence avec l'écosystème, lisibilité pour un futur contributeur).
 - Aucune donnée familiale dans le dépôt. Le dossier de données est hors du projet.
+- Pour tester sans toucher aux vraies données, on démarre sur un dossier temporaire :
+  `FAMILY_DATA_DIR=<dossier vide hors du projet> PORT=4599 npm start`. Sans ces deux variables,
+  `npm start` ouvre `D:\Genealogie`, c'est-à-dire l'arbre de la maison.
+- Les tests (`npm test`) écrivent chacun dans leur propre dossier temporaire : ils ne peuvent pas
+  atteindre une vraie base, et chaque fichier a son processus.

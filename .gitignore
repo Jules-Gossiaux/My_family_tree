@@ -10,6 +10,8 @@ out/
 .env.*
 config.local.json
 *.local.json
+# Réglages écrits par l'application dans le dossier de données — jamais dans le dépôt.
+config.json
 
 # Données familiales — ne doivent JAMAIS être versionnées
 data/

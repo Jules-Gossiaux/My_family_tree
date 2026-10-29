@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import { DB_PATH, ensureLayout } from './config';
+import { runMigrations } from './migrations';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,6 +43,9 @@ db.pragma('foreign_keys = ON');
 
 const schema = fs.readFileSync(path.join(here, 'schema.sql'), 'utf8');
 db.exec(schema);
+
+// Après l'ouverture : `schema.sql` doit avoir posé les tables avant que les migrations les ajustent.
+runMigrations();
 
 export function now(): string {
   return new Date().toISOString();

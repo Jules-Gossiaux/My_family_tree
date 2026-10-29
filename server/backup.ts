@@ -2,11 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 import { db } from './db';
+import { notify } from './notices';
 import { DATA_DIR, MEDIA_DIR } from './config';
 
 const BACKUP_DIR = path.join(DATA_DIR, 'sauvegardes');
 const KEEP = 20;
-const AUTO_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const WATCH_EVERY_MS = 30 * 60 * 1000;
 
 export interface BackupInfo {
   name: string;
@@ -56,7 +58,7 @@ function prune(): void {
  * Le fichier est écrit dans un temporaire puis renommé, pour ne jamais laisser
  * une archive à moitié écrite en cas d'interruption.
  */
-export async function createBackup(reason = 'auto'): Promise<BackupInfo> {
+async function createBackup(reason: string): Promise<BackupInfo> {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
 
   const name = `famille-${stamp()}-${reason}.zip`;
@@ -108,14 +110,53 @@ export async function createBackup(reason = 'auto'): Promise<BackupInfo> {
   return { name, size: stat.size, createdAt: stat.mtime.toISOString() };
 }
 
-/** Sauvegarde automatique au démarrage, si la dernière est trop ancienne. */
+/**
+ * Lignes écrites depuis l'ouverture de la connection : c'est ce compteur qui dit si la session a
+ * réellement changé la base. Une archive de plus sans changement ne protège rien et chasse les
+ * vingt archives gardées.
+ */
+function writes(): number {
+  return (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n;
+}
+
+const writtenSinceBackup = { count: writes() };
+
+/** Forcer une archive, y compris quand rien n'a changé (bouton « Sauvegarder »). */
+export async function forceBackup(reason: string): Promise<BackupInfo> {
+  const info = await createBackup(reason);
+  writtenSinceBackup.count = writes();
+  return info;
+}
+
+async function backupIfWritten(reason: string): Promise<void> {
+  if (writes() === writtenSinceBackup.count) return;
+  await forceBackup(reason);
+}
+
+/**
+ * Deux moments, une seule idée : la base ne doit jamais rester des heures sans copie.
+ *
+ * - au démarrage, si la dernière archive est trop ancienne : ce qu'une session d'hier a écrit
+ *   n'est garanti que par une archive d'aujourd'hui ;
+ * - toutes les trente minutes, dès que quelque chose a été écrit pendant la session. Une longue
+ *   après-midi de saisie ne peut pas dépendre du seul bouton sur lequel on oublie de cliquer, ni
+ *   d'un redémarrage qui n'arrivera pas avant le coucher.
+ */
 export function scheduleAutoBackup(): void {
   setTimeout(() => {
     const last = lastBackup();
-    const stale = !last || Date.now() - new Date(last.createdAt).getTime() > AUTO_INTERVAL_MS;
+    const stale = !last || Date.now() - new Date(last.createdAt).getTime() > MAX_AGE_MS;
     if (!stale) return;
-    createBackup('auto').catch((error) => {
-      console.warn('[sauvegarde] échec :', error);
-    });
+    void forceBackup('auto').catch(reportFailure);
   }, 4000);
+
+  setInterval(() => {
+    void backupIfWritten('session').catch(reportFailure);
+  }, WATCH_EVERY_MS).unref();
+}
+
+/** Un échec de sauvegarde qui reste dans la console est une sauvegarde que l'on croit avoir. */
+function reportFailure(error: unknown): void {
+  console.error('[sauvegarde] échec :', error);
+  notify('La sauvegarde automatique a échoué. Vérifiez que le disque a de la place libre.');
 }

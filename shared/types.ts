@@ -24,7 +24,8 @@ export interface Person {
 
 export interface Couple {
   id: string;
-  partnerA: string;
+  /** Les deux partenaires peuvent être effacés de la base : l'union, elle, reste et porte les enfants. */
+  partnerA: string | null;
   partnerB: string | null;
   type: string;
   status: string;
@@ -94,4 +95,6 @@ export interface AppState {
   rootPersonId: string | null;
   counts: { persons: number; couples: number; media: number };
   backup: BackupInfo | null;
+  /** Ce que le serveur sait et ne doit pas taire : sauvegarde manquée, schéma abîmé. */
+  warnings: string[];
 }

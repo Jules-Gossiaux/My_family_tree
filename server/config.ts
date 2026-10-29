@@ -7,8 +7,12 @@ import path from 'node:path';
  * Ordre de priorité :
  *   1. variable d'environnement FAMILY_DATA_DIR
  *   2. config.local.json à la racine du projet (ignoré par git)
- *   3. D:\Genealogie (recommandation de la spec, si le dossier existe)
- *   4. ./data dans le projet (repli, ignoré par git)
+ *   3. D:\Genealogie sous Windows (recommandation de la spec, créé au besoin)
+ *
+ * Le repli sur le dossier du projet est volontairement supprimé : une base qui se
+ * crée là où le code est rangé finit par être déplacée, nettoyée ou versionnée. Si
+ * aucun dossier ne se décide, on s'arrête en l'écrivant plutôt que d'ouvrir un arbre
+ * vide que l'on prendrait pour ses données perdues.
  */
 export function resolveDataDir(): string {
   const fromEnv = process.env.FAMILY_DATA_DIR;
@@ -26,11 +30,23 @@ export function resolveDataDir(): string {
     }
   }
 
-  if (process.platform === 'win32' && fs.existsSync('D:\\Genealogie')) {
-    return 'D:\\Genealogie';
-  }
+  if (process.platform === 'win32') return 'D:\\Genealogie';
 
-  return process.cwd();
+  console.error(
+    [
+      '',
+      '  Aucun dossier de données n’est choisi, et rien ne sera écrit tant que ce choix n’est pas fait.',
+      '',
+      '  Dites où vivent vos données, par l’un de ces deux moyens :',
+      '',
+      '      set FAMILY_DATA_DIR=D:\\Chemin\\vers\\mes\\donnees',
+      '      config.local.json  { "dataDir": "D:\\\\Chemin\\\\vers\\\\mes\\\\donnees" }',
+      '',
+      '  Le dossier sera créé s’il manque.',
+      '',
+    ].join('\n'),
+  );
+  process.exit(1);
 }
 
 export const DATA_DIR = resolveDataDir();

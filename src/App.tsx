@@ -48,6 +48,7 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const canvas = useRef<TreeCanvasHandle>(null);
 
   const load = useCallback(async () => {
@@ -55,6 +56,7 @@ export default function App() {
       const [data, state] = await Promise.all([api.graph(), api.state()]);
       setGraph(data);
       setBackup(state.backup);
+      setWarnings(state.warnings ?? []);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de charger les données');
@@ -64,6 +66,22 @@ export default function App() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Une sauvegarde qui échoue trente minutes après le chargement de la page doit être dite à
+  // l'écran : sans cette respiration, l'application afficherait « tout va bien » jusqu'au bout.
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const state = await api.state();
+        setBackup(state.backup);
+        setWarnings(state.warnings ?? []);
+      } catch {
+        /* le serveur se ferme peut-être : le prochain clic le dira */
+      }
+    };
+    const timer = window.setInterval(() => void poll(), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -123,7 +141,7 @@ export default function App() {
           couple.partnerA === ofPersonId
             ? personById.get(couple.partnerB ?? '')
             : couple.partnerB === ofPersonId
-              ? personById.get(couple.partnerA)
+              ? personById.get(couple.partnerA ?? '')
               : undefined,
         )
         .filter((person): person is Person => Boolean(person));
@@ -272,6 +290,14 @@ export default function App() {
       </header>
 
       {error && <div className="banner-error">{error}</div>}
+
+      {warnings.length > 0 && !error && (
+        <div className="banner-warn">
+          {warnings.map((warning) => (
+            <span key={warning}>{warning}</span>
+          ))}
+        </div>
+      )}
 
       <main className="main">
         {isEmpty ? (

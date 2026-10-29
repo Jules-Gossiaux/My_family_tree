@@ -96,6 +96,20 @@ function attributeChildrenToCouple(coupleId: string, a: string, b: string): void
 }
 
 /**
+ * Un couple ne sert pas qu'à dessiner deux cases côte à côte : il porte la mémoire de l'union
+ * dont des enfants sont issus. Il ne disparaît donc que quand plus personne ne le justifie —
+ * ni un enfant, ni un acte, ni l'un de ses deux membres.
+ */
+export function pruneEmptyCouples(): void {
+  db.prepare(
+    `DELETE FROM couple
+      WHERE partner_a IS NULL AND partner_b IS NULL
+        AND id NOT IN (SELECT couple_id FROM parent_child WHERE couple_id IS NOT NULL)
+        AND id NOT IN (SELECT couple_id FROM event WHERE couple_id IS NOT NULL)`,
+  ).run();
+}
+
+/**
  * Attache un enfant à un parent. Deux règles commandent le reste : un enfant ne peut avoir
  * que deux parents, et une union n'existe que si quelqu'un la déclare. Sans `otherParentId`
  * l’enfant est rattaché à ce parent seul — l’arbre le dessine alors sous sa case à lui, pas

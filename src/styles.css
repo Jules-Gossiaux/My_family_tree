@@ -220,6 +220,17 @@ input::placeholder {
   border-bottom: 1px solid rgba(196, 115, 95, 0.25);
 }
 
+.banner-warn {
+  padding: 8px 16px;
+  background: var(--gold-soft);
+  color: var(--text);
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .main {
   flex: 1;
   display: flex;

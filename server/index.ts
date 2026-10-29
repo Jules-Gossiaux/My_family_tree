@@ -5,8 +5,9 @@ import express, { type Response } from 'express';
 import { db, now, newId } from './db';
 import { DATA_DIR } from './config';
 import { parseGenealogyDate } from './dates';
-import { RelationError, attachRelation } from './relations';
-import { createBackup, lastBackup, listBackups, scheduleAutoBackup } from './backup';
+import { RelationError, attachRelation, pruneEmptyCouples } from './relations';
+import { forceBackup, lastBackup, listBackups, scheduleAutoBackup } from './backup';
+import { listNotices, notify } from './notices';
 import type {
   Couple,
   CreatePersonInput,
@@ -34,8 +35,11 @@ function readConfig(): AppConfig {
       const parsed = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as Partial<AppConfig>;
       return { rootPersonId: parsed.rootPersonId ?? null };
     }
-  } catch {
-    /* configuration illisible : on repart de zéro */
+  } catch (error) {
+    // Le fichier reste sur le disque : la panne est dite à l'écran, pas remplacée par un vide.
+    console.error(`[réglages] ${CONFIG_PATH} est illisible, la personne de référence est perdue.`);
+    console.error(String(error));
+    notify('Le fichier de réglages est abîmé : la souche de l’arbre est à choisir à nouveau.');
   }
   return { rootPersonId: null };
 }
@@ -165,6 +169,7 @@ app.get('/api/state', (_req, res) => {
     rootPersonId: config.rootPersonId,
     counts: { persons: persons.n, couples: couples.n, media: media.n },
     backup: lastBackup(),
+    warnings: listNotices(),
   });
 });
 
@@ -174,7 +179,7 @@ app.get('/api/backups', (_req, res) => {
 
 app.post('/api/backup', async (_req, res) => {
   try {
-    const info = await createBackup('manuel');
+    const info = await forceBackup('manuel');
     res.json(info);
   } catch (error) {
     console.error('[sauvegarde]', error);
@@ -405,12 +410,16 @@ app.patch('/api/persons/:id', (req, res) => {
 });
 
 app.delete('/api/persons/:id', (req, res) => {
-  db.prepare('DELETE FROM person WHERE id = ?').run(req.params.id);
-  const config = readConfig();
-  if (config.rootPersonId === req.params.id) {
-    const next = db.prepare('SELECT id FROM person LIMIT 1').get() as Row | undefined;
-    writeConfig({ rootPersonId: next?.id ?? null });
-  }
+  const remove = db.transaction(() => {
+    db.prepare('DELETE FROM person WHERE id = ?').run(req.params.id);
+    pruneEmptyCouples();
+    const config = readConfig();
+    if (config.rootPersonId === req.params.id) {
+      const next = db.prepare('SELECT id FROM person LIMIT 1').get() as Row | undefined;
+      writeConfig({ rootPersonId: next?.id ?? null });
+    }
+  });
+  remove();
   res.json({ ok: true });
 });
 

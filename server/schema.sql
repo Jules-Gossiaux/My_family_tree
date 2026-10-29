@@ -44,10 +44,13 @@ CREATE TABLE IF NOT EXISTS place (
 );
 
 -- Table nommée « couple » et non « union » : UNION est un mot réservé SQL.
+-- Les deux partenaires sont laissés en NULL par la suppression d'une personne : le couple
+-- continue de dire de quelle union viennent ses enfants. Voir migration 1 pour les bases
+-- créées avant ce choix. Même définition que dans server/migrations.ts.
 CREATE TABLE IF NOT EXISTS couple (
   id                  TEXT PRIMARY KEY,
-  partner_a           TEXT NOT NULL REFERENCES person(id) ON DELETE CASCADE,
-  partner_b           TEXT REFERENCES person(id) ON DELETE CASCADE,
+  partner_a           TEXT REFERENCES person(id) ON DELETE SET NULL,
+  partner_b           TEXT REFERENCES person(id) ON DELETE SET NULL,
   type                TEXT NOT NULL DEFAULT 'inconnu',
   status              TEXT NOT NULL DEFAULT 'en_cours',
   start_date_min      TEXT,
