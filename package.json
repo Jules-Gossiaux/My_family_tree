@@ -13,10 +13,10 @@
     "dev:client": "vite",
     "build": "vite build",
     "start": "tsx server/index.ts",
+    "test": "node --import tsx --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@types/adm-zip": "^0.5.8",
     "adm-zip": "^0.6.1",
     "better-sqlite3": "^13.0.3",
     "express": "^4.21.2",
