@@ -22,7 +22,8 @@ export interface Unit {
   depth: number;
   subtreeW: number;
   children: string[];
-  childJunction: Map<string, number>;
+  /** Sous quel trait horizontal l'enfant pend, en pixels depuis le centre du bloc. */
+  childOffset: Map<string, number>;
 }
 
 export interface Edge {
@@ -118,7 +119,13 @@ export function buildLayout(graph: GraphData): LayoutResult {
 
     const w = slots.length * CARD_W + (slots.length - 1) * CARD_GAP;
     const children: string[] = [];
-    const childJunction = new Map<string, number>();
+    const childOffset = new Map<string, number>();
+
+    /** Au milieu de la jointure de deux cases : les enfants nés d'une union. */
+    const junctionOffset = (after: number) =>
+      -w / 2 + (after + 1) * CARD_W + after * CARD_GAP + CARD_GAP / 2;
+    /** Au centre d'une case : les enfants rattachés à un parent seul. */
+    const slotOffset = (index: number) => -w / 2 + index * (CARD_W + CARD_GAP) + CARD_W / 2;
 
     const unit: Unit = {
       key: personId,
@@ -130,7 +137,7 @@ export function buildLayout(graph: GraphData): LayoutResult {
       depth: 0,
       subtreeW: w,
       children,
-      childJunction,
+      childOffset,
     };
 
     byKey.set(personId, unit);
@@ -141,21 +148,30 @@ export function buildLayout(graph: GraphData): LayoutResult {
     const nextVisited = new Set(visited);
     for (const slot of slots) nextVisited.add(slot);
 
-    junctions.forEach((junction, index) => {
+    const claim = (childId: string, offset: number) => {
+      if (nextVisited.has(childId) || !personById.has(childId)) return;
+      if (children.includes(childId)) return;
+      children.push(childId);
+      childOffset.set(childId, offset);
+    };
+
+    for (const junction of junctions) {
       for (const childId of childrenByCouple.get(junction.coupleId) ?? []) {
-        if (nextVisited.has(childId) || !personById.has(childId)) continue;
-        if (children.includes(childId)) continue;
-        children.push(childId);
-        childJunction.set(childId, index);
+        claim(childId, junctionOffset(junction.after));
+      }
+    }
+
+    // Enfant hors union, ou issu d'une union que ce bloc ne dessine pas : il pend sous la
+    // case de son parent. L'inverse le ferait disparaître de l'arbre.
+    slots.forEach((slotId, index) => {
+      for (const childId of childrenByPerson.get(slotId) ?? []) claim(childId, slotOffset(index));
+      for (const couple of couplesByPerson.get(slotId) ?? []) {
+        if (junctions.some((junction) => junction.coupleId === couple.id)) continue;
+        for (const childId of childrenByCouple.get(couple.id) ?? []) {
+          claim(childId, slotOffset(index));
+        }
       }
     });
-
-    for (const childId of childrenByPerson.get(personId) ?? []) {
-      if (nextVisited.has(childId) || !personById.has(childId)) continue;
-      if (children.includes(childId)) continue;
-      children.push(childId);
-      childJunction.set(childId, -1);
-    }
 
     for (const childId of children) buildUnit(childId, nextVisited);
 
@@ -224,21 +240,16 @@ export function buildLayout(graph: GraphData): LayoutResult {
   const units = [...byKey.values()];
   const edges: Edge[] = [];
   for (const unit of units) {
+    // Une ligne de raccord par point d'accroche : deux traits au même niveau se croiseraient.
+    const busByOffset = new Map<number, number>();
     for (const childKey of unit.children) {
-      const junctionIndex = unit.childJunction.get(childKey) ?? -1;
-      let offset = 0;
-      if (junctionIndex >= 0) {
-        offset =
-          -unit.w / 2 +
-          (junctionIndex + 1) * CARD_W +
-          junctionIndex * CARD_GAP +
-          CARD_GAP / 2;
-      }
+      const offset = unit.childOffset.get(childKey) ?? 0;
+      if (!busByOffset.has(offset)) busByOffset.set(offset, busByOffset.size * 14);
       edges.push({
         from: unit.key,
         to: childKey,
         offset,
-        bus: junctionIndex >= 0 ? junctionIndex * 14 : 0,
+        bus: busByOffset.get(offset) ?? 0,
       });
     }
   }

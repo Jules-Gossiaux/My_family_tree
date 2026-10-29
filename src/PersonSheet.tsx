@@ -8,6 +8,7 @@ interface Props {
   refreshKey: number;
   onSelect: (personId: string) => void;
   onAdd: (relation: RelationInput, anchorName: string) => void;
+  onAttach: (personId: string) => void;
   onEdit: (person: PersonDetail) => void;
   onClose: () => void;
   onSetRoot: (personId: string) => void;
@@ -40,6 +41,7 @@ export default function PersonSheet({
   refreshKey,
   onSelect,
   onAdd,
+  onAttach,
   onEdit,
   onClose,
   onSetRoot,
@@ -123,6 +125,9 @@ export default function PersonSheet({
         </button>
         <button type="button" onClick={() => onAdd({ type: 'parent', ofPersonId: person.id }, name)}>
           + Parent
+        </button>
+        <button type="button" onClick={() => onAttach(person.id)}>
+          Rattacher…
         </button>
         <button type="button" className="ghost" onClick={() => onEdit(person)}>
           Modifier

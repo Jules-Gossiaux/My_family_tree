@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from './api';
-import type { CreatePersonInput, RelationInput, Sex } from '../shared/types';
+import { fullName } from './dates';
+import type { CreatePersonInput, Person, RelationInput, Sex } from '../shared/types';
 
 interface Props {
   relation: RelationInput | null;
   anchorName?: string;
+  /** Personnes qui peuvent devenir le second parent : unions déjà connues de l'ancrage. */
+  otherParentCandidates?: Person[];
   editing?: {
     id: string;
     givenNames: string;
@@ -26,7 +29,14 @@ const RELATION_LABEL: Record<string, string> = {
   parent: 'parent de',
 };
 
-export default function AddPersonDialog({ relation, anchorName, editing, onClose, onSaved }: Props) {
+export default function AddPersonDialog({
+  relation,
+  anchorName,
+  otherParentCandidates = [],
+  editing,
+  onClose,
+  onSaved,
+}: Props) {
   const [givenNames, setGivenNames] = useState('');
   const [familyName, setFamilyName] = useState('');
   const [birthName, setBirthName] = useState('');
@@ -35,6 +45,7 @@ export default function AddPersonDialog({ relation, anchorName, editing, onClose
   const [living, setLiving] = useState(true);
   const [birthText, setBirthText] = useState('');
   const [deathText, setDeathText] = useState('');
+  const [otherParentId, setOtherParentId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const firstField = useRef<HTMLInputElement>(null);
@@ -58,10 +69,12 @@ export default function AddPersonDialog({ relation, anchorName, editing, onClose
       setLiving(true);
       setBirthText('');
       setDeathText('');
+      // Une seule union connue : on la pré-sélectionne, mais elle reste visible et modifiable.
+      setOtherParentId(otherParentCandidates.length === 1 ? otherParentCandidates[0].id : '');
     }
     setError(null);
     setTimeout(() => firstField.current?.focus(), 30);
-  }, [editing, anchorName]);
+  }, [editing, anchorName, otherParentCandidates]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -98,7 +111,7 @@ export default function AddPersonDialog({ relation, anchorName, editing, onClose
           living,
           birthText,
           deathText,
-          relation,
+          relation: relation ? { ...relation, otherParentId: otherParentId || null } : null,
         };
         const created = await api.createPerson(input);
         onSaved(created.id);
@@ -120,6 +133,30 @@ export default function AddPersonDialog({ relation, anchorName, editing, onClose
             {RELATION_LABEL[relation.type]} <strong>{anchorName}</strong>
           </p>
         )}
+
+        {!editing &&
+          relation &&
+          relation.type !== 'partner' &&
+          otherParentCandidates.length > 0 && (
+            <label className="field">
+              <span>
+                {relation.type === 'child'
+                  ? 'Et l’autre parent est…'
+                  : 'Ce parent forme un couple avec…'}
+              </span>
+              <select
+                value={otherParentId}
+                onChange={(e) => setOtherParentId(e.target.value)}
+              >
+                <option value="">Personne — on ne déclare pas d’union</option>
+                {otherParentCandidates.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {fullName(candidate)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
         <div className="field-row">
           <label className="field">

@@ -2,10 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import TreeCanvas, { type TreeCanvasHandle } from './TreeCanvas';
 import PersonSheet from './PersonSheet';
 import AddPersonDialog from './AddPersonDialog';
+import AttachDialog from './AttachDialog';
 import { api } from './api';
 import { buildLayout } from './treeLayout';
 import { fullName, lifeSpan } from './dates';
-import type { BackupInfo, GraphData, PersonDetail, RelationInput } from '../shared/types';
+import type {
+  BackupInfo,
+  GraphData,
+  Person,
+  PersonDetail,
+  RelationInput,
+} from '../shared/types';
 
 interface DialogState {
   relation: RelationInput | null;
@@ -32,6 +39,7 @@ export default function App() {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [attach, setAttach] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [backup, setBackup] = useState<BackupInfo | null>(null);
@@ -100,6 +108,45 @@ export default function App() {
     [load],
   );
 
+  /**
+   * Les personnes qui peuvent devenir le second parent de la nouvelle fiche. On ne les
+   * propose que si l'union existe déjà ailleurs dans l'arbre : rien n'est jamais deviné.
+   */
+  const otherParentCandidates = useMemo<Person[]>(() => {
+    if (!graph || !dialog?.relation || dialog.editing) return [];
+    const { type, ofPersonId } = dialog.relation;
+    if (type === 'partner') return [];
+
+    if (type === 'child') {
+      return graph.couples
+        .map((couple) =>
+          couple.partnerA === ofPersonId
+            ? personById.get(couple.partnerB ?? '')
+            : couple.partnerB === ofPersonId
+              ? personById.get(couple.partnerA)
+              : undefined,
+        )
+        .filter((person): person is Person => Boolean(person));
+    }
+
+    const parents = graph.parentChild
+      .filter((link) => link.childId === ofPersonId)
+      .map((link) => link.parentId);
+    return graph.persons.filter((person) => parents.includes(person.id));
+  }, [graph, dialog, personById]);
+
+  const handleAttached = useCallback(
+    async (id: string) => {
+      setAttach(null);
+      await load();
+      setSelectedId(id);
+      setRefreshKey((key) => key + 1);
+      setToast('Lien ajouté à l’arbre');
+      window.setTimeout(() => canvas.current?.focusPerson(id), 60);
+    },
+    [load],
+  );
+
   const handleSetRoot = useCallback(
     async (id: string) => {
       await api.setRoot(id);
@@ -151,19 +198,19 @@ export default function App() {
       ) {
         return;
       }
-      if (!selectedId || dialog || pendingDelete || menu) return;
+      if (!selectedId || dialog || pendingDelete || menu || attach) return;
       event.preventDefault();
       setPendingDelete(selectedId);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId, dialog, pendingDelete, menu]);
+  }, [selectedId, dialog, pendingDelete, menu, attach]);
 
   const openMenu = useCallback((personId: string, x: number, y: number) => {
     setMenu({
       personId,
       x: Math.min(x, window.innerWidth - 230),
-      y: Math.min(y, window.innerHeight - 240),
+      y: Math.min(y, window.innerHeight - 300),
     });
   }, []);
 
@@ -254,6 +301,7 @@ export default function App() {
               refreshKey={refreshKey}
               onSelect={selectPerson}
               onAdd={(relation, anchorName) => setDialog({ relation, anchorName })}
+              onAttach={(personId) => setAttach(personId)}
               onEdit={(person) => setDialog({ relation: null, editing: person })}
               onClose={() => setSelectedId(null)}
               onSetRoot={handleSetRoot}
@@ -304,6 +352,15 @@ export default function App() {
             <button type="button" onClick={() => { void handleSetRoot(menu.personId); setMenu(null); }}>
               Faire la souche de l'arbre
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAttach(menu.personId);
+                setMenu(null);
+              }}
+            >
+              Rattacher à une personne…
+            </button>
             <div className="menu-sep" />
             <button
               type="button"
@@ -350,6 +407,7 @@ export default function App() {
         <AddPersonDialog
           relation={dialog.relation}
           anchorName={dialog.anchorName}
+          otherParentCandidates={otherParentCandidates}
           editing={
             dialog.editing
               ? {
@@ -367,6 +425,15 @@ export default function App() {
           }
           onClose={() => setDialog(null)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {attach && personById.get(attach) && (
+        <AttachDialog
+          person={personById.get(attach) as Person}
+          candidates={(graph?.persons ?? []).filter((other) => other.id !== attach)}
+          onClose={() => setAttach(null)}
+          onAttached={handleAttached}
         />
       )}
 

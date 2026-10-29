@@ -26,6 +26,7 @@ server/          API HTTP + accès SQLite
   config.ts      résolution du dossier de données
   db.ts          ouverture de la base, application du schéma
   dates.ts       analyse des dates floues
+  relations.ts   rattachement d'une personne à une autre, avec ses refus
   index.ts       routes
   schema.sql     schéma complet
 shared/          types partagés serveur / client
@@ -34,6 +35,8 @@ src/             interface React
   TreeCanvas.tsx rendu SVG, zoom et déplacement
   PersonSheet.tsx fiche latérale
   AddPersonDialog.tsx saisie rapide
+  AttachDialog.tsx choix d'une personne déjà existante à rattacher
+tests/           tests du parseur de dates et des relations (`npm test`)
 ```
 
 Le serveur sert l'API et, en production, le front compilé par Vite. Un seul processus, un seul port.
@@ -48,6 +51,8 @@ Le serveur sert l'API et, en production, le front compilé par Vite. Un seul pro
 | Identifiants | UUID v4 | pas de collision lors d'une future fusion de bases |
 | Dates | jamais un champ `DATE`, toujours min/max/qualifier/texte | la généalogie vit dans l'approximation |
 | Table des couples | nommée `couple` et non `union` | `UNION` est un mot réservé SQL |
+| Unions | jamais créées sans qu'on les déclare | un enfant rattaché à un parent seul n'implique pas l'existence d'un second parent |
+| Refus d'écriture | message en français compréhensible, code HTTP 400/404/409 | la personne doit savoir quoi faire sans lire une pile d'appels |
 
 ## Lancement
 
@@ -72,6 +77,7 @@ Le serveur sert l'API et, en production, le front compilé par Vite. Un seul pro
 | GET | `/api/graph` | personnes, couples, liens parent-enfant, en une requête |
 | GET | `/api/persons/:id` | fiche complète : relations et événements |
 | POST | `/api/persons` | création, avec rattachement optionnel |
+| POST | `/api/persons/:id/relations` | rattacher deux personnes déjà dans la base |
 | PATCH | `/api/persons/:id` | modification |
 | DELETE | `/api/persons/:id` | suppression |
 | PUT | `/api/config` | personne racine de l'arbre |
@@ -85,6 +91,28 @@ Le rattachement à la création prend la forme :
 
 `type` vaut `child`, `parent` ou `partner`. C'est ce qui permet d'enchaîner la saisie sans
 repasser par un écran vide : on ajoute toujours quelqu'un **par rapport à quelqu'un**.
+
+## Rattacher des personnes qui existent déjà
+
+La même structure s'envoie seule à `POST /api/persons/:id/relations`, où `:id` est la personne
+soumise. Depuis l'interface : bouton « Rattacher… » de la fiche, ou menu contextuel d'une case.
+
+Le corps de la règle tient en trois phrases, et il est écrit une seule fois dans
+`server/relations.ts` — les deux routes passent par là :
+
+- **Une union n'existe que si on la déclare.** Rattacher un enfant à un parent ne crée jamais de
+  conjoint par défaut. Le second parent n'est posé que par `otherParentId`, choisi explicitement
+  dans la saisie (« Et l'autre parent est… », avec le choix assumé « Personne — on ne déclare pas
+  d'union »).
+- **Deux parents au plus.** Une troisième parenté est refusée : « Cette personne a déjà deux
+  parents. Commencez par en remplacer un. »
+- **Pas de boucle.** Devenir le parent de son propre ascendant est refusé en 409, avec le motif
+  dans le message.
+
+Un lien déjà existant n'est pas dupliqué. Surtout, déclarer l'union d'un couple rend cette union
+aux enfants que la base connaît **déjà des deux** : leurs liens héritent du `couple_id` et les
+enfants basculent sous la jonction du couple. Un enfant rattaché à un seul des deux n'est jamais
+rangé dans l'union.
 
 ## Passe 0 — socle
 
@@ -103,18 +131,27 @@ repasser par un écran vide : on ajoute toujours quelqu'un **par rapport à quel
 - [x] recherche instantanée dans l'en-tête
 - [x] modification d'une personne existante depuis la fiche
 - [x] branches non rattachées visibles dans l'arbre
+- [x] rattachement de deux personnes déjà existantes, sans union inventée
+- [x] une case par personne, conjoints dessinés de part et d'autre
 - [ ] suppression avec confirmation
 
-## Limites connues de la passe 0
+## Limites connues
 
-Ces points sont assumés pour l'instant, et traités en passe 3 :
+À traiter en passe 3 :
 
-- **Une personne à plusieurs unions apparaît plusieurs fois.** Jean marié deux fois est dessiné
-  deux fois, une fois par couple. La correction consiste à faire de l'union une case à part entière,
-  avec la personne au centre et ses conjoints de part et d'autre.
+- **Deux parents solos et l'enfant pend des deux blocs.** Luc fils de Paul sans union déclarée, et
+  aussi fils de Marie sans union déclarée, est dessiné **une seule fois** mais rattaché aux deux
+  cases : la mise en page ne peut le placer que sous l'un des deux, et le second lien traverse
+  l'arbre à l'horizontale. Déclarer l'union de Paul et Marie (« Rattacher… » → conjoint, ou
+  « Et l'autre parent est… » pendant la saisie) ramène l'enfant sous la jonction du couple et
+  supprime le trait qui traverse.
 - **Pas de gestion visuelle des cycles.** Un mariage entre cousins est ignoré au-delà du premier
-  passage, sans signalement.
+  passage, sans signalement. Une écriture qui créerait une boucle est refusée, mais un cycle déjà
+  présent dans la base n'est pas signalé à l'écran.
 - **Aucune photo, aucun document** : c'est la passe 4.
+
+Résolu : une personne ayant plusieurs unions n'apparaît plus qu'une seule fois, ses conjoints étant
+dessinés dans le même bloc `[conjoint] [personne] [conjoint]`.
 
 ## Conventions
 

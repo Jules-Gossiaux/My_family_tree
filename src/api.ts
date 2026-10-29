@@ -4,6 +4,7 @@ import type {
   CreatePersonInput,
   GraphData,
   PersonDetail,
+  RelationInput,
 } from '../shared/types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -34,6 +35,11 @@ export const api = {
   updatePerson: (id: string, input: Partial<CreatePersonInput> & { nickname?: string }) =>
     request<{ ok: true }>(`/api/persons/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
   deletePerson: (id: string) => request<{ ok: true }>(`/api/persons/${id}`, { method: 'DELETE' }),
+  attachRelation: (id: string, relation: RelationInput) =>
+    request<{ ok: true }>(`/api/persons/${id}/relations`, {
+      method: 'POST',
+      body: JSON.stringify(relation),
+    }),
   setRoot: (rootPersonId: string | null) =>
     request<{ ok: true }>('/api/config', {
       method: 'PUT',

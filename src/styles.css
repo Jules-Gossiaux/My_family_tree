@@ -94,7 +94,8 @@ button.link:hover {
   text-decoration: underline;
 }
 
-input {
+input,
+select {
   font: inherit;
   color: var(--text);
   background: var(--bg);
@@ -106,8 +107,13 @@ input {
   width: 100%;
 }
 
-input:focus {
+input:focus,
+select:focus {
   border-color: var(--gold);
+}
+
+select {
+  cursor: pointer;
 }
 
 input::placeholder {
@@ -802,6 +808,61 @@ input::placeholder {
 .dialog-actions button {
   padding: 7px 14px;
   font-size: 13px;
+}
+
+/* ---------- rattachement : liste de personnes ---------- */
+
+.pick-list {
+  max-height: 230px;
+  overflow-y: auto;
+  margin: 2px 0 0;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.pick-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 9px;
+  text-align: left;
+}
+
+.pick-row:hover {
+  background: var(--gold-soft);
+}
+
+.pick-name {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.pick-dates {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.pick-summary {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-left: 2px solid var(--gold);
+  background: var(--gold-soft);
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pick-summary strong {
+  color: var(--text);
+  font-weight: 500;
 }
 
 /* ---------- barres de défilement ---------- */

@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import express from 'express';
+import express, { type Response } from 'express';
 import { db, now, newId } from './db';
 import { DATA_DIR } from './config';
 import { parseGenealogyDate } from './dates';
+import { RelationError, attachRelation } from './relations';
 import { createBackup, lastBackup, listBackups, scheduleAutoBackup } from './backup';
 import type {
   Couple,
@@ -14,6 +15,7 @@ import type {
   ParentChild,
   Person,
   PersonDetail,
+  RelationInput,
 } from '../shared/types';
 
 const app = express();
@@ -114,45 +116,6 @@ function loadParentChild(): ParentChild[] {
   }));
 }
 
-function findCouple(a: string, b: string | null): Row | undefined {
-  if (!b) {
-    return db
-      .prepare('SELECT * FROM couple WHERE partner_b IS NULL AND partner_a = ?')
-      .get(a) as Row | undefined;
-  }
-  return db
-    .prepare(
-      `SELECT * FROM couple
-        WHERE (partner_a = ? AND partner_b = ?) OR (partner_a = ? AND partner_b = ?)`,
-    )
-    .get(a, b, b, a) as Row | undefined;
-}
-
-function createCouple(a: string, b: string | null): Row {
-  const existing = findCouple(a, b);
-  if (existing) return existing;
-  const id = newId();
-  db.prepare(
-    'INSERT INTO couple (id, partner_a, partner_b, created_at) VALUES (?, ?, ?, ?)',
-  ).run(id, a, b, now());
-  return db.prepare('SELECT * FROM couple WHERE id = ?').get(id) as Row;
-}
-
-function linkParentChild(parentId: string, childId: string, coupleId: string | null): void {
-  const existing = db
-    .prepare('SELECT id FROM parent_child WHERE parent_id = ? AND child_id = ?')
-    .get(parentId, childId) as Row | undefined;
-  if (existing) {
-    if (coupleId) {
-      db.prepare('UPDATE parent_child SET couple_id = ? WHERE id = ?').run(coupleId, existing.id);
-    }
-    return;
-  }
-  db.prepare(
-    'INSERT INTO parent_child (id, parent_id, child_id, couple_id) VALUES (?, ?, ?, ?)',
-  ).run(newId(), parentId, childId, coupleId);
-}
-
 function setLifeEvent(personId: string, type: 'naissance' | 'deces', text?: string | null): void {
   const existing = db
     .prepare('SELECT id FROM event WHERE person_id = ? AND type = ?')
@@ -176,6 +139,16 @@ function setLifeEvent(personId: string, type: 'naissance' | 'deces', text?: stri
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(newId(), personId, type, date.min, date.max, date.qualifier, date.text, now());
   }
+}
+
+/** Un refus de relation se montre tel quel : la personne doit comprendre ce qu'elle peut corriger. */
+function sendRelationError(res: Response, error: unknown): void {
+  if (error instanceof RelationError) {
+    res.status(error.status).json({ error: error.message });
+    return;
+  }
+  console.error('[relation]', error);
+  res.status(500).json({ error: 'La liaison n’a pas pu être enregistrée' });
 }
 
 app.get('/api/health', (_req, res) => {
@@ -338,45 +311,7 @@ app.post('/api/persons', (req, res) => {
     setLifeEvent(id, 'deces', body.deathText);
 
     const relation = body.relation;
-    if (relation?.ofPersonId) {
-      const anchor = relation.ofPersonId;
-
-      if (relation.type === 'child') {
-        let coupleId: string | null = null;
-        if (relation.otherParentId) {
-          coupleId = createCouple(anchor, relation.otherParentId).id as string;
-        } else {
-          const existing = db
-            .prepare('SELECT id FROM couple WHERE partner_a = ? OR partner_b = ?')
-            .all(anchor, anchor) as Row[];
-          if (existing.length === 1) coupleId = existing[0].id;
-        }
-        linkParentChild(anchor, id, coupleId);
-        if (relation.otherParentId) linkParentChild(relation.otherParentId, id, coupleId);
-      }
-
-      if (relation.type === 'partner') {
-        createCouple(anchor, id);
-      }
-
-      if (relation.type === 'parent') {
-        const existingParents = db
-          .prepare('SELECT parent_id FROM parent_child WHERE child_id = ?')
-          .all(anchor) as Row[];
-        if (existingParents.length === 1) {
-          const other = existingParents[0].parent_id as string;
-          const couple = createCouple(id, other);
-          db.prepare('UPDATE parent_child SET couple_id = ? WHERE child_id = ? AND parent_id = ?').run(
-            couple.id,
-            anchor,
-            other,
-          );
-          linkParentChild(id, anchor, couple.id);
-        } else {
-          linkParentChild(id, anchor, null);
-        }
-      }
-    }
+    if (relation?.ofPersonId) attachRelation(id, relation);
 
     const config = readConfig();
     if (!config.rootPersonId) {
@@ -384,8 +319,24 @@ app.post('/api/persons', (req, res) => {
     }
   });
 
-  create();
+  try {
+    create();
+  } catch (error) {
+    sendRelationError(res, error);
+    return;
+  }
   res.status(201).json({ id });
+});
+
+/** Rattache deux personnes que la base connaît déjà : un enfant, un parent, un conjoint. */
+app.post('/api/persons/:id/relations', (req, res) => {
+  try {
+    attachRelation(req.params.id, req.body as RelationInput);
+  } catch (error) {
+    sendRelationError(res, error);
+    return;
+  }
+  res.status(201).json({ ok: true });
 });
 
 app.patch('/api/persons/:id', (req, res) => {
