@@ -32,10 +32,10 @@ function archiveDate(backup: BackupInfo): string {
   });
 }
 
-/** Le nom porte le motif de l'archive : « session », « manuel », « auto ». */
+/** Le nom porte le motif de l'archive : « session », « manuel », « avant-restauration ». */
 function reason(name: string): string {
   const parts = name.replace(/^famille-/, '').replace(/\.zip$/, '').split('-');
-  return parts[parts.length - 1] ?? '';
+  return parts.slice(4).join(' ') || 'archive';
 }
 
 /**
@@ -241,6 +241,13 @@ export default function SettingsDialog({
               ))}
             </ul>
           )}
+          <p className="settings-note">
+            Recharger une archive ne se commande pas ici : l’application ne peut pas remplacer la
+            base sur laquelle elle est assise. Fermez-la (la fenêtre ouverte par{' '}
+            <code>start.bat</code>), double-cliquez <code>restore.bat</code> dans ce dossier,
+            choisissez le numéro de l’archive et tapez OUI. Ce qui était en place est copié avant
+            d’être remplacé, donc le voyage a un retour.
+          </p>
         </div>
 
         {error && <p className="dialog-error">{error}</p>}

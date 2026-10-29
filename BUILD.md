@@ -10,14 +10,15 @@ version minuscule mais complète (« balle traçante »), puis on épaissit.
 
 | Passe | Contenu | État |
 |---|---|---|
-| 0 | Socle : base, ajout de personnes, arbre minimal, fiche minimale | en cours |
-| 1 | Saisie rapide, dates floues, couples, demi-frères | en cours |
-| 2 | Sauvegarde automatique en ZIP daté | en cours |
+| 0 | Socle : base, ajout de personnes, arbre minimal, fiche minimale | faite |
+| 1 | Saisie rapide, dates floues, couples, demi-frères | faite |
+| 2 | Sauvegarde automatique en ZIP daté | faite |
 | 3 | Arbre de descendance abouti, branches colorées | à faire |
 | 4 | Médias : import, vignettes, bac d'entrée, recadrage portrait | à faire |
 | 5 | Fiche complète : dossier de vie, chronologie, notes | à faire |
 | 6 | Poster PDF, deux modèles, avec portraits | à faire |
 | 7 | Parenté, questions ouvertes, recherche, filtres | à faire |
+| 8 | Export GEDCOM | à faire |
 
 ## Architecture
 
@@ -31,6 +32,7 @@ server/          API HTTP + accès SQLite
   relations.ts   rattachement d'une personne à une autre, avec ses refus
   backup.ts      archive ZIP datée, au démarrage et pendant la session
   export.ts      tout l'arbre en un JSON lisible sans l'application
+  restore.ts     recharge une archive : contrôle, copie de sûreté, échange
   index.ts       routes
   schema.sql     schéma complet
 shared/          types partagés serveur / client
@@ -42,7 +44,9 @@ src/             interface React
   AttachDialog.tsx choix d'une personne déjà existante à rattacher
   SettingsDialog.tsx écran Réglages : dossier, souche, copies, export
   saveFile.ts    écrire un fichier produit par le serveur là où l'utilisateur le veut
-tests/           dates, relations, intégrité, migration, export, archives (`npm test`)
+tests/           dates, relations, intégrité, migration, export, archives, restauration (`npm test`)
+start.bat        démarrer l'application
+restore.bat      recharger une archive de sauvegarde
 ```
 
 Le serveur sert l'API et, en production, le front compilé par Vite. Un seul processus, un seul port.
@@ -74,6 +78,11 @@ Le serveur sert l'API et, en production, le front compilé par Vite. Un seul pro
   posé par `start.bat`) : ouvrir la page trop tôt afficherait une erreur de connexion.
 - Un port déjà pris (double démarrage) donne un message en français et un code de sortie non nul,
   que `start.bat` traduit par une fenêtre qui reste lisible au lieu de se refermer.
+
+`restore.bat` est le second écran d'entrée, et le seul qui écrase des données. Il reprend les mêmes
+réparations (dépendances, moteur SQLite) puis laisse `server/restore.ts` parler : liste numérotée des
+archives, numéro tapé, comparaison « elle contient / la base actuelle », puis le mot **OUI** à taper.
+Tout autre texte n'arrive pas jusqu'à la base.
 
 ## Le dossier de données
 
@@ -122,8 +131,34 @@ Réglages liste les archives avec, sur chacune, un bouton **« Copier vers… »
 octet au navigateur : `showSaveFilePicker` ouvre la fenêtre d'enregistrement (Chrome, Edge), les
 autres navigateurs retombent sur le téléchargement. Dans les deux cas la copie quitte le disque, ce
 qui est tout ce qu'on demande à ce bouton. Le nom de l'archive est validé serveur avant d'être ouvert :
-`backupFile()` ne connaît que le motif `famille-…-[a-z]+.zip` et reste dans le dossier `sauvegardes`,
-un `..` glissé dans la requête ressort en 404.
+`backupFile()` ne connaît que le motif `famille-…-HHMM-motif.zip` et reste dans le dossier
+`sauvegardes`, un `..` glissé dans la requête ressort en 404.
+
+### Recharger une archive
+
+Compter sur une sauvegarde que l'on n'a jamais su relire, c'est croire qu'on a deux copies.
+`server/restore.ts` fait le voyage inverse, et l'ordre de ses étapes est tout le sujet :
+
+1. **contrôler avant d'écarter** — la base de l'archive est écrite dans un fichier de côté, ouverte
+   en lecture, passée à `PRAGMA integrity_check` et à la table `person` qu'elle doit contenir. Une
+   archive vide, abîmée ou venue d'ailleurs est refusée avant que quoi que ce soit ait bougé ;
+2. **copier ce qui va être écrasé** — une archive `…-avant-restauration.zip` de la base en place,
+   produite par `backup()` et donc lisible même si le fichier de départ était à moitié écrit. Deux
+   restaurations dans la même minute gardent leurs deux copies (`…-b.zip`) ;
+3. **échanger les fichiers** — `famille.db` est renommé puis remplacé, jamais écrit par-dessus : une
+   coupure laisse l'un ou l'autre, jamais deux moitiés. Si le second renommage échoue, le premier est
+   défait dans la foulée. Les journaux `-wal` et `-shm` de la base qui n'est plus là sont effacés,
+   sinon ils feraient relire l'ancienne base à la nouvelle ;
+4. **relire ce qui est en place** — les comptages annoncés à l'écran viennent du fichier posé, pas de
+   l'archive que l'on croyait installer.
+
+Les réglages et les médias voyagent avec l'archive : `config.json` est remplacé par celui de
+l'archive, les fichiers de `medias/` sont ajoutés à ceux du dossier. **Rien n'est supprimé** — une
+restauration ramène des personnes et les photos que leurs lignes réclament, ce n'est pas un tri. Une
+entrée d'archive dont le nom sortirait du dossier des médias est écartée et dite à l'écran.
+
+L'application refuse de travailler si quelqu'un écoute sur le port : remplacer une base sous un
+programme qui l'utilise produirait un arbre à moitié écrit. `--force` passe outre, en le disant.
 
 ### Export JSON
 
@@ -238,7 +273,7 @@ rangé dans l'union.
 - [x] écran Réglages : dossier de données, personne de référence, archives, export
 - [x] copie d'une archive vers un autre support (« Copier vers… », hors du disque)
 - [x] export JSON de l'arbre, lisible sans l'application
-- [ ] restauration depuis une archive
+- [x] restauration d'une archive (`restore.bat`) : contrôle, copie de sûreté, échange de fichiers
 
 ## Limites connues
 
@@ -254,10 +289,19 @@ rangé dans l'union.
   passage, sans signalement. Une écriture qui créerait une boucle est refusée, mais un cycle déjà
   présent dans la base n'est pas signalé à l'écran.
 - **Aucune photo, aucun document** : c'est la passe 4.
-- **Rien ne remplace une archive.** « Copier vers… » sort une copie du disque, mais aucun écran ne la
-  recharge : la restauration se fait encore à la main, application fermée, en remplaçant le fichier
-  `famille.db` du dossier de données par celui de l'archive (le `LISEZMOI.txt` de l'archive le dit).
-  Compter sur une sauvegarde que l'on n'a jamais su restaurer est le seul vrai risque de ce chapitre.
+- **La restauration ne se commande pas depuis l'écran.** Elle passe par `restore.bat`, application
+  fermée : le serveur tient la base ouverte et remplacer ce sur quoi il est assis produirait un arbre
+  à moitié écrit. L'écran Réglages le dit sous la liste des archives, avec les trois gestes à faire.
+  Un bouton « Restaurer » supposerait de redémarrer le serveur de l'intérieur, ou de passer par un
+  fichier de consigne appliqué au démarrage — deux choses à construire en même temps que l'écran qui
+  les montre, pas avant.
+- **Une archive contrôlée n'est pas une archive juste.** Le script vérifie que la base s'ouvre, pas
+  que l'arbre qu'elle contient est celui que l'on croyait : une fausse manœuvre de saisie vieille de
+  trois semaines revient intacte. La comparaison annoncée avant de remplacer (combien de personnes
+  ici, combien là) est ce qui doit faire tiquer.
+- **Une restauration ne supprime aucune photo.** Les médias de l'archive sont ajoutés à ceux du
+  dossier, jamais l'inverse : les images supprimées depuis l'archive reviendraient avec leur ligne,
+  mais celles ajoutées après restent en place même si plus personne ne les réclame.
 - **L'export JSON ne porte pas les images**, seulement leurs chemins et leurs légendes : c'est un
   fichier de données, pas une archive. Les pixels vivent dans le ZIP.
 
@@ -276,5 +320,8 @@ sauvegarde.
 - Pour tester sans toucher aux vraies données, on démarre sur un dossier temporaire :
   `FAMILY_DATA_DIR=<dossier vide hors du projet> PORT=4599 npm start`. Sans ces deux variables,
   `npm start` ouvre `D:\Genealogie`, c'est-à-dire l'arbre de la maison.
+- La restauration suit la même résolution de dossier, donc elle aussi se teste avec un dossier à
+  part : `npm run restore -- --data-dir <dossier> --list`. Sans `--data-dir`, ce sont les archives de
+  la maison qui sont listées — et choisies, ensuite.
 - Les tests (`npm test`) écrivent chacun dans leur propre dossier temporaire : ils ne peuvent pas
   atteindre une vraie base, et chaque fichier a son processus.
