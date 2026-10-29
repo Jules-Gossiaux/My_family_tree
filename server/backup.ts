@@ -92,8 +92,10 @@ async function createBackup(reason: string): Promise<BackupInfo> {
         '  medias/      photos et documents scannés',
         '  config.json  réglages de l’application',
         '',
-        'Restauration : fermez l’application, remplacez le fichier',
-        'famille.db du dossier de données par celui de cette archive.',
+        'Restauration : double-cliquez « restore.bat » dans le dossier du programme, ou',
+        'lancez « npm run restore -- --list » pour voir les archives.',
+        "Ne remplacez pas famille.db à la main : le script contrôle l’archive, garde une",
+        'copie de ce qu’il écrase et repart les journaux de la base.',
         '',
       ].join('\n'),
       'utf8',
@@ -158,8 +160,9 @@ export function scheduleAutoBackup(): void {
 /**
  * Une archive que l'application a elle-même écrite. Le nom vient du serveur, mais il fait le
  * voyage par une requête HTTP : un `..` glissé dedans ne doit pas remonter hors du dossier.
+ * Le motif laissé après l'heure peut contenir un tiret : « avant-restauration ».
  */
-const ARCHIVE_NAME = /^famille-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-[a-z]+\.zip$/;
+const ARCHIVE_NAME = /^famille-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-[a-z][a-z-]*\.zip$/;
 
 export function backupFile(name: string): { path: string; size: number } | null {
   if (!ARCHIVE_NAME.test(name)) return null;

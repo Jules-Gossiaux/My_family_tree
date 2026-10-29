@@ -13,6 +13,7 @@
     "dev:client": "vite",
     "build": "vite build",
     "start": "tsx server/index.ts",
+    "restore": "tsx server/restore.ts",
     "test": "node --import tsx --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
