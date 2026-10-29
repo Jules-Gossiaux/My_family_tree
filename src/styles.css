@@ -571,6 +571,107 @@ input::placeholder {
   margin-top: 26px;
   padding-top: 14px;
   border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.link.danger {
+  color: var(--danger);
+}
+
+.backup-note {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+/* ---------- menu contextuel ---------- */
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 61;
+  min-width: 214px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 5px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.context-menu button:hover {
+  background: var(--surface-2);
+}
+
+.context-menu button.danger {
+  color: var(--danger);
+}
+
+.menu-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 5px 6px;
+}
+
+.dialog-small {
+  max-width: 430px;
+}
+
+.dialog-text {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.dialog-text strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #1a0d0a;
+  font-weight: 500;
+}
+
+.danger-solid:hover {
+  background: #d2836f;
+  border-color: #d2836f;
+}
+
+.toast {
+  position: fixed;
+  bottom: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  z-index: 70;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
 /* ---------- dialogue ---------- */

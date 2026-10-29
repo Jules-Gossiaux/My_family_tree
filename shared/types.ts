@@ -82,3 +82,16 @@ export interface CreatePersonInput {
   deathText?: string | null;
   relation?: RelationInput | null;
 }
+
+export interface BackupInfo {
+  name: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface AppState {
+  dataDir: string;
+  rootPersonId: string | null;
+  counts: { persons: number; couples: number; media: number };
+  backup: BackupInfo | null;
+}

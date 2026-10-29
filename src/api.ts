@@ -1,4 +1,10 @@
-import type { CreatePersonInput, GraphData, PersonDetail } from '../shared/types';
+import type {
+  AppState,
+  BackupInfo,
+  CreatePersonInput,
+  GraphData,
+  PersonDetail,
+} from '../shared/types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -20,6 +26,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   graph: () => request<GraphData>('/api/graph'),
+  state: () => request<AppState>('/api/state'),
+  backup: () => request<BackupInfo>('/api/backup', { method: 'POST' }),
   person: (id: string) => request<PersonDetail>(`/api/persons/${id}`),
   createPerson: (input: CreatePersonInput) =>
     request<{ id: string }>('/api/persons', { method: 'POST', body: JSON.stringify(input) }),

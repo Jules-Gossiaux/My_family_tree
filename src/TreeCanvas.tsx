@@ -5,6 +5,7 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { CARD_GAP, CARD_H, CARD_W, type LayoutResult, type Unit } from './treeLayout';
@@ -15,6 +16,7 @@ interface Props {
   layout: LayoutResult;
   selectedId: string | null;
   onSelect: (personId: string) => void;
+  onContextMenu: (personId: string, x: number, y: number) => void;
 }
 
 export interface TreeCanvasHandle {
@@ -38,18 +40,21 @@ function Card({
   y,
   selected,
   onSelect,
+  onContext,
 }: {
   person: Person;
   x: number;
   y: number;
   selected: boolean;
   onSelect: () => void;
+  onContext: (event: ReactMouseEvent) => void;
 }) {
   return (
     <g
       className={`card${selected ? ' is-selected' : ''}`}
       transform={`translate(${x} ${y})`}
       onClick={onSelect}
+      onContextMenu={onContext}
       role="button"
     >
       <rect width={CARD_W} height={CARD_H} rx={10} className="card-box" />
@@ -64,7 +69,7 @@ function Card({
 }
 
 const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
-  { layout, selectedId, onSelect },
+  { layout, selectedId, onSelect, onContextMenu },
   ref,
 ) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -133,7 +138,6 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
     fit();
   }, [signature, fit, layout.units.length]);
 
-  // L'ouverture de la fiche réduit le canevas : sans recadrage, l'arbre se retrouve tronqué.
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -202,49 +206,40 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
 
   const renderUnit = (unit: Unit) => {
     const x0 = unit.x - unit.w / 2;
-
-    if (unit.personIds.length === 1) {
-      const person = layout.personById.get(unit.personIds[0]);
-      if (!person) return null;
-      return (
-        <Card
-          key={unit.key}
-          person={person}
-          x={x0}
-          y={unit.y}
-          selected={selectedId === person.id}
-          onSelect={() => handleSelect(person.id)}
-        />
-      );
-    }
-
-    const a = layout.personById.get(unit.personIds[0]);
-    const b = layout.personById.get(unit.personIds[1]);
-    if (!a || !b) return null;
+    const slotX = (index: number) => x0 + index * (CARD_W + CARD_GAP);
 
     return (
       <g key={unit.key}>
-        <Card
-          person={a}
-          x={x0}
-          y={unit.y}
-          selected={selectedId === a.id}
-          onSelect={() => handleSelect(a.id)}
-        />
-        <Card
-          person={b}
-          x={x0 + CARD_W + CARD_GAP}
-          y={unit.y}
-          selected={selectedId === b.id}
-          onSelect={() => handleSelect(b.id)}
-        />
-        <line
-          className="couple-link"
-          x1={x0 + CARD_W}
-          y1={unit.y + CARD_H / 2}
-          x2={x0 + CARD_W + CARD_GAP}
-          y2={unit.y + CARD_H / 2}
-        />
+        {unit.junctions.map((junction) => (
+          <line
+            key={junction.coupleId}
+            className="couple-link"
+            x1={slotX(junction.after) + CARD_W}
+            y1={unit.y + CARD_H / 2}
+            x2={slotX(junction.after + 1)}
+            y2={unit.y + CARD_H / 2}
+          />
+        ))}
+        {unit.slots.map((personId, index) => {
+          const person = layout.personById.get(personId);
+          if (!person) return null;
+          return (
+            <Card
+              key={personId}
+              person={person}
+              x={slotX(index)}
+              y={unit.y}
+              selected={selectedId === personId}
+              onSelect={() => handleSelect(personId)}
+              onContext={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onSelect(personId);
+                onContextMenu(personId, event.clientX, event.clientY);
+              }}
+            />
+          );
+        })}
       </g>
     );
   };
@@ -260,8 +255,8 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
               if (!from || !to) return null;
               const y1 = from.y + CARD_H;
               const y2 = to.y;
-              const mid = y1 + (y2 - y1) / 2;
-              const d = `M ${from.x} ${y1} V ${mid} H ${to.x} V ${y2}`;
+              const mid = Math.min(y1 + (y2 - y1) / 2 + edge.bus, y2 - 16);
+              const d = `M ${from.x + edge.offset} ${y1} V ${mid} H ${to.x} V ${y2}`;
               return <path key={`${edge.from}-${edge.to}`} d={d} className="edge" />;
             })}
           </g>

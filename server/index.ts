@@ -4,6 +4,7 @@ import express from 'express';
 import { db, now, newId } from './db';
 import { DATA_DIR } from './config';
 import { parseGenealogyDate } from './dates';
+import { createBackup, lastBackup, listBackups, scheduleAutoBackup } from './backup';
 import type {
   Couple,
   CreatePersonInput,
@@ -189,7 +190,22 @@ app.get('/api/state', (_req, res) => {
     dataDir: DATA_DIR,
     rootPersonId: config.rootPersonId,
     counts: { persons: persons.n, couples: couples.n, media: media.n },
+    backup: lastBackup(),
   });
+});
+
+app.get('/api/backups', (_req, res) => {
+  res.json({ backups: listBackups() });
+});
+
+app.post('/api/backup', async (_req, res) => {
+  try {
+    const info = await createBackup('manuel');
+    res.json(info);
+  } catch (error) {
+    console.error('[sauvegarde]', error);
+    res.status(500).json({ error: 'La sauvegarde a échoué' });
+  }
 });
 
 app.get('/api/graph', (_req, res) => {
@@ -468,4 +484,5 @@ if (fs.existsSync(distDir)) {
 app.listen(PORT, () => {
   console.log(`Arbre de famille — http://localhost:${PORT}`);
   console.log(`Données : ${DATA_DIR}`);
+  scheduleAutoBackup();
 });

@@ -11,6 +11,7 @@ interface Props {
   onEdit: (person: PersonDetail) => void;
   onClose: () => void;
   onSetRoot: (personId: string) => void;
+  onDelete: (personId: string) => void;
 }
 
 function RelationRow({ person, onSelect }: { person: Person; onSelect: (id: string) => void }) {
@@ -42,6 +43,7 @@ export default function PersonSheet({
   onEdit,
   onClose,
   onSetRoot,
+  onDelete,
 }: Props) {
   const [person, setPerson] = useState<PersonDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -175,6 +177,14 @@ export default function PersonSheet({
       <footer className="sheet-footer">
         <button type="button" className="link" onClick={() => onSetRoot(person.id)}>
           Faire de cette personne la souche de l'arbre
+        </button>
+        <button
+          type="button"
+          className="link danger"
+          onClick={() => onDelete(person.id)}
+          title="Supprimer (touche Suppr)"
+        >
+          Supprimer cette personne
         </button>
       </footer>
     </aside>

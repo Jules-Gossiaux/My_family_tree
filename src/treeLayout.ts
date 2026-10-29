@@ -4,24 +4,32 @@ export const CARD_W = 148;
 export const CARD_H = 64;
 export const CARD_GAP = 10;
 export const SIBLING_GAP = 30;
-export const LEVEL_GAP = 76;
+export const LEVEL_GAP = 84;
 export const PAD = 48;
+
+export interface Junction {
+  coupleId: string;
+  after: number;
+}
 
 export interface Unit {
   key: string;
-  personIds: string[];
-  coupleId: string | null;
+  slots: string[];
+  junctions: Junction[];
   x: number;
   y: number;
   w: number;
   depth: number;
   subtreeW: number;
   children: string[];
+  childJunction: Map<string, number>;
 }
 
 export interface Edge {
   from: string;
   to: string;
+  offset: number;
+  bus: number;
 }
 
 export interface LayoutResult {
@@ -38,9 +46,9 @@ export interface LayoutResult {
 /**
  * Place les cases de l'arbre.
  *
- * Chaque « unité » est une personne seule ou un couple : c'est le couple qui porte les enfants,
- * pas l'individu. Le placement est un parcours post-ordre : chaque sous-arbre occupe une largeur
- * propre, le parent est centré au-dessus des enfants.
+ * Une personne = une seule case, jamais dupliquée. Ses conjoints sont dessinés dans le même
+ * bloc, de part et d'autre : [conjoint] [personne] [conjoint]. Les enfants pendent sous la
+ * jonction du couple dont ils sont issus, ce qui rend les demi-frères lisibles.
  */
 export function buildLayout(graph: GraphData): LayoutResult {
   const personById = new Map(graph.persons.map((p) => [p.id, p]));
@@ -70,56 +78,86 @@ export function buildLayout(graph: GraphData): LayoutResult {
     }
   }
 
-  const primaryCoupleOf = (personId: string): Couple | null => {
-    const list = couplesByPerson.get(personId) ?? [];
-    if (list.length === 0) return null;
-    const withChildren = list.find((c) => (childrenByCouple.get(c.id) ?? []).length > 0);
-    return withChildren ?? list[0];
+  const partnerOf = (couple: Couple, personId: string): string | null => {
+    const other = couple.partnerA === personId ? couple.partnerB : couple.partnerA;
+    return other && personById.has(other) ? other : null;
   };
 
   const byKey = new Map<string, Unit>();
   const unitByPerson = new Map<string, string>();
 
-  function makeUnit(personId: string, couple: Couple | null, visited: Set<string>): Unit {
-    const key = couple ? couple.id : personId;
-    const cached = byKey.get(key);
+  function buildUnit(personId: string, visited: Set<string>): Unit {
+    const cached = byKey.get(personId);
     if (cached) return cached;
 
-    const personIds = [personId];
-    if (couple) {
-      const partnerId = couple.partnerA === personId ? couple.partnerB : couple.partnerA;
-      if (partnerId && personById.has(partnerId)) personIds.push(partnerId);
+    const couples = couplesByPerson.get(personId) ?? [];
+    const hasChildren = (couple: Couple) => (childrenByCouple.get(couple.id) ?? []).length > 0;
+    const ordered = [...couples].sort((a, b) => Number(hasChildren(b)) - Number(hasChildren(a)));
+
+    const leftCouple = ordered.length > 1 ? ordered[ordered.length - 1] : null;
+    const rightCouples = ordered.length > 1 ? ordered.slice(0, ordered.length - 1) : ordered;
+
+    const slots: string[] = [];
+    const junctions: Junction[] = [];
+
+    if (leftCouple) {
+      const partnerId = partnerOf(leftCouple, personId);
+      if (partnerId) {
+        slots.push(partnerId);
+        junctions.push({ coupleId: leftCouple.id, after: 0 });
+      }
+    }
+    slots.push(personId);
+
+    for (const couple of rightCouples) {
+      const partnerId = partnerOf(couple, personId);
+      if (!partnerId) continue;
+      junctions.push({ coupleId: couple.id, after: slots.length - 1 });
+      slots.push(partnerId);
     }
 
-    const w = personIds.length === 2 ? CARD_W * 2 + CARD_GAP : CARD_W;
+    const w = slots.length * CARD_W + (slots.length - 1) * CARD_GAP;
+    const children: string[] = [];
+    const childJunction = new Map<string, number>();
+
     const unit: Unit = {
-      key,
-      personIds,
-      coupleId: couple?.id ?? null,
+      key: personId,
+      slots,
+      junctions,
       x: 0,
       y: 0,
       w,
       depth: 0,
       subtreeW: w,
-      children: [],
+      children,
+      childJunction,
     };
-    byKey.set(key, unit);
-    for (const pid of personIds) {
-      if (!unitByPerson.has(pid)) unitByPerson.set(pid, key);
+
+    byKey.set(personId, unit);
+    for (const slot of slots) {
+      if (!unitByPerson.has(slot)) unitByPerson.set(slot, personId);
     }
 
     const nextVisited = new Set(visited);
-    for (const pid of personIds) nextVisited.add(pid);
+    for (const slot of slots) nextVisited.add(slot);
 
-    const childIds = couple
-      ? [...(childrenByCouple.get(couple.id) ?? []), ...(childrenByPerson.get(personId) ?? [])]
-      : (childrenByPerson.get(personId) ?? []);
+    junctions.forEach((junction, index) => {
+      for (const childId of childrenByCouple.get(junction.coupleId) ?? []) {
+        if (nextVisited.has(childId) || !personById.has(childId)) continue;
+        if (children.includes(childId)) continue;
+        children.push(childId);
+        childJunction.set(childId, index);
+      }
+    });
 
-    for (const childId of childIds) {
-      if (nextVisited.has(childId)) continue;
-      const childUnit = makeUnit(childId, primaryCoupleOf(childId), nextVisited);
-      if (!unit.children.includes(childUnit.key)) unit.children.push(childUnit.key);
+    for (const childId of childrenByPerson.get(personId) ?? []) {
+      if (nextVisited.has(childId) || !personById.has(childId)) continue;
+      if (children.includes(childId)) continue;
+      children.push(childId);
+      childJunction.set(childId, -1);
     }
+
+    for (const childId of children) buildUnit(childId, nextVisited);
 
     return unit;
   }
@@ -132,32 +170,13 @@ export function buildLayout(graph: GraphData): LayoutResult {
         null);
 
   const rootKeys: string[] = [];
-  if (rootPersonId) {
-    const rootCouples = couplesByPerson.get(rootPersonId) ?? [];
-    if (rootCouples.length > 0) {
-      for (const couple of rootCouples) {
-        const unit = makeUnit(rootPersonId, couple, new Set());
-        if (!rootKeys.includes(unit.key)) rootKeys.push(unit.key);
-      }
-    } else {
-      rootKeys.push(makeUnit(rootPersonId, null, new Set()).key);
-    }
-  }
+  if (rootPersonId) rootKeys.push(buildUnit(rootPersonId, new Set()).key);
 
-  // Branches non rattachées : une personne sans lien connu doit rester visible,
-  // sinon elle disparaît de l'arbre et semble perdue.
-  const unattached = graph.persons.filter((person) => !unitByPerson.has(person.id));
-  for (const person of unattached) {
-    const personCouples = couplesByPerson.get(person.id) ?? [];
-    if (personCouples.length > 0) {
-      for (const couple of personCouples) {
-        const unit = makeUnit(person.id, couple, new Set());
-        if (!rootKeys.includes(unit.key)) rootKeys.push(unit.key);
-      }
-    } else {
-      const unit = makeUnit(person.id, null, new Set());
-      if (!rootKeys.includes(unit.key)) rootKeys.push(unit.key);
-    }
+  // Branches non rattachées : une personne sans lien connu doit rester visible.
+  for (const person of graph.persons) {
+    if (unitByPerson.has(person.id)) continue;
+    const unit = buildUnit(person.id, new Set());
+    if (!rootKeys.includes(unit.key)) rootKeys.push(unit.key);
   }
 
   function measure(key: string): number {
@@ -205,7 +224,23 @@ export function buildLayout(graph: GraphData): LayoutResult {
   const units = [...byKey.values()];
   const edges: Edge[] = [];
   for (const unit of units) {
-    for (const childKey of unit.children) edges.push({ from: unit.key, to: childKey });
+    for (const childKey of unit.children) {
+      const junctionIndex = unit.childJunction.get(childKey) ?? -1;
+      let offset = 0;
+      if (junctionIndex >= 0) {
+        offset =
+          -unit.w / 2 +
+          (junctionIndex + 1) * CARD_W +
+          junctionIndex * CARD_GAP +
+          CARD_GAP / 2;
+      }
+      edges.push({
+        from: unit.key,
+        to: childKey,
+        offset,
+        bus: junctionIndex >= 0 ? junctionIndex * 14 : 0,
+      });
+    }
   }
 
   const maxX = units.reduce((max, u) => Math.max(max, u.x + u.w / 2), 0);
