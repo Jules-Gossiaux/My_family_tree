@@ -4,14 +4,20 @@ import { spawn } from 'node:child_process';
 import express, { type Response } from 'express';
 import { db, now, newId } from './db';
 import { DATA_DIR } from './config';
-import { parseGenealogyDate } from './dates';
+import { parseGenealogyDate, readDateRow as toDate } from './dates';
 import { RelationError, attachRelation, pruneEmptyCouples } from './relations';
-import { forceBackup, lastBackup, listBackups, scheduleAutoBackup } from './backup';
+import {
+  backupFile,
+  forceBackup,
+  lastBackup,
+  listBackups,
+  scheduleAutoBackup,
+} from './backup';
+import { buildExport, exportFileName } from './export';
 import { listNotices, notify } from './notices';
 import type {
   Couple,
   CreatePersonInput,
-  GDate,
   GraphData,
   ParentChild,
   Person,
@@ -24,6 +30,9 @@ app.use(express.json({ limit: '4mb' }));
 
 const PORT = Number.parseInt(process.env.PORT ?? '', 10) || 4321;
 const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
+
+/** Le dossier de données se choisit dans ce fichier à la racine du projet, jamais versionné. */
+const LOCAL_CONFIG_PATH = path.resolve(process.cwd(), 'config.local.json');
 
 interface AppConfig {
   rootPersonId: string | null;
@@ -48,16 +57,42 @@ function writeConfig(config: AppConfig): void {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
 }
 
-type Row = Record<string, any>;
-
-function toDate(row: Row, prefix: string): GDate | null {
-  const min = row[`${prefix}_min`] ?? null;
-  const max = row[`${prefix}_max`] ?? null;
-  const qualifier = row[`${prefix}_qualifier`] ?? null;
-  const text = row[`${prefix}_text`] ?? null;
-  if (!min && !max && !text) return null;
-  return { min, max, qualifier: qualifier ?? 'unknown', text };
+/** Le fichier est écrit entier : un réglage déjà présent reste, seul le dossier change. */
+function writeLocalConfig(dataDir: string): void {
+  let merged: Record<string, unknown> = {};
+  try {
+    if (fs.existsSync(LOCAL_CONFIG_PATH)) {
+      merged = JSON.parse(fs.readFileSync(LOCAL_CONFIG_PATH, 'utf8')) as Record<string, unknown>;
+    }
+  } catch {
+    // Un fichier que l'on ne peut pas lire serait de toute façon ignoré au démarrage : on le remplace.
+    console.error(`[réglages] ${LOCAL_CONFIG_PATH} est illisible, il sera réécrit.`);
+  }
+  merged.dataDir = dataDir;
+  fs.writeFileSync(LOCAL_CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');
 }
+
+/** Ce que le nouvel emplacement ne peut pas être. Le message se montre tel quel à l'écran. */
+function rejectDataDir(resolved: string): string | null {
+  const fold = (value: string) => (process.platform === 'win32' ? value.toLowerCase() : value);
+  const project = fold(path.resolve(process.cwd()));
+  const target = fold(resolved);
+
+  // Le dépôt est destiné à GitHub : une base rangée là finirait par être versionnée.
+  if (target === project || target.startsWith(project + path.sep)) {
+    return (
+      'Vos données ne peuvent pas vivre dans le dossier du programme : le dépôt est fait pour être ' +
+      'partagé, et une famille y serait un jour versionnée. Choisissez un dossier hors du projet, ' +
+      'par exemple D:\\Genealogie.'
+    );
+  }
+  if (target === fold(path.parse(resolved).root)) {
+    return 'Choisissez un dossier dans le disque, pas le disque lui-même : D:\\Genealogie plutôt que D:\\.';
+  }
+  return null;
+}
+
+type Row = Record<string, any>;
 
 function mapPerson(row: Row): Person {
   return {
@@ -166,6 +201,7 @@ app.get('/api/state', (_req, res) => {
   const config = readConfig();
   res.json({
     dataDir: DATA_DIR,
+    dataDirFromEnv: Boolean(process.env.FAMILY_DATA_DIR?.trim()),
     rootPersonId: config.rootPersonId,
     counts: { persons: persons.n, couples: couples.n, media: media.n },
     backup: lastBackup(),
@@ -175,6 +211,37 @@ app.get('/api/state', (_req, res) => {
 
 app.get('/api/backups', (_req, res) => {
   res.json({ backups: listBackups() });
+});
+
+/**
+ * Une archive déjà écrite, livrée octet pour octet : c'est le « sauvegarder vers… » de la spec, la
+ * seule copie qui protège vraiment parce qu'elle quitte le disque. Le nom est validé côté serveur
+ * avant l'ouverture du fichier.
+ */
+app.get('/api/backups/file', (req, res) => {
+  const name = String(req.query.name ?? '');
+  const file = backupFile(name);
+  if (!file) {
+    res.status(404).json({ error: 'Archive introuvable dans le dossier de sauvegardes' });
+    return;
+  }
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+  const stream = fs.createReadStream(file.path);
+  stream.on('error', () => {
+    // L'entête est déjà partie : la réponse s'arrête là, le client verra un fichier incomplet.
+    res.destroy();
+  });
+  stream.pipe(res);
+});
+
+/** Tout l'arbre en un fichier JSON que n'importe quel éditeur ouvre, sans l'application. */
+app.get('/api/export/json', (_req, res) => {
+  const exportDocument = buildExport(readConfig().rootPersonId);
+  const name = exportFileName();
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+  res.send(JSON.stringify(exportDocument, null, 2));
 });
 
 app.post('/api/backup', async (_req, res) => {
@@ -428,6 +495,51 @@ app.put('/api/config', (req, res) => {
   const config = readConfig();
   writeConfig({ rootPersonId: body.rootPersonId ?? config.rootPersonId });
   res.json({ ok: true });
+});
+
+/**
+ * Changer le dossier de données s'écrit dans `config.local.json` et se dit à ouvrir au prochain
+ * démarrage. Le serveur ne rouvre pas la base derrière le dos de l'utilisateur : la base est
+ * ouverte, les médias référencés par des chemins relatifs, et un solde de course entre deux
+ * dossiers produirait un arbre à moitié écrit. Rien n'est donc simulé — le redémarrage est demandé.
+ */
+app.put('/api/config/data-dir', (req, res) => {
+  const body = req.body as { dataDir?: string };
+  const requested = (body.dataDir ?? '').trim().replace(/^["']+|["']+$/g, '');
+  if (!requested) {
+    res.status(400).json({ error: 'Indiquez le dossier où doivent vivre vos données.' });
+    return;
+  }
+
+  const resolved = path.resolve(requested);
+  const refusal = rejectDataDir(resolved);
+  if (refusal) {
+    res.status(400).json({ error: refusal });
+    return;
+  }
+
+  try {
+    fs.mkdirSync(resolved, { recursive: true });
+    fs.accessSync(resolved, fs.constants.W_OK);
+  } catch (error) {
+    res.status(400).json({
+      error: `Ce dossier n’est pas utilisable : ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return;
+  }
+
+  writeLocalConfig(resolved);
+  res.json({
+    ok: true,
+    dataDir: resolved,
+    restartNeeded: resolved !== DATA_DIR,
+    note:
+      process.env.FAMILY_DATA_DIR?.trim() && resolved !== DATA_DIR
+        ? `Enregistré dans config.local.json. La variable FAMILY_DATA_DIR (actuellement ${process.env.FAMILY_DATA_DIR}) prime sur ce fichier : retirez-la pour que ce choix soit utilisé.`
+        : resolved !== DATA_DIR
+          ? 'Enregistré. Redémarrez l’application pour ouvrir ce dossier.'
+          : 'C’est déjà le dossier ouvert : rien ne change.',
+  });
 });
 
 const distDir = path.resolve(process.cwd(), 'dist');

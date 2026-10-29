@@ -155,6 +155,21 @@ export function scheduleAutoBackup(): void {
   }, WATCH_EVERY_MS).unref();
 }
 
+/**
+ * Une archive que l'application a elle-même écrite. Le nom vient du serveur, mais il fait le
+ * voyage par une requête HTTP : un `..` glissé dedans ne doit pas remonter hors du dossier.
+ */
+const ARCHIVE_NAME = /^famille-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-[a-z]+\.zip$/;
+
+export function backupFile(name: string): { path: string; size: number } | null {
+  if (!ARCHIVE_NAME.test(name)) return null;
+  const dir = path.resolve(BACKUP_DIR);
+  const target = path.resolve(dir, name);
+  if (!target.startsWith(dir + path.sep)) return null;
+  if (!fs.existsSync(target)) return null;
+  return { path: target, size: fs.statSync(target).size };
+}
+
 /** Un échec de sauvegarde qui reste dans la console est une sauvegarde que l'on croit avoir. */
 function reportFailure(error: unknown): void {
   console.error('[sauvegarde] échec :', error);

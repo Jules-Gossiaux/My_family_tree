@@ -29,6 +29,10 @@ export const api = {
   graph: () => request<GraphData>('/api/graph'),
   state: () => request<AppState>('/api/state'),
   backup: () => request<BackupInfo>('/api/backup', { method: 'POST' }),
+  backups: () => request<{ backups: BackupInfo[] }>('/api/backups'),
+  /** Adresses des fichiers que l'on enregistre ailleurs que dans le dossier de données. */
+  backupFileUrl: (name: string) => `/api/backups/file?name=${encodeURIComponent(name)}`,
+  exportJsonUrl: '/api/export/json',
   person: (id: string) => request<PersonDetail>(`/api/persons/${id}`),
   createPerson: (input: CreatePersonInput) =>
     request<{ id: string }>('/api/persons', { method: 'POST', body: JSON.stringify(input) }),
@@ -45,4 +49,17 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ rootPersonId }),
     }),
+  setDataDir: (dataDir: string) =>
+    request<DataDirResult>('/api/config/data-dir', {
+      method: 'PUT',
+      body: JSON.stringify({ dataDir }),
+    }),
 };
+
+/** Le dossier choisi est écrit sur le disque ; l'ouverture réelle attend un redémarrage. */
+export interface DataDirResult {
+  ok: true;
+  dataDir: string;
+  restartNeeded: boolean;
+  note: string;
+}

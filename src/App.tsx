@@ -3,6 +3,7 @@ import TreeCanvas, { type TreeCanvasHandle } from './TreeCanvas';
 import PersonSheet from './PersonSheet';
 import AddPersonDialog from './AddPersonDialog';
 import AttachDialog from './AttachDialog';
+import SettingsDialog from './SettingsDialog';
 import { api } from './api';
 import { buildLayout } from './treeLayout';
 import { fullName, lifeSpan } from './dates';
@@ -44,6 +45,9 @@ export default function App() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [backup, setBackup] = useState<BackupInfo | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [dataDir, setDataDir] = useState('');
+  const [dataDirFromEnv, setDataDirFromEnv] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [query, setQuery] = useState('');
@@ -57,6 +61,8 @@ export default function App() {
       setGraph(data);
       setBackup(state.backup);
       setWarnings(state.warnings ?? []);
+      setDataDir(state.dataDir);
+      setDataDirFromEnv(state.dataDirFromEnv);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de charger les données');
@@ -216,13 +222,13 @@ export default function App() {
       ) {
         return;
       }
-      if (!selectedId || dialog || pendingDelete || menu || attach) return;
+      if (!selectedId || dialog || pendingDelete || menu || attach || settings) return;
       event.preventDefault();
       setPendingDelete(selectedId);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId, dialog, pendingDelete, menu, attach]);
+  }, [selectedId, dialog, pendingDelete, menu, attach, settings]);
 
   const openMenu = useCallback((personId: string, x: number, y: number) => {
     setMenu({
@@ -282,6 +288,15 @@ export default function App() {
         <span className="backup-note">{backupLabel(backup)}</span>
         <button type="button" className="ghost" onClick={runBackup} disabled={backupBusy}>
           {backupBusy ? 'Sauvegarde…' : 'Sauvegarder'}
+        </button>
+
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => setSettings(true)}
+          title="Dossier de données, souche de l’arbre, copies et export"
+        >
+          Réglages
         </button>
 
         <button type="button" className="primary" onClick={() => setDialog({ relation: null })}>
@@ -460,6 +475,19 @@ export default function App() {
           candidates={(graph?.persons ?? []).filter((other) => other.id !== attach)}
           onClose={() => setAttach(null)}
           onAttached={handleAttached}
+        />
+      )}
+
+      {settings && (
+        <SettingsDialog
+          dataDir={dataDir}
+          dataDirFromEnv={dataDirFromEnv}
+          rootPersonId={graph?.rootId ?? null}
+          persons={graph?.persons ?? []}
+          onClose={() => setSettings(false)}
+          onRootChange={handleSetRoot}
+          onBackup={setBackup}
+          onToast={setToast}
         />
       )}
 

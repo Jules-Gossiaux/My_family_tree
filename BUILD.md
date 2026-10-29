@@ -30,6 +30,7 @@ server/          API HTTP + accès SQLite
   notices.ts     ce que le serveur sait et doit afficher
   relations.ts   rattachement d'une personne à une autre, avec ses refus
   backup.ts      archive ZIP datée, au démarrage et pendant la session
+  export.ts      tout l'arbre en un JSON lisible sans l'application
   index.ts       routes
   schema.sql     schéma complet
 shared/          types partagés serveur / client
@@ -39,7 +40,9 @@ src/             interface React
   PersonSheet.tsx fiche latérale
   AddPersonDialog.tsx saisie rapide
   AttachDialog.tsx choix d'une personne déjà existante à rattacher
-tests/           tests du parseur de dates et des relations (`npm test`)
+  SettingsDialog.tsx écran Réglages : dossier, souche, copies, export
+  saveFile.ts    écrire un fichier produit par le serveur là où l'utilisateur le veut
+tests/           dates, relations, intégrité, migration, export, archives (`npm test`)
 ```
 
 Le serveur sert l'API et, en production, le front compilé par Vite. Un seul processus, un seul port.
@@ -84,6 +87,15 @@ ailleurs. Sur les systèmes où aucun choix ne peut être deviné, l'application
 les deux façons d'indiquer le dossier.
 
 Le chemin retenu est affiché au démarrage (`Données : …`) et repris dans l'en-tête de l'interface.
+L'écran **Réglages** le change : il écrit `config.local.json` à la racine du projet et demande un
+redémarrage. Deux chemins sont refusés à l'écran, parce qu'ils coûteraient plus tard : un dossier rangé
+**dans le dépôt** (une famille versionnée par accident), et **la racine d'un disque** (`D:\` plutôt
+que `D:\Genealogie`). Quand `FAMILY_DATA_DIR` est posée, elle prime et l'écran le dit — sans quoi on
+croirait changer son dossier alors que rien ne bouge.
+
+Le serveur ne rouvre pas la base en cours de route : la base est ouverte, les médias sont référencés
+par des chemins relatifs, et partir à chaud produirait un arbre à moitié écrit. Le redémarrage est
+donc demandé, jamais simulé.
 
 ## Sauvegarde des données
 
@@ -103,6 +115,34 @@ vérification produirait une archive identique et chasserait les vingt gardées.
 Un échec de sauvegarde n'est pas seulement loggé : il passe par `server/notices.ts` et s'affiche
 en bandeau. Une sauvegarde que l'on croit avoir est pire qu'une sauvegarde refusée.
 
+### Faire sortir une copie du disque
+
+Une archive rangée à côté des données ne protège ni de l'incendie ni du disque qui meurt. L'écran
+Réglages liste les archives avec, sur chacune, un bouton **« Copier vers… »** qui la livre octet pour
+octet au navigateur : `showSaveFilePicker` ouvre la fenêtre d'enregistrement (Chrome, Edge), les
+autres navigateurs retombent sur le téléchargement. Dans les deux cas la copie quitte le disque, ce
+qui est tout ce qu'on demande à ce bouton. Le nom de l'archive est validé serveur avant d'être ouvert :
+`backupFile()` ne connaît que le motif `famille-…-[a-z]+.zip` et reste dans le dossier `sauvegardes`,
+un `..` glissé dans la requête ressort en 404.
+
+### Export JSON
+
+`server/export.ts` écrit tout l'arbre dans un fichier que n'importe quel éditeur ouvre, sans
+l'application — le troisième niveau de la spec, celui qui protège d'un logiciel qui disparaît.
+Le document épouse les tables, sans inventer de vue : `persons`, `couples`, `parentChild`, `events`,
+`places`, `media`, `notes`, `sources`, `branches`, précédés de `format`, `version`, `exportedAt`,
+`rootPersonId`, `counts`, et d'une `note` qui explique comment relire les dates.
+
+Deux choix y comptent :
+
+- **une date garde ses quatre colonnes** (`min`, `max`, `qualifier`, `text`) réunies en un objet. Une
+  date floue exportée en `1920-01-01` serait une date inventée ;
+- **les naissances et décès ne sont pas dupliqués** depuis `event`, et `parentChild.coupleId` reste
+  vide tant que l'union n'est pas déclarée. L'export ne dévine pas ce que la base tait.
+
+Le fichier est proposé sous le nom `arbre-AAAAMMJJ-HHMM.json`. Les médias y sont désignés par leur
+chemin relatif au dossier de données, donc reprise dans l'archive ZIP.
+
 ## Faire évoluer le schéma
 
 `schema.sql` est écrit avec des `CREATE TABLE IF NOT EXISTS` : il pose les tables d'une base neuve
@@ -116,7 +156,7 @@ union, ses actes de mariage, et par `SET NULL` la mémoire de l'union dont venai
 deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 `pruneEmptyCouples()` que quand plus rien ne la justifie — ni un enfant, ni un acte, ni un membre.
 
-## Contrat d'API (passes 0 et 1)
+## Contrat d'API (passes 0 à 2)
 
 | Méthode | Route | Rôle |
 |---|---|---|
@@ -128,6 +168,11 @@ deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 | PATCH | `/api/persons/:id` | modification |
 | DELETE | `/api/persons/:id` | suppression |
 | PUT | `/api/config` | personne racine de l'arbre |
+| PUT | `/api/config/data-dir` | dossier de données : écrit `config.local.json`, demande un redémarrage |
+| POST | `/api/backup` | archive ZIP immédiate |
+| GET | `/api/backups` | archives gardées dans le dossier de données |
+| GET | `/api/backups/file?name=` | une archive, en flux, pour la copier sur un autre support |
+| GET | `/api/export/json` | tout l'arbre en JSON, avec un nom de fichier proposé |
 
 Le rattachement à la création prend la forme :
 
@@ -190,9 +235,9 @@ rangé dans l'union.
 - [x] bouton « Sauvegarder » et date de la dernière archive dans l'en-tête
 - [x] avertissements à l'écran quand une sauvegarde échoue ou qu'un réglages est abîmé
 - [x] un couple survit à la suppression d'un de ses membres (migration 1)
-- [ ] écran Réglages : dossier de données, personne de référence, dossier de copie externe
-- [ ] copie de la sauvegarde vers un dossier extérieur (disque ou clé)
-- [ ] export JSON de l'arbre
+- [x] écran Réglages : dossier de données, personne de référence, archives, export
+- [x] copie d'une archive vers un autre support (« Copier vers… », hors du disque)
+- [x] export JSON de l'arbre, lisible sans l'application
 - [ ] restauration depuis une archive
 
 ## Limites connues
@@ -209,6 +254,12 @@ rangé dans l'union.
   passage, sans signalement. Une écriture qui créerait une boucle est refusée, mais un cycle déjà
   présent dans la base n'est pas signalé à l'écran.
 - **Aucune photo, aucun document** : c'est la passe 4.
+- **Rien ne remplace une archive.** « Copier vers… » sort une copie du disque, mais aucun écran ne la
+  recharge : la restauration se fait encore à la main, application fermée, en remplaçant le fichier
+  `famille.db` du dossier de données par celui de l'archive (le `LISEZMOI.txt` de l'archive le dit).
+  Compter sur une sauvegarde que l'on n'a jamais su restaurer est le seul vrai risque de ce chapitre.
+- **L'export JSON ne porte pas les images**, seulement leurs chemins et leurs légendes : c'est un
+  fichier de données, pas une archive. Les pixels vivent dans le ZIP.
 
 Résolu : une personne ayant plusieurs unions n'apparaît plus qu'une seule fois, ses conjoints étant
 dessinés dans le même bloc `[conjoint] [personne] [conjoint]`.

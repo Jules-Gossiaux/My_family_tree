@@ -92,6 +92,8 @@ export interface BackupInfo {
 
 export interface AppState {
   dataDir: string;
+  /** Le dossier courant vient de la variable FAMILY_DATA_DIR : ce choix prime sur l'écran Réglages. */
+  dataDirFromEnv: boolean;
   rootPersonId: string | null;
   counts: { persons: number; couples: number; media: number };
   backup: BackupInfo | null;

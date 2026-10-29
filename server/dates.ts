@@ -185,3 +185,20 @@ export function parseGenealogyDate(input: string | null | undefined): GDate | nu
 
   return make(null, null, 'unknown', text);
 }
+
+/**
+ * Relit une date telle qu'elle est stockée : quatre colonnes `<prefix>_min`, `_max`,
+ * `_qualifier`, `_text`. Une ligne sans aucune de ces colonnes ne vaut pas une date inconnue,
+ * elle vaut l'absence de date — la différence se voit sur la fiche.
+ */
+export function readDateRow(
+  row: Record<string, unknown>,
+  prefix: string,
+): GDate | null {
+  const min = (row[`${prefix}_min`] as string | null) ?? null;
+  const max = (row[`${prefix}_max`] as string | null) ?? null;
+  const qualifier = (row[`${prefix}_qualifier`] as Qualifier | null) ?? 'unknown';
+  const text = (row[`${prefix}_text`] as string | null) ?? null;
+  if (!min && !max && !text) return null;
+  return { min, max, qualifier, text };
+}
