@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import express, { type Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import { db, now, newId } from './db';
 import { DATA_DIR } from './config';
 import { parseGenealogyDate, readDateRow as toDate } from './dates';
@@ -15,10 +15,25 @@ import {
 } from './backup';
 import { buildExport, exportFileName } from './export';
 import { listNotices, notify } from './notices';
+import {
+  MAX_BYTES,
+  MediaError,
+  attachPersons,
+  deleteMedia,
+  detachPerson,
+  getMedia,
+  listMedia,
+  mediaFile,
+  setPortrait,
+  storeMedia,
+  storeThumbnail,
+  updateMedia,
+} from './media';
 import type {
   Couple,
   CreatePersonInput,
   GraphData,
+  MediaKind,
   ParentChild,
   Person,
   PersonDetail,
@@ -104,6 +119,7 @@ function mapPerson(row: Row): Person {
     living: row.living === 1,
     summary: row.summary,
     branchId: row.branch_id,
+    portraitMediaId: row.portrait_media_id ?? null,
     birth: null,
     death: null,
   };
@@ -198,12 +214,15 @@ app.get('/api/state', (_req, res) => {
   const persons = db.prepare('SELECT COUNT(*) AS n FROM person').get() as { n: number };
   const couples = db.prepare('SELECT COUNT(*) AS n FROM couple').get() as { n: number };
   const media = db.prepare('SELECT COUNT(*) AS n FROM media').get() as { n: number };
+  const unattached = db
+    .prepare('SELECT COUNT(*) AS n FROM media WHERE id NOT IN (SELECT media_id FROM media_person)')
+    .get() as { n: number };
   const config = readConfig();
   res.json({
     dataDir: DATA_DIR,
     dataDirFromEnv: Boolean(process.env.FAMILY_DATA_DIR?.trim()),
     rootPersonId: config.rootPersonId,
-    counts: { persons: persons.n, couples: couples.n, media: media.n },
+    counts: { persons: persons.n, couples: couples.n, media: media.n, mediaUnattached: unattached.n },
     backup: lastBackup(),
     warnings: listNotices(),
   });
@@ -348,6 +367,7 @@ app.get('/api/persons/:id', (req, res) => {
     siblings,
     partners,
     children,
+    media: listMedia({ personId: person.id }),
   };
   res.json(detail);
 });
@@ -418,7 +438,10 @@ app.patch('/api/persons/:id', (req, res) => {
     return;
   }
 
-  const body = req.body as Partial<CreatePersonInput> & { nickname?: string | null };
+  const body = req.body as Partial<CreatePersonInput> & {
+    nickname?: string | null;
+    portraitMediaId?: string | null;
+  };
 
   const update = db.transaction(() => {
     const fields: string[] = [];
@@ -465,14 +488,26 @@ app.patch('/api/persons/:id', (req, res) => {
       );
       const nick = (body.nickname ?? '').trim();
       if (nick) {
-        db.prepare(
-          'INSERT INTO name_variant (id, person_id, name, type) VALUES (?, ?, ?, ?)',
-        ).run(newId(), req.params.id, nick, 'surnom');
+        db.prepare('INSERT INTO name_variant (id, person_id, name, type) VALUES (?, ?, ?, ?)').run(
+          newId(),
+          req.params.id,
+          nick,
+          'surnom',
+        );
       }
+    }
+
+    if (body.portraitMediaId !== undefined) {
+      setPortrait(req.params.id, body.portraitMediaId);
     }
   });
 
-  update();
+  try {
+    update();
+  } catch (error) {
+    sendMediaError(res, error);
+    return;
+  }
   res.json({ ok: true });
 });
 
@@ -488,6 +523,138 @@ app.delete('/api/persons/:id', (req, res) => {
   });
   remove();
   res.json({ ok: true });
+});
+
+/**
+ * Les médias entrent par leurs octets, pas par du JSON : une photo n'a rien à faire encodée en
+ * base64 dans une chaîne. Le plafond est celui du module, plus une marge pour les entêtes.
+ */
+const rawBytes = express.raw({
+  type: () => true,
+  limit: `${Math.ceil(MAX_BYTES / 1024 / 1024) + 4}mb`,
+});
+
+/** Un refus de média se montre tel quel : le message dit déjà quoi changer au fichier. */
+function sendMediaError(res: Response, error: unknown): void {
+  if (error instanceof MediaError) {
+    res.status(error.status).json({ error: error.message });
+    return;
+  }
+  if (error instanceof RelationError) {
+    res.status(error.status).json({ error: error.message });
+    return;
+  }
+  console.error('[média]', error);
+  res.status(500).json({ error: 'Le média n’a pas pu être traité.' });
+}
+
+app.post('/api/media', rawBytes, (req, res) => {
+  const buffer = req.body as unknown as Buffer;
+  if (!Buffer.isBuffer(buffer) || !buffer.length) {
+    res.status(400).json({ error: 'Aucun octet n’est arrivé : le fichier est resté vide.' });
+    return;
+  }
+  try {
+    const { media, deduped } = storeMedia({
+      kind: (String(req.query.kind ?? 'photo') as MediaKind) ?? 'photo',
+      mime: String(req.query.mime ?? req.headers['content-type'] ?? '').split(';')[0].trim(),
+      buffer,
+      taken: req.query.taken ? String(req.query.taken) : null,
+      caption: req.query.caption ? String(req.query.caption) : null,
+      documentType: req.query.documentType ? String(req.query.documentType) : null,
+      width: Number.parseInt(String(req.query.width ?? ''), 10) || null,
+      height: Number.parseInt(String(req.query.height ?? ''), 10) || null,
+    });
+    res.status(deduped ? 200 : 201).json({ media, deduped });
+  } catch (error) {
+    sendMediaError(res, error);
+  }
+});
+
+/** La vignette se dessine dans le navigateur : le serveur la range, il ne décode rien. */
+app.put('/api/media/:id/thumbnail', rawBytes, (req, res) => {
+  const buffer = req.body as unknown as Buffer;
+  if (!Buffer.isBuffer(buffer) || !buffer.length) {
+    res.status(400).json({ error: 'Aucune vignette n’est arrivée.' });
+    return;
+  }
+  try {
+    res.json({ media: storeThumbnail(req.params.id, buffer) });
+  } catch (error) {
+    sendMediaError(res, error);
+  }
+});
+
+/** `?state=a-relier` donne le bac d'entrée : ce qui est dans le dossier sans savoir à qui parler. */
+app.get('/api/media', (req, res) => {
+  const unattached = String(req.query.state ?? '') === 'a-relier';
+  res.json({ media: listMedia(unattached ? { unattached: true } : {}) });
+});
+
+function sendMediaPart(res: Response, id: string, part: 'original' | 'thumb'): void {
+  try {
+    const { file, mime } = mediaFile(id, part);
+    res.setHeader('Content-Type', mime ?? 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    const stream = fs.createReadStream(file);
+    stream.on('error', () => res.destroy());
+    stream.pipe(res);
+  } catch (error) {
+    sendMediaError(res, error);
+  }
+}
+
+app.get('/api/media/:id/original', (req, res) => sendMediaPart(res, req.params.id, 'original'));
+app.get('/api/media/:id/thumbnail', (req, res) => sendMediaPart(res, req.params.id, 'thumb'));
+
+app.patch('/api/media/:id', (req, res) => {
+  const body = req.body as {
+    caption?: string | null;
+    kind?: MediaKind;
+    documentType?: string | null;
+    dateText?: string | null;
+  };
+  try {
+    res.json({ media: updateMedia(req.params.id, body) });
+  } catch (error) {
+    sendMediaError(res, error);
+  }
+});
+
+/** Seul endroit de l'application qui efface des fichiers du disque — d'où la confirmation à l'écran. */
+app.delete('/api/media/:id', (req, res) => {
+  try {
+    deleteMedia(req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    sendMediaError(res, error);
+  }
+});
+
+/** Rattachement, seul ou par lot : c'est la table qui rend une photo de groupe utilisable. */
+app.post('/api/media/:id/persons', (req, res) => {
+  const body = req.body as { personIds?: string[]; role?: string };
+  const personIds = (body.personIds ?? []).filter((id) => typeof id === 'string' && id);
+  if (!personIds.length) {
+    res.status(400).json({ error: 'Choisissez au moins une personne à rattacher.' });
+    return;
+  }
+  try {
+    attachPersons(req.params.id, personIds, body.role ?? 'sujet');
+    res.json({ media: getMedia(req.params.id) });
+  } catch (error) {
+    sendMediaError(res, error);
+  }
+});
+
+app.delete('/api/media/:id/persons/:personId', (req, res) => {
+  try {
+    detachPerson(req.params.id, req.params.personId);
+    res.json({ media: getMedia(req.params.id) });
+  } catch (error) {
+    sendMediaError(res, error);
+  }
 });
 
 app.put('/api/config', (req, res) => {
@@ -540,6 +707,29 @@ app.put('/api/config/data-dir', (req, res) => {
           ? 'Enregistré. Redémarrez l’application pour ouvrir ce dossier.'
           : 'C’est déjà le dossier ouvert : rien ne change.',
   });
+});
+
+/**
+ * Une photo de 200 Mo est rejetée par le parseur avant d'arriver jusqu'à nos propres gardes. Sans
+ * cette traductrice, l'écran afficherait une page HTML d'Express en anglais.
+ */
+app.use((error: unknown, req: Request, res: Response, next: (e: unknown) => void) => {
+  const code = (error as { code?: string } | null)?.code;
+  if (code === 'entity.too.large' || code === 'request_entity_too_large') {
+    const isUpload = !req.is('json') && !req.is('text/*');
+    res.status(413).json({
+      error: isUpload
+        ? `Ce fichier est trop gros pour entrer ici. Découpez le scan ou importez-le par morceaux — la limite est de ${Math.round(MAX_BYTES / 1024 / 1024)} Mo.`
+        : 'Cette demande est trop grosse pour être traitée.',
+    });
+    return;
+  }
+  if (res.headersSent || !req.path.startsWith('/api')) {
+    next(error);
+    return;
+  }
+  console.error('[requête]', error);
+  res.status(500).json({ error: 'La demande n’a pas abouti.' });
 });
 
 const distDir = path.resolve(process.cwd(), 'dist');
