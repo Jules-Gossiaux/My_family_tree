@@ -1,6 +1,6 @@
 # Plan de construction
 
-Ce document détaille les passes 0, 1 et 2, et suit l'avancement. La vision et le modèle de données
+Ce document détaille les passes 0, 1, 2 et 4, et suit l'avancement. La vision et le modèle de données
 sont dans [`SPEC.md`](SPEC.md).
 
 ## Principe
@@ -14,7 +14,7 @@ version minuscule mais complète (« balle traçante »), puis on épaissit.
 | 1 | Saisie rapide, dates floues, couples, demi-frères | faite |
 | 2 | Sauvegarde automatique en ZIP daté, réglages, export JSON, restauration | faite |
 | 3 | Arbre de descendance abouti, branches colorées, réglage « moi » et « me recentrer » | à faire |
-| 4 | Médias : import, vignettes, bac d'entrée, rattachement par lot, choix du portrait | à faire |
+| 4 | Médias : import, vignettes, bac d'entrée, rattachement par lot, choix du portrait | faite |
 | 5 | Fiche complète : dossier de vie, chronologie, notes | à faire |
 | 6 | Poster PDF, deux modèles, avec portraits ; cadre de recadrage interactif | à faire |
 | 7 | Parenté, questions ouvertes, recherche par surnom, filtres, annuaire | à faire |
@@ -33,18 +33,24 @@ server/          API HTTP + accès SQLite
   backup.ts      archive ZIP datée, au démarrage et pendant la session
   export.ts      tout l'arbre en un JSON lisible sans l'application
   restore.ts     recharge une archive : contrôle, copie de sûreté, échange
+  media.ts       range, retrouve et détache les photos et les documents
   index.ts       routes
   schema.sql     schéma complet
 shared/          types partagés serveur / client
 src/             interface React
   treeLayout.ts  calcul de position des cases
   TreeCanvas.tsx rendu SVG, zoom et déplacement
-  PersonSheet.tsx fiche latérale
+  PersonSheet.tsx fiche latérale, galerie de la personne et portrait
   AddPersonDialog.tsx saisie rapide
   AttachDialog.tsx choix d'une personne déjà existante à rattacher
   SettingsDialog.tsx écran Réglages : dossier, souche, copies, export
   saveFile.ts    écrire un fichier produit par le serveur là où l'utilisateur le veut
-tests/           dates, relations, intégrité, migration, export, archives, restauration (`npm test`)
+  thumbnails.ts  vignette dessinée par le navigateur, type et date pris du fichier
+  MediaInbox.tsx bac d'entrée : importer en lot puis rattacher à plusieurs personnes
+  MediaLightbox.tsx visionneuse plein écran, avec ou sans éditeur à l'intérieur
+  MediaEditor.tsx légende, date lue et type d'un média déjà en place
+tests/           dates, relations, intégrité, migration, export, archives, restauration,
+                 médias (`npm test`)
 start.bat        démarrer l'application
 restore.bat      recharger une archive de sauvegarde
 ```
@@ -63,6 +69,11 @@ Le serveur sert l'API et, en production, le front compilé par Vite. Un seul pro
 | Table des couples | nommée `couple` et non `union` | `UNION` est un mot réservé SQL |
 | Unions | jamais créées sans qu'on les déclare | un enfant rattaché à un parent seul n'implique pas l'existence d'un second parent |
 | Refus d'écriture | message en français compréhensible, code HTTP 400/404/409 | la personne doit savoir quoi faire sans lire une pile d'appels |
+| Upload des médias | octets bruts (`express.raw`), jamais de JSON base64 | un JPEG de 20 Mo en base64 pèse 27 Mo de texte et encrera le tas Node ; les octets entrent tels quels |
+| Déduplication | empreinte `sha256` de l'original, calculée à l'écriture | la même photo scannée deux fois ne doit pas remplir le dossier ni peupler le bac de deux cases identiques |
+| Vignettes | dessinées par le navigateur dans un `<canvas>`, `sharp` écarté | pas de binaire natif de plus à recompiler quand Node change ; le serveur range des octets, il ne décode rien |
+| Serving d'un média | par identifiant (`/api/media/:id/original`), chemin revalidé contre le dossier de données | un chemin glissé dans une requête ne doit pas ouvrir un fichier hors du dossier familial |
+| Emplacement sur disque | `medias/<photo\|document>/<année>/<id>.<ext>`, écrit en `.part` puis renommé | ranger à l'année vue sur le fichier et une coupure ne laisse jamais une moitié d'image que la base croirait entière |
 
 ## Lancement
 
@@ -191,16 +202,16 @@ union, ses actes de mariage, et par `SET NULL` la mémoire de l'union dont venai
 deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 `pruneEmptyCouples()` que quand plus rien ne la justifie — ni un enfant, ni un acte, ni un membre.
 
-## Contrat d'API (passes 0 à 2)
+## Contrat d'API (passes 0 à 4)
 
 | Méthode | Route | Rôle |
 |---|---|---|
-| GET | `/api/state` | dossier de données, statistiques, personne racine, dernière archive, avertissements |
+| GET | `/api/state` | dossier de données, statistiques (personnes, couples, médias, médias à rattacher), personne racine, dernière archive, avertissements |
 | GET | `/api/graph` | personnes, couples, liens parent-enfant, en une requête |
-| GET | `/api/persons/:id` | fiche complète : relations et événements |
+| GET | `/api/persons/:id` | fiche complète : relations, événements et médias de la personne |
 | POST | `/api/persons` | création, avec rattachement optionnel |
 | POST | `/api/persons/:id/relations` | rattacher deux personnes déjà dans la base |
-| PATCH | `/api/persons/:id` | modification |
+| PATCH | `/api/persons/:id` | modification, `portraitMediaId` compris (mettre `null` retire le portrait) |
 | DELETE | `/api/persons/:id` | suppression |
 | PUT | `/api/config` | personne racine de l'arbre |
 | PUT | `/api/config/data-dir` | dossier de données : écrit `config.local.json`, demande un redémarrage |
@@ -208,6 +219,14 @@ deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 | GET | `/api/backups` | archives gardées dans le dossier de données |
 | GET | `/api/backups/file?name=` | une archive, en flux, pour la copier sur un autre support |
 | GET | `/api/export/json` | tout l'arbre en JSON, avec un nom de fichier proposé |
+| POST | `/api/media?kind=&mime=&taken=&width=&height=` | l'original en octets bruts ; répond `deduped: true` et 200 si la photo était déjà là, 201 sinon, 413 si elle dépasse 60 Mo |
+| PUT | `/api/media/:id/thumbnail` | la vignette dessinée par le navigateur, en octets bruts |
+| GET | `/api/media?state=a-relier` | le bac d'entrée : les médias que personne ne réclame |
+| GET | `/api/media/:id/original` · `/thumbnail` | les fichiers, en flux, revalidés contre le dossier de données |
+| PATCH | `/api/media/:id` | légende, type (`photo`/`document`), type d'acte, date lue |
+| DELETE | `/api/media/:id` | supprimer le média **et ses deux fichiers du disque** |
+| POST | `/api/media/:id/persons` | rattacher à une ou plusieurs personnes (`personIds`, `role`) |
+| DELETE | `/api/media/:id/persons/:personId` | détacher d'une personne, sans rien effacer |
 
 Le rattachement à la création prend la forme :
 
@@ -240,6 +259,39 @@ Un lien déjà existant n'est pas dupliqué. Surtout, déclarer l'union d'un cou
 aux enfants que la base connaît **déjà des deux** : leurs liens héritent du `couple_id` et les
 enfants basculent sous la jonction du couple. Un enfant rattaché à un seul des deux n'est jamais
 rangé dans l'union.
+
+## Les photos et les documents
+
+Une famille a deux sortes de preuves : les visages et les papiers. Les deux entrent par le même
+geste — on dépose des fichiers — et repartent par deux chemins distincts : la fiche d'une personne,
+qui montre sa propre galerie, et le **bac d'entrée**, qui montre ce que personne ne réclame encore.
+
+Le trajet d'un fichier, tel qu'il est écrit dans le code :
+
+1. le navigateur lit le fichier, devine si c'est une **photo** ou un **document** (PDF), retient la
+   date que le disque connaît (`file.lastModified`) et dessine une vignette de 512 px dans un canvas ;
+2. l'original part en octets bruts à `POST /api/media` ; `server/media.ts` vérifie le type, la taille,
+   calcule le `sha256` ; si cette empreinte existe déjà, **rien n'est écrit une seconde fois** et la
+   réponse le dit (`deduped`) ;
+3. sinon le fichier est posé en `.part` puis renommé sous `medias/<photo|document>/<année>/<id>.<ext>`,
+   la ligne est créée, et la vignette arrive dans la foulée par `PUT /api/media/:id/thumbnail` ;
+4. le média est rattaché : à la personne dont la fiche est ouverte, ou, depuis le bac, à plusieurs
+   personnes d'un seul lot — c'est la table `media_person` qui rend une photo de groupe utilisable.
+
+Trois choses se jouent à l'écran :
+
+- **le portrait** est un choix assumé, pas une taille : « Faire le portrait », dans la visionneuse.
+  La case de la personne en tête d'arbre prend alors cette image ; retirer le portrait rend juste la
+  case à son défile d'initiales, jamais le média disparaît ;
+- **la visionneuse suit l'identifiant du média, jamais sa place.** Corriger une date dans le dossier
+  de vie réordonne la galerie chronologiquement ; rester sur un index ferait sauter le lecteur sur une
+  photo voisine sans qu'on lui ait rien demandé ;
+- **supprimer est à deux temps.** « Détacher » rend le média au bac et ne touche à rien sur le disque ;
+  « Supprimer » est le seul endroit de l'application qui efface des fichiers, et il le demande deux fois.
+
+Un média dont la vignette n'a pas pu être dessinée (HEIC, GIF animé, format que Chrome ne décode pas)
+entre quand même, sans aperçu, avec son nom en travers : refuser une photo sous prétexte qu'on ne sait
+pas la réduire serait perdre une preuve pour un problème d'affichage.
 
 ## Passe 0 — socle
 
@@ -275,6 +327,22 @@ rangé dans l'union.
 - [x] export JSON de l'arbre, lisible sans l'application
 - [x] restauration d'une archive (`restore.bat`) : contrôle, copie de sûreté, échange de fichiers
 
+## Passe 4 — photos et documents
+
+- [x] import par glisser-déposer et par bouton, en lot, sur la fiche et dans le bac
+- [x] formats reconnus : JPEG, PNG, WebP, GIF, PDF ; les autres sont refusés en disant pourquoi
+- [x] plafond à 60 Mo, annoncé en 413 avant d'écrire quoi que ce soit
+- [x] écriture `.part` puis renommage, rangee sous `medias/<type>/<année>/`
+- [x] déduplication par `sha256` : un doublon est dit comme tel, pas compté comme un ajout
+- [x] vignettes dessinées par le navigateur, sans dépendance native
+- [x] bac d'entrée avec compteur dans l'en-tête, import en lot et rattachement à plusieurs personnes
+- [x] galerie dans la fiche, dans l'ordre où la vie s'est déroulée
+- [x] visionneuse plein écran, image et PDF, navigation clavier et flèches
+- [x] portrait choisi, retiré, repris sur la case de la personne
+- [x] légende, date lue sur le fichier et type d'acte modifiables après coup (`MediaEditor`)
+- [x] détacher (rend au bac) et supprimer (efface les fichiers), avec confirmation à deux temps
+- [x] tests serveur sur de vrais fichiers dans un dossier temporaire (`tests/media.test.ts`)
+
 ## Limites connues
 
 À traiter en passe 3 :
@@ -288,7 +356,23 @@ rangé dans l'union.
 - **Pas de gestion visuelle des cycles.** Un mariage entre cousins est ignoré au-delà du premier
   passage, sans signalement. Une écriture qui créerait une boucle est refusée, mais un cycle déjà
   présent dans la base n'est pas signalé à l'écran.
-- **Aucune photo, aucun document** : c'est la passe 4.
+- **Aucun recadrage.** Les colonnes `crop_x`, `crop_y` et `crop_size` de `media_person` sont vides :
+  le portrait est l'image entière, telle quelle. Le cadre de recadrage interactif appartient à la
+  passe 6, parce que c'est le poster qui a besoin d'un visage centré, pas la fiche.
+- **La date d'un média vient du fichier, pas de l'image.** `takenOf()` lit `file.lastModified`, pas
+  l'EXIF : une photo de 1911 scannée en 2020 arrive datée de 2020. Elle se corrige dans la visionneuse
+  (« Date lue sur le fichier »), et le dossier garde ses quatre colonnes de date floue.
+- **Une vignette qui n'a pas pu être dessinée ne se rattrape pas.** Le serveur ne décode rien, donc il
+  ne peut pas la refaire plus tard : un JPEG que le navigateur n'a pas su réduire reste un carré vide,
+  avec son nom en travers. Le fichier original, lui, est bien là.
+- **Poser un fichier sur le disque ne l'importe pas.** Seule la route écrit la ligne et range l'image :
+  copier un JPEG dans `medias/` à la main le rend invisible de l'application, et rien ne le signale.
+- **Supprimer une personne rend ses photos au bac.** `media_person` est en `ON DELETE CASCADE` : les
+  fichiers restent sur le disque, les médias retournent dans « à rattacher », mais recréer la personne
+  ne repeuple pas sa galerie — il faut les rattacher à nouveau.
+- **Le bac ne voit que les personnes.** Une image rattachée à un événement (`media_event`) ou à un lieu
+  (`place_id`, `source_id`) n'a aucun écran : ces colonnes sont là depuis le schéma, la passe 5 les
+  remplira avec le dossier de vie.
 - **La recherche ne voit pas les surnoms.** Elle filtre sur les prénoms, le nom de famille et le nom de
   naissance, jamais sur `name_variant` : « Tata Michèle » ne se trouve pas, alors que c'est souvent le seul
   nom que la famille connaît. Ce n'est pas un `OR` à ajouter côté client — `/api/graph` ne renvoie pas les

@@ -3,6 +3,7 @@ import TreeCanvas, { type TreeCanvasHandle } from './TreeCanvas';
 import PersonSheet from './PersonSheet';
 import AddPersonDialog from './AddPersonDialog';
 import AttachDialog from './AttachDialog';
+import MediaInbox from './MediaInbox';
 import SettingsDialog from './SettingsDialog';
 import { api } from './api';
 import { buildLayout } from './treeLayout';
@@ -48,6 +49,8 @@ export default function App() {
   const [dataDir, setDataDir] = useState('');
   const [dataDirFromEnv, setDataDirFromEnv] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [inbox, setInbox] = useState(false);
+  const [unattached, setUnattached] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [query, setQuery] = useState('');
@@ -61,6 +64,7 @@ export default function App() {
       setGraph(data);
       setBackup(state.backup);
       setWarnings(state.warnings ?? []);
+      setUnattached(state.counts.mediaUnattached);
       setDataDir(state.dataDir);
       setDataDirFromEnv(state.dataDirFromEnv);
       setError(null);
@@ -81,6 +85,7 @@ export default function App() {
         const state = await api.state();
         setBackup(state.backup);
         setWarnings(state.warnings ?? []);
+        setUnattached(state.counts.mediaUnattached);
       } catch {
         /* le serveur se ferme peut-être : le prochain clic le dira */
       }
@@ -222,13 +227,13 @@ export default function App() {
       ) {
         return;
       }
-      if (!selectedId || dialog || pendingDelete || menu || attach || settings) return;
+      if (!selectedId || dialog || pendingDelete || menu || attach || settings || inbox) return;
       event.preventDefault();
       setPendingDelete(selectedId);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId, dialog, pendingDelete, menu, attach, settings]);
+  }, [selectedId, dialog, pendingDelete, menu, attach, settings, inbox]);
 
   const openMenu = useCallback((personId: string, x: number, y: number) => {
     setMenu({
@@ -293,6 +298,16 @@ export default function App() {
         <button
           type="button"
           className="ghost"
+          onClick={() => setInbox(true)}
+          title="Photos et documents en attente de rattachement"
+        >
+          Photos
+          {unattached > 0 && <span className="badge">{unattached}</span>}
+        </button>
+
+        <button
+          type="button"
+          className="ghost"
           onClick={() => setSettings(true)}
           title="Dossier de données, souche de l’arbre, copies et export"
         >
@@ -347,6 +362,10 @@ export default function App() {
               onClose={() => setSelectedId(null)}
               onSetRoot={handleSetRoot}
               onDelete={(id) => setPendingDelete(id)}
+              onMediaChanged={() => {
+                void load();
+                setRefreshKey((key) => key + 1);
+              }}
             />
           </>
         )}
@@ -487,6 +506,18 @@ export default function App() {
           onClose={() => setSettings(false)}
           onRootChange={handleSetRoot}
           onBackup={setBackup}
+          onToast={setToast}
+        />
+      )}
+
+      {inbox && (
+        <MediaInbox
+          persons={graph?.persons ?? []}
+          onClose={() => setInbox(false)}
+          onChanged={() => {
+            void load();
+            setRefreshKey((key) => key + 1);
+          }}
           onToast={setToast}
         />
       )}
