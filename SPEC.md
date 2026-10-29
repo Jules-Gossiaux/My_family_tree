@@ -150,7 +150,8 @@ L'affichage choisit la formulation, la base ne ment jamais.
 Indispensable dans une grande famille : « Tata Michèle » est le seul nom que tout le monde connaît.
 
 **branch** — `id`, `name`, `color`, `root_person_id`. Les branches (paternelle, maternelle,
-une famille alliée) permettent de colorer l'arbre et de filtrer. `[À VALIDER]` utile ou superflu ?
+famille alliée) colorent l'arbre et servent de filtre. **Retenu** : indispensable à 400 personnes
+pour s'y retrouver d'un coup d'œil.
 
 **place** — `id`, `name`, `lat`, `lon`, `parent_place_id`. Hiérarchie ville → département → pays.
 
@@ -235,26 +236,53 @@ Superposition du contexte historique (guerres, exode) depuis un fichier local.
 
 ### 8.7 Export
 
-- **Poster** : PDF vectoriel haute résolution, A2/A1, descendance et/ou éventail
+- **Poster** : PDF vectoriel haute résolution, A2/A1, **deux modèles** — descendance depuis la souche
+  et éventail — **avec les portraits**. Le portrait imprimé est un carré issu d'un recadrage manuel
+  (voir 8.8), pas la photo entière : une photo de groupe de 1952 recadrée automatiquement donne
+  un poster illisible.
 - **Livre** : PDF, une page par personne (v2)
 - **GEDCOM** : export (v1), import (v2)
 - **JSON + ZIP** : sauvegarde complète, lisible sans l'application
 
-## 9. Feuille de route
+### 8.8 Recadrage des portraits
 
-**v1 — le socle**
-modèle de données · arbre de descendance depuis la souche · fiche personne · annuaire · saisie rapide ·
-bac d'entrée · calculateur de parenté · chronologie · recherche · export poster · sauvegarde auto
+Un portrait imprimable est un **carré centré sur le visage**, découpé dans la photo d'origine.
+L'application propose un cadre déplaçable et zoomable, mémorisé par couple (personne, média) :
+la même photo peut fournir le portrait de plusieurs personnes, avec des cadrages différents.
+Sans cet outil, un poster avec portraits est impossible à produire proprement.
 
-**v2 — la profondeur**
-livre PDF · fusion de doublons · statistiques · carte des lieux · import GEDCOM · filtres par branche
+## 9. Ordre de construction
 
-**v3 — le confort**
-reconnaissance faciale locale (regroupement proposé, jamais imposé) · notes audio
+On ne construit pas écran par écran en finition : on traverse d'abord toutes les couches avec une
+version minuscule (« balle traçante »), puis on épaissit. Chaque passe se termine par quelque chose
+d'utilisable.
 
-## 10. Décisions ouvertes
+| Passe | Contenu | Résultat à la fin |
+|---|---|---|
+| **0** | Base, ajouter 3 personnes, arbre minimal, fiche minimale | Ça clique et ça répond, de bout en bout |
+| **1** | Saisie rapide au clavier, dates floues, unions, demi-frères | La famille se saisit pour de vrai |
+| **2** | Sauvegarde automatique en ZIP daté | Les données ne peuvent plus être perdues |
+| **3** | Arbre de descendance, blocs couples, zoom, recentrer, branches colorées | Le projet devient réel et beau |
+| **4** | Médias : import, vignettes, bac d'entrée, rattachement par lot, recadrage portrait | Les visages arrivent |
+| **5** | Fiche complète : dossier de vie, chronologie, notes, documents | Cliquer sur quelqu'un raconte sa vie |
+| **6** | Poster : deux modèles, avec portraits | Un objet à offrir |
+| **7** | Calculateur de parenté, questions ouvertes, recherche, filtres | L'outil devient confortable |
 
-1. `[À VALIDER]` Poster : descendance depuis la souche, éventail, ou les deux ? Avec portraits ou noms et dates seuls ?
-2. `[À VALIDER]` Documents rattachés à un événement, à une personne, ou les deux ?
-3. `[À VALIDER]` Notion de « branches » colorées : utile ou surcharge visuelle ?
-4. `[À VALIDER]` Ordre de construction : modèle + arbre d'abord, ou saisie + fiches d'abord ?
+**v1** = passes 0 à 6. **v2** = livre PDF, fusion de doublons, statistiques, carte des lieux,
+import GEDCOM. **v3** = reconnaissance faciale locale, notes audio.
+
+## 10. Décisions prises
+
+| Sujet | Décision |
+|---|---|
+| Poster | Les deux modèles (descendance et éventail), **avec portraits** |
+| Documents | Rattachés **à une personne et à un événement** (les deux tables existent) |
+| Branches colorées | Oui |
+| Ordre de construction | Balle traçante, puis épaississement (voir §9) |
+| Stockage | `D:\Genealogie\` |
+| Reconnaissance faciale | v3, locale, gratuite |
+
+## 11. Reste à décider
+
+1. `[À VALIDER]` Format du poster : A2, A1, les deux au choix à l'export ?
+2. `[À VALIDER]` La souche : quel couple ? (à définir au moment de la saisie, pas maintenant)
