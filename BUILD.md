@@ -12,12 +12,12 @@ version minuscule mais complète (« balle traçante »), puis on épaissit.
 |---|---|---|
 | 0 | Socle : base, ajout de personnes, arbre minimal, fiche minimale | faite |
 | 1 | Saisie rapide, dates floues, couples, demi-frères | faite |
-| 2 | Sauvegarde automatique en ZIP daté | faite |
-| 3 | Arbre de descendance abouti, branches colorées | à faire |
-| 4 | Médias : import, vignettes, bac d'entrée, recadrage portrait | à faire |
+| 2 | Sauvegarde automatique en ZIP daté, réglages, export JSON, restauration | faite |
+| 3 | Arbre de descendance abouti, branches colorées, réglage « moi » et « me recentrer » | à faire |
+| 4 | Médias : import, vignettes, bac d'entrée, rattachement par lot, choix du portrait | à faire |
 | 5 | Fiche complète : dossier de vie, chronologie, notes | à faire |
-| 6 | Poster PDF, deux modèles, avec portraits | à faire |
-| 7 | Parenté, questions ouvertes, recherche, filtres | à faire |
+| 6 | Poster PDF, deux modèles, avec portraits ; cadre de recadrage interactif | à faire |
+| 7 | Parenté, questions ouvertes, recherche par surnom, filtres, annuaire | à faire |
 | 8 | Export GEDCOM | à faire |
 
 ## Architecture
@@ -289,9 +289,14 @@ rangé dans l'union.
   passage, sans signalement. Une écriture qui créerait une boucle est refusée, mais un cycle déjà
   présent dans la base n'est pas signalé à l'écran.
 - **Aucune photo, aucun document** : c'est la passe 4.
+- **La recherche ne voit pas les surnoms.** Elle filtre sur les prénoms, le nom de famille et le nom de
+  naissance, jamais sur `name_variant` : « Tata Michèle » ne se trouve pas, alors que c'est souvent le seul
+  nom que la famille connaît. Ce n'est pas un `OR` à ajouter côté client — `/api/graph` ne renvoie pas les
+  surnoms, seuls les portent les personnes détaillées. À traiter avec l'annuaire de la passe 7, qui aura
+  de toute façon besoin de chercher dans ces noms-là.
 - **La restauration ne se commande pas depuis l'écran.** Elle passe par `restore.bat`, application
   fermée : le serveur tient la base ouverte et remplacer ce sur quoi il est assis produirait un arbre
-  à moitié écrit. L'écran Réglages le dit sous la liste des archives, avec les trois gestes à faire.
+  à moitié écrit. L'écran Réglages le dit sous la liste des archives, avec les quatre gestes à faire.
   Un bouton « Restaurer » supposerait de redémarrer le serveur de l'intérieur, ou de passer par un
   fichier de consigne appliqué au démarrage — deux choses à construire en même temps que l'écran qui
   les montre, pas avant.
