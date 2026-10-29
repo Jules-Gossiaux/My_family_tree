@@ -1,0 +1,42 @@
+# Dépendances
+node_modules/
+.pnpm-store/
+dist/
+build/
+out/
+
+# Secrets et configuration locale
+.env
+.env.*
+config.local.json
+*.local.json
+
+# Données familiales — ne doivent JAMAIS être versionnées
+data/
+medias/
+scans_bruts/
+sauvegardes/
+exports/
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite3
+*.ged
+
+# Journaux et caches
+*.log
+.cache/
+.tmp/
+tmp/
+
+# Système
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
