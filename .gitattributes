@@ -1,0 +1,13 @@
+* text=auto
+
+# Les scripts Windows exigent des fins de ligne CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Les fichiers binaires ne doivent jamais être convertis
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.db binary
+*.zip binary
