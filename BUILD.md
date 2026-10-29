@@ -49,6 +49,21 @@ Le serveur sert l'API et, en production, le front compilé par Vite. Un seul pro
 | Dates | jamais un champ `DATE`, toujours min/max/qualifier/texte | la généalogie vit dans l'approximation |
 | Table des couples | nommée `couple` et non `union` | `UNION` est un mot réservé SQL |
 
+## Lancement
+
+`start.bat` est le seul écran d'entrée pour l'utilisateur. Il doit donc se réparer lui-même :
+
+- Le moteur SQLite est un **binaire compilé pour la version de Node installée**. Une mise à jour de
+  Node rend le module chargeable : `start.bat` le détecte (`node -e "require('better-sqlite3')"`) et
+  relance `npm rebuild better-sqlite3` avant de démarrer. Sans ce test, le double-clic n'affiche
+  qu'une erreur technique illisible. `package.json` déclare `engines: node >= 20`.
+- Si le module casse quand même, `server/db.ts` affiche la commande à taper au lieu d'une pile
+  d'appels.
+- Le **navigateur est ouvert par le serveur**, une fois l'écoute réellement établie (`OPEN_BROWSER=1`
+  posé par `start.bat`) : ouvrir la page trop tôt afficherait une erreur de connexion.
+- Un port déjà pris (double démarrage) donne un message en français et un code de sortie non nul,
+  que `start.bat` traduit par une fenêtre qui reste lisible au lieu de se refermer.
+
 ## Contrat d'API (passes 0 et 1)
 
 | Méthode | Route | Rôle |

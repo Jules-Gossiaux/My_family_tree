@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import express from 'express';
 import { db, now, newId } from './db';
 import { DATA_DIR } from './config';
@@ -18,7 +19,7 @@ import type {
 const app = express();
 app.use(express.json({ limit: '4mb' }));
 
-const PORT = Number(process.env.PORT ?? 4321);
+const PORT = Number.parseInt(process.env.PORT ?? '', 10) || 4321;
 const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
 
 interface AppConfig {
@@ -481,8 +482,30 @@ if (fs.existsSync(distDir)) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`Arbre de famille — http://localhost:${PORT}`);
+/** Ouvre le navigateur par défaut une fois le serveur réellement à l'écoute. */
+function openBrowser(url: string): void {
+  const child = spawn('cmd.exe', ['/d', '/s', '/c', 'start', '""', url], {
+    detached: true,
+    stdio: 'ignore',
+    windowsVerbatimArguments: true,
+  });
+  child.on('error', () => console.log(`Ouvrez ${url} dans votre navigateur.`));
+  child.unref();
+}
+
+const server = app.listen(PORT, () => {
+  const url = `http://localhost:${PORT}`;
+  console.log(`Arbre de famille — ${url}`);
   console.log(`Données : ${DATA_DIR}`);
+  if (process.env.OPEN_BROWSER && process.platform === 'win32') openBrowser(url);
   scheduleAutoBackup();
+});
+
+server.on('error', (error: Error) => {
+  if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
+  console.error(`\n  Le port ${PORT} est déjà occupé, l'application ne peut pas démarrer.`);
+  console.error(`  So elle est déjà ouverte dans une autre fenêtre : retrouvez-la sur http://localhost:${PORT}.`);
+  console.error(`  So un autre programme occupe ce port : relancez avec la variable PORT changée.`);
+  console.error('      set PORT=4322 && npm start\n');
+  process.exit(1);
 });
