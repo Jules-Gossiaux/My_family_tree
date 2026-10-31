@@ -1,6 +1,8 @@
 import type {
   AppState,
   BackupInfo,
+  Branch,
+  BranchInput,
   CreatePersonInput,
   GraphData,
   Media,
@@ -49,8 +51,10 @@ export const api = {
   person: (id: string) => request<PersonDetail>(`/api/persons/${id}`),
   createPerson: (input: CreatePersonInput) =>
     request<{ id: string }>('/api/persons', { method: 'POST', body: JSON.stringify(input) }),
-  updatePerson: (id: string, input: Partial<CreatePersonInput> & { nickname?: string }) =>
-    request<{ ok: true }>(`/api/persons/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  updatePerson: (
+    id: string,
+    input: Partial<CreatePersonInput> & { nickname?: string; branchId?: string | null },
+  ) => request<{ ok: true }>(`/api/persons/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
   deletePerson: (id: string) => request<{ ok: true }>(`/api/persons/${id}`, { method: 'DELETE' }),
   attachRelation: (id: string, relation: RelationInput) =>
     request<{ ok: true }>(`/api/persons/${id}/relations`, {
@@ -67,6 +71,19 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ dataDir }),
     }),
+
+  /** Une branche : un nom, une couleur, et la personne dont elle part. */
+  createBranch: (input: BranchInput & { includeDescendants?: boolean }) =>
+    request<{ branch: Branch }>('/api/branches', { method: 'POST', body: JSON.stringify(input) }),
+  updateBranch: (id: string, input: BranchInput) =>
+    request<{ branch: Branch }>(`/api/branches/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  /** Range la descendance d'une personne sous une branche ; dit combien de cases ont suivi. */
+  branchDescendants: (id: string, rootPersonId?: string) =>
+    request<{ assigned: number }>(`/api/branches/${id}/descendants`, {
+      method: 'POST',
+      body: JSON.stringify({ rootPersonId }),
+    }),
+  deleteBranch: (id: string) => request<{ ok: true }>(`/api/branches/${id}`, { method: 'DELETE' }),
 
   /** Ce qui attend encore un visage. */
   unattachedMedia: () => request<{ media: Media[] }>('/api/media?state=a-relier'),

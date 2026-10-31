@@ -10,6 +10,14 @@ import Database from 'better-sqlite3';
  * migration doit traverser sans rien perdre. Les autres tests partent d'une base neuve.
  */
 const OLD_SCHEMA = `
+  CREATE TABLE branch (
+    id             TEXT PRIMARY KEY,
+    name           TEXT NOT NULL,
+    color          TEXT NOT NULL DEFAULT '#C9A961',
+    root_person_id TEXT,
+    created_at     TEXT NOT NULL
+  );
+
   CREATE TABLE person (
     id                TEXT PRIMARY KEY,
     given_names       TEXT NOT NULL DEFAULT '',
@@ -72,6 +80,9 @@ const ids = {
   eve: 'aaaaaaaa-0000-4000-8000-000000000003',
   couple: 'aaaaaaaa-0000-4000-8000-0000000000aa',
   act: 'aaaaaaaa-0000-4000-8000-0000000000bb',
+  branchePaul: 'aaaaaaaa-0000-4000-8000-0000000000d1',
+  brancheVeuve: 'aaaaaaaa-0000-4000-8000-0000000000d2',
+  personneEffacee: 'aaaaaaaa-0000-4000-8000-0000000000ff',
 };
 
 function writeOldFamily(): void {
@@ -100,6 +111,15 @@ function writeOldFamily(): void {
     .prepare('INSERT INTO event (id, person_id, couple_id, type, created_at) VALUES (?, NULL, ?, ?, ?)')
     .run(ids.act, ids.couple, 'mariage', stamp);
 
+  // Deux branches d'une base ancienne : l'une partie d'une personne encore là, l'autre d'une
+  // personne déjà effacée à l'époque où rien n'interdisait de laisser sa tête en l'air.
+  const insertBranch = legacy.prepare(
+    'INSERT INTO branch (id, name, color, root_person_id, created_at) VALUES (?, ?, ?, ?, ?)',
+  );
+  insertBranch.run(ids.branchePaul, 'Descendance Dupont', '#5fb0a7', ids.paul, stamp);
+  insertBranch.run(ids.brancheVeuve, 'Ligne orpheline', '#d98a8a', ids.personneEffacee, stamp);
+  legacy.prepare('UPDATE person SET branch_id = ? WHERE id = ?').run(ids.branchePaul, ids.eve);
+
   legacy.close();
 }
 
@@ -124,7 +144,7 @@ function coupleColumns(): string {
 
 describe('reprise d’une base créée avec l’ancien schéma', () => {
   it('traverse la migration sans rien perdre', () => {
-    assert.equal(db.pragma('user_version', { simple: true }), 1);
+    assert.equal(db.pragma('user_version', { simple: true }), 2);
 
     const couple = row('SELECT * FROM couple WHERE id = ?', ids.couple);
     assert.ok(couple, 'le couple doit survivre à la mise à jour du schéma');
@@ -143,6 +163,30 @@ describe('reprise d’une base créée avec l’ancien schéma', () => {
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   });
 
+  it('remet la tête de ligne en règle', () => {
+    const dupont = row('SELECT * FROM branch WHERE id = ?', ids.branchePaul);
+    assert.ok(dupont, 'la branche doit survivre à la mise à jour du schéma');
+    assert.equal(dupont.name, 'Descendance Dupont');
+    assert.equal(dupont.color, '#5fb0a7', 'la teinte choisie ne doit pas redevenir la défaut');
+    assert.equal(dupont.root_person_id, ids.paul);
+    assert.equal(row('SELECT branch_id FROM person WHERE id = ?', ids.eve)?.branch_id, ids.branchePaul);
+
+    const tete = db.prepare('PRAGMA foreign_key_list(branch)').all() as Row[];
+    assert.equal(
+      tete.find((entry) => entry.from === 'root_person_id')?.on_delete,
+      'SET NULL',
+      'la tête doit devenir une vraie référence',
+    );
+
+    const orpheline = row('SELECT * FROM branch WHERE id = ?', ids.brancheVeuve);
+    assert.ok(orpheline, 'la branche se garde');
+    assert.equal(
+      orpheline.root_person_id,
+      null,
+      'une tête qui ne désigne plus personne est remise à zéro au lieu de pendre en l’air',
+    );
+  });
+
   it('ne casse plus l’union quand un parent est effacé', () => {
     const remove = db.transaction(() => {
       db.prepare('DELETE FROM person WHERE id = ?').run(ids.paul);
@@ -159,18 +203,28 @@ describe('reprise d’une base créée avec l’ancien schéma', () => {
       'Eve doit rester l’enfant de cette union',
     );
     assert.ok(row('SELECT id FROM event WHERE id = ?', ids.act), 'l’acte de mariage survit');
+    assert.equal(
+      row('SELECT root_person_id FROM branch WHERE id = ?', ids.branchePaul)?.root_person_id,
+      null,
+      'la branche survit à sa tête et se cherche une autre tête',
+    );
   });
 
   it('ne rejoue pas la migration au démarrage suivant', () => {
     const before = (db.prepare('SELECT COUNT(*) AS n FROM couple').get() as Row).n;
     const links = (db.prepare('SELECT COUNT(*) AS n FROM parent_child').get() as Row).n;
+    const branchHeads = (db.prepare('SELECT COUNT(*) AS n FROM branch WHERE root_person_id IS NOT NULL').get() as Row).n;
 
     runMigrations();
     runMigrations();
 
-    assert.equal(db.pragma('user_version', { simple: true }), 1);
+    assert.equal(db.pragma('user_version', { simple: true }), 2);
     assert.equal((db.prepare('SELECT COUNT(*) AS n FROM couple').get() as Row).n, before);
     assert.equal((db.prepare('SELECT COUNT(*) AS n FROM parent_child').get() as Row).n, links);
+    assert.equal(
+      (db.prepare('SELECT COUNT(*) AS n FROM branch WHERE root_person_id IS NOT NULL').get() as Row).n,
+      branchHeads,
+    );
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   });
 });

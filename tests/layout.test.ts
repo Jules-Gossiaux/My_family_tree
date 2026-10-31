@@ -38,7 +38,7 @@ function graph(
   parentChild: ParentChild[],
   rootId: string | null = null,
 ): GraphData {
-  return { persons, couples, parentChild, rootId, dataDir: 'test' };
+  return { persons, couples, parentChild, branches: [], rootId, dataDir: 'test' };
 }
 
 /** Toutes les cases dessinées : une personne ne doit y figurer qu'une fois. */

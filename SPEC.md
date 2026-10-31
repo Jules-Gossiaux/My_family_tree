@@ -236,6 +236,18 @@ Indispensable dans une grande famille : « Tata Michèle » est le seul nom que 
 famille alliée) colorent l'arbre et servent de filtre. **Retenu** : indispensable à 400 personnes
 pour s'y retrouver d'un coup d'œil.
 
+Quatre règles la tiennent debout :
+
+- **une personne ne porte qu'une branche** (`person.branch_id`) : la teinte d'une case doit se lire sans
+  ambivalence ;
+- **une branche ne vole pas ses gens à une autre branche** : ranger la descendance d'une personne laisse
+  en place celles qui ont déjà été classées à la main ;
+- **deux branches ne portent ni le même nom ni la même teinte** : le nom seul les distingue, et deux
+  lignes de la même couleur se lisent comme une seule. Le refus dit laquelle reprendre ;
+- **la tête de ligne est une personne, pas un identifiant au hasard** : `root_person_id` est en
+  `ON DELETE SET NULL` — effacer la personne dont partait une branche la laisse debout et en quête d'une
+  autre tête, au lieu de laisser en base une référence qui ne désigne plus personne (migration 2).
+
 **place** — `id`, `name`, `lat`, `lon`, `parent_place_id`. Hiérarchie ville → département → pays.
 
 **couple** — `id`, `partner_a`, `partner_b`, `type` (mariage / pacs / concubinage / inconnu),
@@ -284,7 +296,8 @@ jour de doute sur les clés — mais toutes ne sont pas encore nourries. Ce qui 
 |---|---|
 | `person`, `couple`, `parent_child`, `event`, `name_variant` | remplies et lues par l'interface |
 | `media`, `media_person` | **remplies et lues depuis la passe 4** : le bac, la galerie d'une personne, le portrait |
-| `branch`, `place`, `note`, `source` | posées, traversées par l'export JSON, **rien ne les remplit** : les branches colorées viennent en passe 3, les notes et les sources en passe 5 |
+| `branch` | **remplie et lue depuis la passe 3** : nom, teinte, tête de ligne, personnes rangées |
+| `place`, `note`, `source` | posées, traversées par l'export JSON, **rien ne les remplit** : les notes et les sources viennent en passe 5 |
 | `media_event` | posée, et absente de l'export : le rattachement d'un média à un événement se joue en passe 5 |
 
 L'export JSON porte donc des listes vides plutôt que de les inventer, et une table vide n'est pas une
@@ -309,13 +322,18 @@ seule fois**, ses conjoints étant alignés autour d'elle dans le même bloc.
 
 Ce que la barre de l'arbre sait faire aujourd'hui : rechercher un nom et zoomer dessus, agrandir, réduire,
 ajuster la vue, déplacer le canevas à la souris, ouvrir la fiche d'une personne par un clic, et passer par
-un menu contextuel pour la modifier, la rattacher, la supprimer ou la définir comme souche. Les liens que
-la descendance ne dessine pas — second parent, boucle, union dont les deux cases sont ailleurs — paraissent
-en pointillés, avec une légende qui les compte (§4.3).
+un menu contextuel pour la modifier, la rattacher, la supprimer, la définir comme souche ou créer une
+branche qui part d'elle. Les liens que la descendance ne dessine pas — second parent, boucle, union dont
+les deux cases sont ailleurs — paraissent en pointillés, avec une légende qui les compte (§4.3).
+
+Une branche se remplit et se lit sans quitter l'arbre : la case porte une teinte au bas de son encadrement
+(nom de la branche dans l'infobulle), et une ligne de pastilles au-dessus du canevas les énumère avec le
+compte de leurs cases — cliquer l'une d'elles ouvre la tête de ligne et amène l'arbre sur elle. Une branche
+sans tête de ligne reste affichée, grisée, et dit pourquoi elle ne se clique pas.
 
 Ce qui manque et attend son fil : **me recentrer** (il exige le réglage « moi », §4.1) et le filtre par
-branche (il exige que `branch` soit remplie, §7.3) ; le filtre vivants/décédés n'a pas encore de ligne de
-commande.
+branche — les branches sont remplies (§7.3), mais la barre de filtres n'est pas encore dessinée ; le filtre
+vivants/décédés n'a pas non plus de ligne de commande.
 
 ### 8.2 La fiche personne — « dossier de vie »
 

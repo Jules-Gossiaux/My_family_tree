@@ -128,7 +128,7 @@ describe('une suppression ne détruit pas plus qu’elle-même', () => {
 
 describe('le schéma porte la version des migrations', () => {
   it('est à jour et ne casse plus les couples à la suppression', () => {
-    assert.equal(db.pragma('user_version', { simple: true }), 1);
+    assert.equal(db.pragma('user_version', { simple: true }), 2);
 
     const keys = db.prepare('PRAGMA foreign_key_list(couple)').all() as Row[];
     for (const column of ['partner_a', 'partner_b']) {
@@ -140,6 +140,15 @@ describe('le schéma porte la version des migrations', () => {
         'une personne supprimée doit laisser son union debout',
       );
     }
+  });
+
+  it('crée une base neuve déjà dans la forme que les migrations visent', () => {
+    // `schema.sql` et `migrations.ts` portent les mêmes définitions : une base qui sort du
+    // premier n'a rien à subir du second.
+    const keys = db.prepare('PRAGMA foreign_key_list(branch)').all() as Row[];
+    const head = keys.find((row) => row.from === 'root_person_id');
+    assert.ok(head, 'la tête de ligne doit être une vraie référence à une personne');
+    assert.equal(head.on_delete, 'SET NULL', 'une branche survit à la personne dont elle partait');
   });
 });
 

@@ -2,15 +2,18 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { saveFromServer } from './saveFile';
 import { fullName } from './dates';
-import type { BackupInfo, Person } from '../shared/types';
+import type { BackupInfo, Branch, Person } from '../shared/types';
 
 interface Props {
   dataDir: string;
   dataDirFromEnv: boolean;
   rootPersonId: string | null;
   persons: Person[];
+  branches: Branch[];
   onClose: () => void;
   onRootChange: (personId: string) => void;
+  /** Une branche a bougé : l'arbre doit reprendre ses teintes et ses compteurs. */
+  onBranchesChanged: () => void;
   onBackup: (info: BackupInfo) => void;
   onToast: (message: string) => void;
 }
@@ -39,25 +42,192 @@ function reason(name: string): string {
 }
 
 /**
- * L'écran de fin de saisie : où vivent les données, de qui l'arbre part, et comment une copie
- * sort du disque. Trois choses que l'on ne regarde qu'une fois, mais qu'il faut pouvoir faire
- * sans fermer l'application ni ouvrir un terminal.
+ * Une ligne de branche : ce qu'elle porte comme nom, comme teinte, de qui elle part, et ce qu'on en
+ * fait. Tout se corrige ici, y compris le nom que la création a posé à la hâte depuis l'arbre.
+ */
+function BranchRow({
+  branch,
+  persons,
+  onChanged,
+  onToast,
+}: {
+  branch: Branch;
+  persons: Person[];
+  onChanged: () => void;
+  onToast: (message: string) => void;
+}) {
+  const [name, setName] = useState(branch.name);
+  const [color, setColor] = useState(branch.color);
+  const [rootId, setRootId] = useState(branch.rootPersonId ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<'save' | 'range' | 'delete' | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  // Le graphe peut revenir d'en dessous (une personne rangée entre-temps) : la ligne se remet à jour,
+  // mais seulement quand ce n'est pas ce que l'on est en train d'écrire.
+  useEffect(() => {
+    setName(branch.name);
+    setColor(branch.color);
+    setRootId(branch.rootPersonId ?? '');
+  }, [branch.name, branch.color, branch.rootPersonId]);
+
+  const dirty =
+    name.trim() !== branch.name ||
+    color.toLowerCase() !== branch.color.toLowerCase() ||
+    rootId !== (branch.rootPersonId ?? '');
+
+  const save = async () => {
+    setBusy('save');
+    setError(null);
+    try {
+      await api.updateBranch(branch.id, { name, color, rootPersonId: rootId || null });
+      onChanged();
+      onToast(`Branche « ${name.trim()} » enregistrée`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'La branche n’a pas pu être enregistrée');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const range = async () => {
+    setBusy('range');
+    setError(null);
+    try {
+      const { assigned } = await api.branchDescendants(branch.id);
+      onChanged();
+      onToast(
+        assigned === 0
+          ? 'Personne de plus : les descendants étaient déjà rangés ailleurs'
+          : `${assigned} personne${assigned > 1 ? 's' : ''} rangée${assigned > 1 ? 's' : ''} sous ${branch.name}`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Le rangement a échoué');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    setBusy('delete');
+    setError(null);
+    try {
+      await api.deleteBranch(branch.id);
+      onChanged();
+      setConfirming(false);
+      const freed = branch.personCount;
+      onToast(
+        `Branche « ${branch.name} » supprimée — ${freed} personne${freed > 1 ? 's' : ''} rendue${freed > 1 ? 's' : ''} au hors-classe`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Suppression impossible');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <li className="branch-row">
+      <span className="branch-main">
+        <input
+          className="branch-color"
+          type="color"
+          value={color}
+          onChange={(event) => setColor(event.target.value)}
+          aria-label={`Couleur de la branche ${branch.name}`}
+        />
+        <input
+          className="branch-name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void save();
+          }}
+          spellCheck={false}
+          aria-label="Nom de la branche"
+        />
+        <select
+          value={rootId}
+          onChange={(event) => setRootId(event.target.value)}
+          aria-label="Personne dont part la branche"
+        >
+          <option value="">Sans tête de ligne</option>
+          {persons.map((person) => (
+            <option key={person.id} value={person.id}>
+              {fullName(person)}
+            </option>
+          ))}
+        </select>
+        <span className="branch-meta">
+          {branch.personCount} case{branch.personCount > 1 ? 's' : ''}
+        </span>
+      </span>
+
+      <span className="branch-side">
+        <button type="button" className="ghost" onClick={save} disabled={busy !== null || !dirty || !name.trim()}>
+          {busy === 'save' ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          onClick={range}
+          disabled={busy !== null || !branch.rootPersonId}
+          title={
+            branch.rootPersonId
+              ? 'Ranger aussi les descendants de la tête de ligne, ceux qui n’ont pas encore de branche'
+              : 'Choisissez d’abord une personne dont la branche part'
+          }
+        >
+          {busy === 'range' ? 'Rangement…' : 'Ranger ses descendants'}
+        </button>
+        {confirming ? (
+          <>
+            <button type="button" className="danger-solid" onClick={remove} disabled={busy !== null}>
+              Confirmer
+            </button>
+            <button type="button" className="ghost" onClick={() => setConfirming(false)}>
+              Annuler
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => setConfirming(true)}
+            title="Effacer la branche : les personnes redeviennent sans teinte, rien n’est supprimé"
+          >
+            Supprimer
+          </button>
+        )}
+      </span>
+
+      {error && <p className="dialog-error">{error}</p>}
+    </li>
+  );
+}
+
+/**
+ * L'écran de fin de saisie : où vivent les données, de qui l'arbre part, quelles branches le
+ * colorent, et comment une copie sort du disque.
  */
 export default function SettingsDialog({
   dataDir,
   dataDirFromEnv,
   rootPersonId,
   persons,
+  branches,
   onClose,
   onRootChange,
+  onBranchesChanged,
   onBackup,
   onToast,
 }: Props) {
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [draftDir, setDraftDir] = useState('');
+  const [draftBranch, setDraftBranch] = useState('');
   const [dirNote, setDirNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'backup' | 'export' | 'copy' | 'dir' | null>(null);
+  const [busy, setBusy] = useState<'backup' | 'export' | 'copy' | 'dir' | 'branch' | null>(null);
   const [copyingName, setCopyingName] = useState<string | null>(null);
 
   const reloadBackups = async () => {
@@ -93,6 +263,22 @@ export default function SettingsDialog({
       if (result.restartNeeded) onToast('Dossier enregistré : redémarrez pour l’ouvrir');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ce dossier n’est pas utilisable');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const addBranch = async () => {
+    if (!draftBranch.trim() || busy) return;
+    setBusy('branch');
+    setError(null);
+    try {
+      const { branch } = await api.createBranch({ name: draftBranch });
+      setDraftBranch('');
+      onBranchesChanged();
+      onToast(`Branche « ${branch.name} » ajoutée — sa couleur se règle sur sa ligne`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'La branche n’a pas pu être ajoutée');
     } finally {
       setBusy(null);
     }
@@ -195,6 +381,56 @@ export default function SettingsDialog({
               </p>
             </>
           )}
+        </div>
+
+        <div className="section">
+          <h3 className="section-title">Branches</h3>
+          <p className="settings-note">
+            Une branche porte un nom et une teinte : les cases de la même ligne se reconnaissent du
+            premier coup d’œil. Une personne n’en porte qu’une. Le menu d’une personne — « Créer une
+            branche ici » — en pose une qui part de elle et range ses descendants ; cette liste-là
+            change les noms, les couleurs et les têtes de ligne.
+          </p>
+
+          {branches.length === 0 ? (
+            <p className="settings-note">Aucune branche pour l’instant.</p>
+          ) : (
+            <ul className="branch-list">
+              {branches.map((branch) => (
+                <BranchRow
+                  key={branch.id}
+                  branch={branch}
+                  persons={persons}
+                  onChanged={onBranchesChanged}
+                  onToast={onToast}
+                />
+              ))}
+            </ul>
+          )}
+
+          <div className="field-row align-end">
+            <label className="field">
+              <span>En ajouter une</span>
+              <input
+                value={draftBranch}
+                onChange={(event) => setDraftBranch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void addBranch();
+                }}
+                placeholder="Branche Gossiaux"
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </label>
+            <button
+              type="button"
+              className="ghost"
+              onClick={addBranch}
+              disabled={busy !== null || !draftBranch.trim()}
+            >
+              {busy === 'branch' ? 'Ajout…' : 'Ajouter'}
+            </button>
+          </div>
         </div>
 
         <div className="section">

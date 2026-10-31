@@ -42,6 +42,21 @@ export interface ParentChild {
   nature: string;
 }
 
+/**
+ * Une branche de l'arbre : une ligne que l'on colore pour la reconnaître d'un coup d'œil.
+ * `rootPersonId` est la personne dont la branche part, pas une personne de plus — c'est elle que
+ * l'on range, avec ses descendants.
+ */
+export interface Branch {
+  id: string;
+  name: string;
+  /** Hexadécimal, tel que le rend le sélecteur de couleur du navigateur. */
+  color: string;
+  rootPersonId: string | null;
+  /** Combien de personnes portent cette branche — 0 veut dire qu'elle est là sans servir encore. */
+  personCount: number;
+}
+
 export interface EventRow {
   id: string;
   type: string;
@@ -54,8 +69,16 @@ export interface GraphData {
   persons: Person[];
   couples: Couple[];
   parentChild: ParentChild[];
+  branches: Branch[];
   rootId: string | null;
   dataDir: string;
+}
+
+/** Ce que l'on écrit d'une branche. Le nom est seul obligatoire ; la couleur se choisit toute seule. */
+export interface BranchInput {
+  name?: string;
+  color?: string;
+  rootPersonId?: string | null;
 }
 
 export interface PersonDetail extends Person {

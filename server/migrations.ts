@@ -65,6 +65,35 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 2,
+    // Une branche est partie d'une personne : quand cette personne est effacée, la branche reste
+    // et se cherche une autre tête. Avant : `root_person_id` n'était qu'un TEXT, donc la base
+    // pouvait garder une tête désignant une personne disparue — et l'écran Réglages la proposait
+    // quand même dans la liste des racines.
+    // Même définition que `branch` dans schema.sql : les deux textes doivent rester les mêmes.
+    needed: () => onDeleteAction('branch', 'root_person_id') !== 'SET NULL',
+    up: () => {
+      db.exec(`
+        CREATE TABLE branch_new (
+          id             TEXT PRIMARY KEY,
+          name           TEXT NOT NULL,
+          color          TEXT NOT NULL DEFAULT '#C9A961',
+          root_person_id TEXT REFERENCES person(id) ON DELETE SET NULL,
+          created_at     TEXT NOT NULL
+        );
+
+        INSERT INTO branch_new SELECT id, name, color, root_person_id, created_at FROM branch;
+
+        DROP TABLE branch;
+        ALTER TABLE branch_new RENAME TO branch;
+
+        UPDATE branch SET root_person_id = NULL
+          WHERE root_person_id IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM person p WHERE p.id = branch.root_person_id);
+      `);
+    },
+  },
 ];
 
 function userVersion(): number {

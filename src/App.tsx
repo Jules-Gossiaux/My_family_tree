@@ -176,6 +176,35 @@ export default function App() {
     [load],
   );
 
+  /** Le graphe et la fiche ouverte doivent reprendre la même image après un changement de branche. */
+  const reloadTree = useCallback(() => {
+    setRefreshKey((key) => key + 1);
+    return load();
+  }, [load]);
+
+  /**
+   * Une branche neuve part de la personne visée et range toute sa descendance : c'est le geste qui
+   * donne une ligne lisible en un clic. Le nom se corrige ensuite dans Réglages, comme la couleur.
+   */
+  const createBranchHere = useCallback(
+    async (personId: string) => {
+      const person = personById.get(personId);
+      if (!person) return;
+      const name = `Branche ${fullName(person)}`.trim();
+      try {
+        const { branch } = await api.createBranch({ name, rootPersonId: personId });
+        await reloadTree();
+        setToast(
+          `${branch.name} créée — ${branch.personCount} case${branch.personCount > 1 ? 's' : ''} rangée${branch.personCount > 1 ? 's' : ''}. ` +
+            'Son nom et sa couleur se règlent dans Réglages.',
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'La branche n’a pas pu être créée');
+      }
+    },
+    [personById, reloadTree],
+  );
+
   const handleSetRoot = useCallback(
     async (id: string) => {
       await api.setRoot(id);
@@ -348,6 +377,7 @@ export default function App() {
                 ref={canvas}
                 layout={layout}
                 selectedId={selectedId}
+                branches={graph?.branches ?? []}
                 onSelect={selectPerson}
                 onContextMenu={openMenu}
               />
@@ -355,6 +385,7 @@ export default function App() {
             <PersonSheet
               personId={selectedId}
               refreshKey={refreshKey}
+              branches={graph?.branches ?? []}
               onSelect={selectPerson}
               onAdd={(relation, anchorName) => setDialog({ relation, anchorName })}
               onAttach={(personId) => setAttach(personId)}
@@ -362,10 +393,9 @@ export default function App() {
               onClose={() => setSelectedId(null)}
               onSetRoot={handleSetRoot}
               onDelete={(id) => setPendingDelete(id)}
-              onMediaChanged={() => {
-                void load();
-                setRefreshKey((key) => key + 1);
-              }}
+              onBranchChanged={reloadTree}
+              onCreateBranch={(personId) => void createBranchHere(personId)}
+              onMediaChanged={reloadTree}
             />
           </>
         )}
@@ -411,6 +441,15 @@ export default function App() {
             </button>
             <button type="button" onClick={() => { void handleSetRoot(menu.personId); setMenu(null); }}>
               Faire la souche de l'arbre
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void createBranchHere(menu.personId);
+                setMenu(null);
+              }}
+            >
+              Créer une branche ici
             </button>
             <button
               type="button"
@@ -503,8 +542,10 @@ export default function App() {
           dataDirFromEnv={dataDirFromEnv}
           rootPersonId={graph?.rootId ?? null}
           persons={graph?.persons ?? []}
+          branches={graph?.branches ?? []}
           onClose={() => setSettings(false)}
           onRootChange={handleSetRoot}
+          onBranchesChanged={reloadTree}
           onBackup={setBackup}
           onToast={setToast}
         />
@@ -514,10 +555,7 @@ export default function App() {
         <MediaInbox
           persons={graph?.persons ?? []}
           onClose={() => setInbox(false)}
-          onChanged={() => {
-            void load();
-            setRefreshKey((key) => key + 1);
-          }}
+          onChanged={reloadTree}
           onToast={setToast}
         />
       )}

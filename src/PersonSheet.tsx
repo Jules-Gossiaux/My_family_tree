@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api } from './api';
 import MediaEditor from './MediaEditor';
 import MediaLightbox from './MediaLightbox';
 import { kindOf, prepareUpload, takenOf } from './thumbnails';
 import { formatDate, fullName, initials, lifeSpan } from './dates';
-import type { Media, Person, PersonDetail, RelationInput } from '../shared/types';
+import type { Branch, Media, Person, PersonDetail, RelationInput } from '../shared/types';
 
 interface Props {
   personId: string | null;
   refreshKey: number;
+  branches: Branch[];
   onSelect: (personId: string) => void;
   onAdd: (relation: RelationInput, anchorName: string) => void;
   onAttach: (personId: string) => void;
@@ -16,6 +17,9 @@ interface Props {
   onClose: () => void;
   onSetRoot: (personId: string) => void;
   onDelete: (personId: string) => void;
+  /** Changement de branche : les teintes des cases et le compteur de la branche doivent suivre. */
+  onBranchChanged: () => void;
+  onCreateBranch: (personId: string) => void;
   /** Prévient l'application qu'un média a bougé : le compteur du bac et l'arbre doivent suivre. */
   onMediaChanged: () => void;
 }
@@ -47,6 +51,7 @@ const MAX_PER_GO = 40;
 export default function PersonSheet({
   personId,
   refreshKey,
+  branches,
   onSelect,
   onAdd,
   onAttach,
@@ -54,12 +59,16 @@ export default function PersonSheet({
   onClose,
   onSetRoot,
   onDelete,
+  onBranchChanged,
+  onCreateBranch,
   onMediaChanged,
 }: Props) {
   const [person, setPerson] = useState<PersonDetail | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [branchError, setBranchError] = useState<string | null>(null);
+  const [branchBusy, setBranchBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -133,6 +142,24 @@ export default function PersonSheet({
     onMediaChanged();
   };
 
+  /**
+   * Ranger une personne sous une branche — ou la rendre au hors-classe. Une seule teinte par case :
+   * la base ne garde qu'une branche par personne, l'arbre n'a donc rien à arbitrer.
+   */
+  const assignBranch = async (branchId: string | null) => {
+    if (!personId || branchBusy) return;
+    setBranchBusy(true);
+    setBranchError(null);
+    try {
+      await api.updatePerson(personId, { branchId });
+      onBranchChanged();
+    } catch (err) {
+      setBranchError(err instanceof Error ? err.message : 'La branche n’a pas pu être réglée.');
+    } finally {
+      setBranchBusy(false);
+    }
+  };
+
   const makePortrait = async (media: Media) => {
     if (!personId) return;
     setMediaError(null);
@@ -195,6 +222,7 @@ export default function PersonSheet({
   const portraitUrl = portrait && portraitPart ? api.mediaUrl(portrait.id, portraitPart) : null;
   const viewedIndex = viewer === null ? -1 : person.media.findIndex((one) => one.id === viewer);
   const viewed = viewedIndex >= 0 ? person.media[viewedIndex] : null;
+  const branch = branches.find((one) => one.id === person.branchId) ?? null;
 
   return (
     <aside className="sheet">
@@ -243,6 +271,42 @@ export default function PersonSheet({
           Modifier
         </button>
       </div>
+
+      <Section title="Branche">
+        <div className="branch-row">
+          <span
+            className="branch-dot"
+            style={{ '--branch': branch?.color ?? 'var(--line-2)' } as CSSProperties}
+          />
+          <select
+            value={person.branchId ?? ''}
+            onChange={(event) => void assignBranch(event.target.value || null)}
+            disabled={branchBusy}
+          >
+            <option value="">Sans branche</option>
+            {branches.map((one) => (
+              <option key={one.id} value={one.id}>
+                {one.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => onCreateBranch(person.id)}
+            disabled={branchBusy}
+            title="Créer une branche qui part de cette personne et range ses descendants"
+          >
+            Nouvelle branche…
+          </button>
+        </div>
+        <p className="settings-note">
+          {branch
+            ? `${branch.name} range ${branch.personCount} personne${branch.personCount > 1 ? 's' : ''} de la même couleur. Le nom et la teinte se changent dans Réglages.`
+            : 'Aucune branche ici : les cases restent sans teinte. « Nouvelle branche… » en part de cette personne et y range toute sa descendance.'}
+        </p>
+        {branchError && <p className="dialog-error">{branchError}</p>}
+      </Section>
 
       <Section title="Vie">
         <dl className="facts">

@@ -30,6 +30,7 @@ server/          API HTTP + accès SQLite
   migrations.ts  ajustements du schéma pour les bases déjà remplies
   notices.ts     ce que le serveur sait et doit afficher
   relations.ts   rattachement d'une personne à une autre, avec ses refus
+  branches.ts    lignes de famille : nom, teinte, tête de ligne et personnes rangées
   backup.ts      archive ZIP datée, au démarrage et pendant la session
   export.ts      tout l'arbre en un JSON lisible sans l'application
   restore.ts     recharge une archive : contrôle, copie de sûreté, échange
@@ -39,17 +40,17 @@ server/          API HTTP + accès SQLite
 shared/          types partagés serveur / client
 src/             interface React
   treeLayout.ts  calcul de position des cases, et des liens que la descendance ne peut pas dessiner
-  TreeCanvas.tsx rendu SVG, zoom et déplacement
-  PersonSheet.tsx fiche latérale, galerie de la personne et portrait
+  TreeCanvas.tsx rendu SVG, zoom, déplacement, teintes de branche et leurs pastilles
+  PersonSheet.tsx fiche latérale, galerie de la personne, portrait et branche
   AddPersonDialog.tsx saisie rapide
   AttachDialog.tsx choix d'une personne déjà existante à rattacher
-  SettingsDialog.tsx écran Réglages : dossier, souche, copies, export
+  SettingsDialog.tsx écran Réglages : dossier, souche, branches, copies, export
   saveFile.ts    écrire un fichier produit par le serveur là où l'utilisateur le veut
   thumbnails.ts  vignette dessinée par le navigateur, type et date pris du fichier
   MediaInbox.tsx bac d'entrée : importer en lot puis rattacher à plusieurs personnes
   MediaLightbox.tsx visionneuse plein écran, avec ou sans éditeur à l'intérieur
   MediaEditor.tsx légende, date lue et type d'un média déjà en place
-tests/           dates, relations, intégrité, migration, export, archives, restauration,
+tests/           dates, relations, branches, intégrité, migration, export, archives, restauration,
                  médias (`npm test`)
 start.bat        démarrer l'application
 restore.bat      recharger une archive de sauvegarde
@@ -207,12 +208,16 @@ deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 | Méthode | Route | Rôle |
 |---|---|---|
 | GET | `/api/state` | dossier de données, statistiques (personnes, couples, médias, médias à rattacher), personne racine, dernière archive, avertissements |
-| GET | `/api/graph` | personnes, couples, liens parent-enfant, en une requête |
+| GET | `/api/graph` | personnes, couples, liens parent-enfant, branches, en une requête |
 | GET | `/api/persons/:id` | fiche complète : relations, événements et médias de la personne |
 | POST | `/api/persons` | création, avec rattachement optionnel |
 | POST | `/api/persons/:id/relations` | rattacher deux personnes déjà dans la base |
-| PATCH | `/api/persons/:id` | modification, `portraitMediaId` compris (mettre `null` retire le portrait) |
+| PATCH | `/api/persons/:id` | modification, `portraitMediaId` et `branchId` compris (mettre `null` retire le portrait, rend la personne au hors-classe) |
 | DELETE | `/api/persons/:id` | suppression |
+| POST | `/api/branches` | création ; avec `rootPersonId`, range toute la descendance de cette personne |
+| PATCH | `/api/branches/:id` | nom, teinte, tête de ligne — ne déplace aucune personne |
+| POST | `/api/branches/:id/descendants` | range la descendance de la tête (ou de `rootPersonId` donné) ; répond `assigned: 0` si tout le monde était déjà classé |
+| DELETE | `/api/branches/:id` | efface la branche et rend ses personnes au hors-classe |
 | PUT | `/api/config` | personne racine de l'arbre |
 | PUT | `/api/config/data-dir` | dossier de données : écrit `config.local.json`, demande un redémarrage |
 | POST | `/api/backup` | archive ZIP immédiate |
@@ -339,7 +344,17 @@ pas la réduire serait perdre une preuve pour un problème d'affichage.
 - [x] branches non rattachées posées dans un ordre qui ne vole pas leur descendance aux parents
 - [x] tests de mise en page (`tests/layout.test.ts`) : cycle, deux parents solos, cousins mariés dans les
   deux ordres d'arêtes, double union, enfant né du couple dessiné
-- [ ] branches remplissables et colorées sur les cases
+- [x] branches remplissables et colorées sur les cases : « Créer une branche ici » du menu d'une personne en
+  pose une qui part d'elle et range sa descendance, la fiche donne ou rend une branche, Réglages change les
+  noms, les teintes et les têtes de ligne
+- [x] une branche ne déplace jamais une personne déjà rangée ailleurs, et ne tourne pas en rond dans une
+  boucle de famille ; son nom et sa teinte ne se partagent pas
+- [x] pastilles des branches au-dessus du canevas : elles comptent les cases de chaque ligne, colorent la
+  case d'un coup d'œil et amenent l'arbre sur la tête de ligne quand on les clique
+- [x] migration 2 : `branch.root_person_id` devient une vraie référence en `SET NULL`, et une tête qui ne
+  désignait plus personne est remise à zéro plutôt que de rester pendante
+- [x] tests serveur des branches (`tests/branches.test.ts`), et reprise d'une base ancienne peuplée de
+  branches dans `tests/migration.test.ts`
 - [ ] réglage « moi » et bouton « me recentrer »
 - [ ] filtre par branche, filtre vivants/décédés
 

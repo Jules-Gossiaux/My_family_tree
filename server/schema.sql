@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS branch (
   id             TEXT PRIMARY KEY,
   name           TEXT NOT NULL,
   color          TEXT NOT NULL DEFAULT '#C9A961',
-  root_person_id TEXT,
+  -- La personne dont part la branche : elle reste rangée même quand la personne est effacée.
+  root_person_id TEXT REFERENCES person(id) ON DELETE SET NULL,
   created_at     TEXT NOT NULL
 );
 
@@ -25,6 +26,8 @@ CREATE TABLE IF NOT EXISTS person (
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_person_branch ON person(branch_id);
 
 CREATE TABLE IF NOT EXISTS name_variant (
   id        TEXT PRIMARY KEY,

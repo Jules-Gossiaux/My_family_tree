@@ -7,6 +7,16 @@ import { DATA_DIR } from './config';
 import { parseGenealogyDate, readDateRow as toDate } from './dates';
 import { RelationError, attachRelation, pruneEmptyCouples } from './relations';
 import {
+  BranchError,
+  assignDescendants,
+  createBranch,
+  deleteBranch,
+  getBranch,
+  listBranches,
+  setPersonBranch,
+  updateBranch,
+} from './branches';
+import {
   backupFile,
   forceBackup,
   lastBackup,
@@ -30,6 +40,7 @@ import {
   updateMedia,
 } from './media';
 import type {
+  BranchInput,
   Couple,
   CreatePersonInput,
   GraphData,
@@ -280,6 +291,7 @@ app.get('/api/graph', (_req, res) => {
     persons,
     couples: loadCouples(),
     parentChild: loadParentChild(),
+    branches: listBranches(),
     rootId: readConfig().rootPersonId,
     dataDir: DATA_DIR,
   };
@@ -441,6 +453,7 @@ app.patch('/api/persons/:id', (req, res) => {
   const body = req.body as Partial<CreatePersonInput> & {
     nickname?: string | null;
     portraitMediaId?: string | null;
+    branchId?: string | null;
   };
 
   const update = db.transaction(() => {
@@ -500,12 +513,16 @@ app.patch('/api/persons/:id', (req, res) => {
     if (body.portraitMediaId !== undefined) {
       setPortrait(req.params.id, body.portraitMediaId);
     }
+
+    if (body.branchId !== undefined) {
+      setPersonBranch(req.params.id, body.branchId);
+    }
   });
 
   try {
     update();
   } catch (error) {
-    sendMediaError(res, error);
+    sendWriteError(res, error);
     return;
   }
   res.json({ ok: true });
@@ -526,6 +543,59 @@ app.delete('/api/persons/:id', (req, res) => {
 });
 
 /**
+ * Une branche est un nom et une couleur posés sur une ligne de l'arbre. Rien n'est deviné : créer
+ * une branche sans dire de qui elle part ne range personne.
+ */
+app.post('/api/branches', (req, res) => {
+  const body = req.body as BranchInput & { includeDescendants?: boolean };
+  try {
+    res.status(201).json({ branch: createBranch(body) });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+app.patch('/api/branches/:id', (req, res) => {
+  const body = req.body as BranchInput;
+  try {
+    res.json({ branch: updateBranch(req.params.id, body) });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+/**
+ * Range la descendance d'une personne sous une branche : c'est le geste que personne ne veut faire
+ * case par case, et le seul qui remplisse vraiment une branche. Une personne déjà rangée ailleurs
+ * n'est pas déplacée.
+ */
+app.post('/api/branches/:id/descendants', (req, res) => {
+  const body = req.body as { rootPersonId?: string };
+  try {
+    const root = body.rootPersonId ?? getBranch(req.params.id).rootPersonId;
+    if (!root) {
+      throw new BranchError(
+        400,
+        'Cette branche n’a encore personne dont partir : choisissez d’abord sa tête, puis rangez.',
+      );
+    }
+    res.json({ assigned: assignDescendants(req.params.id, root) });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+/** Effacer une branche rend ses personnes au hors-classe ; aucune personne ne se perd en route. */
+app.delete('/api/branches/:id', (req, res) => {
+  try {
+    deleteBranch(req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+/**
  * Les médias entrent par leurs octets, pas par du JSON : une photo n'a rien à faire encodée en
  * base64 dans une chaîne. Le plafond est celui du module, plus une marge pour les entêtes.
  */
@@ -534,18 +604,17 @@ const rawBytes = express.raw({
   limit: `${Math.ceil(MAX_BYTES / 1024 / 1024) + 4}mb`,
 });
 
-/** Un refus de média se montre tel quel : le message dit déjà quoi changer au fichier. */
-function sendMediaError(res: Response, error: unknown): void {
-  if (error instanceof MediaError) {
+/**
+ * Un refus d'écriture se montre tel quel : ces trois-là portent déjà un message français qui dit ce
+ * qu'il faut corriger. Le reste est une panne, et une panne ne s'habille pas des mots d'un refus.
+ */
+function sendWriteError(res: Response, error: unknown): void {
+  if (error instanceof MediaError || error instanceof RelationError || error instanceof BranchError) {
     res.status(error.status).json({ error: error.message });
     return;
   }
-  if (error instanceof RelationError) {
-    res.status(error.status).json({ error: error.message });
-    return;
-  }
-  console.error('[média]', error);
-  res.status(500).json({ error: 'Le média n’a pas pu être traité.' });
+  console.error('[enregistrement]', error);
+  res.status(500).json({ error: 'L’enregistrement n’a pas abouti.' });
 }
 
 app.post('/api/media', rawBytes, (req, res) => {
@@ -567,7 +636,7 @@ app.post('/api/media', rawBytes, (req, res) => {
     });
     res.status(deduped ? 200 : 201).json({ media, deduped });
   } catch (error) {
-    sendMediaError(res, error);
+    sendWriteError(res, error);
   }
 });
 
@@ -581,7 +650,7 @@ app.put('/api/media/:id/thumbnail', rawBytes, (req, res) => {
   try {
     res.json({ media: storeThumbnail(req.params.id, buffer) });
   } catch (error) {
-    sendMediaError(res, error);
+    sendWriteError(res, error);
   }
 });
 
@@ -601,7 +670,7 @@ function sendMediaPart(res: Response, id: string, part: 'original' | 'thumb'): v
     stream.on('error', () => res.destroy());
     stream.pipe(res);
   } catch (error) {
-    sendMediaError(res, error);
+    sendWriteError(res, error);
   }
 }
 
@@ -618,7 +687,7 @@ app.patch('/api/media/:id', (req, res) => {
   try {
     res.json({ media: updateMedia(req.params.id, body) });
   } catch (error) {
-    sendMediaError(res, error);
+    sendWriteError(res, error);
   }
 });
 
@@ -628,7 +697,7 @@ app.delete('/api/media/:id', (req, res) => {
     deleteMedia(req.params.id);
     res.json({ ok: true });
   } catch (error) {
-    sendMediaError(res, error);
+    sendWriteError(res, error);
   }
 });
 
@@ -644,7 +713,7 @@ app.post('/api/media/:id/persons', (req, res) => {
     attachPersons(req.params.id, personIds, body.role ?? 'sujet');
     res.json({ media: getMedia(req.params.id) });
   } catch (error) {
-    sendMediaError(res, error);
+    sendWriteError(res, error);
   }
 });
 
@@ -653,7 +722,7 @@ app.delete('/api/media/:id/persons/:personId', (req, res) => {
     detachPerson(req.params.id, req.params.personId);
     res.json({ media: getMedia(req.params.id) });
   } catch (error) {
-    sendMediaError(res, error);
+    sendWriteError(res, error);
   }
 });
 

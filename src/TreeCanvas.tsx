@@ -3,8 +3,10 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
@@ -17,11 +19,12 @@ import {
   type Unit,
 } from './treeLayout';
 import { lifeSpan, shortName, truncate } from './dates';
-import type { Person } from '../shared/types';
+import type { Branch, Person } from '../shared/types';
 
 interface Props {
   layout: LayoutResult;
   selectedId: string | null;
+  branches: Branch[];
   onSelect: (personId: string) => void;
   onContextMenu: (personId: string, x: number, y: number) => void;
 }
@@ -71,6 +74,8 @@ function Card({
   x,
   y,
   selected,
+  color,
+  branchName,
   onSelect,
   onContext,
 }: {
@@ -78,6 +83,9 @@ function Card({
   x: number;
   y: number;
   selected: boolean;
+  /** La teinte de la branche, ou rien : une case sans branche reste la case par défaut. */
+  color: string | null;
+  branchName: string | null;
   onSelect: () => void;
   onContext: (event: ReactMouseEvent) => void;
 }) {
@@ -89,7 +97,19 @@ function Card({
       onContextMenu={onContext}
       role="button"
     >
+      <title>{branchName ? `${shortName(person)} — ${branchName}` : shortName(person)}</title>
       <rect width={CARD_W} height={CARD_H} rx={10} className="card-box" />
+      {color && (
+        <rect
+          className="card-branch"
+          x={9}
+          y={CARD_H - 6}
+          width={CARD_W - 18}
+          height={3}
+          rx={1.5}
+          fill={color}
+        />
+      )}
       <text className="card-name" x={CARD_W / 2} y={26}>
         {truncate(shortName(person), 18)}
       </text>
@@ -101,7 +121,7 @@ function Card({
 }
 
 const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
-  { layout, selectedId, onSelect, onContextMenu },
+  { layout, selectedId, branches, onSelect, onContextMenu },
   ref,
 ) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -109,6 +129,12 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, vx: 0, vy: 0, moved: false });
   const fitted = useRef<string>('');
+
+  /** Une personne se range sous une seule branche : la teinte de sa case doit se lire sans doute. */
+  const branchOf = useMemo(() => {
+    const byId = new Map(branches.map((branch) => [branch.id, branch]));
+    return (person: Person): Branch | null => (person.branchId ? (byId.get(person.branchId) ?? null) : null);
+  }, [branches]);
 
   const fit = useCallback(() => {
     const el = wrapRef.current;
@@ -255,6 +281,7 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
         {unit.slots.map((personId, index) => {
           const person = layout.personById.get(personId);
           if (!person) return null;
+          const branch = branchOf(person);
           return (
             <Card
               key={personId}
@@ -262,6 +289,8 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
               x={slotX(index)}
               y={unit.y}
               selected={selectedId === personId}
+              color={branch?.color ?? null}
+              branchName={branch?.name ?? null}
               onSelect={() => handleSelect(personId)}
               onContext={(event) => {
                 event.preventDefault();
@@ -312,6 +341,36 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
           <g className="units">{layout.units.map(renderUnit)}</g>
         </g>
       </svg>
+
+      {branches.length > 0 && (
+        <div className="canvas-branches">
+          {branches.map((branch) => {
+            const root = branch.rootPersonId ? layout.personById.get(branch.rootPersonId) : null;
+            const note = root
+              ? `${branch.personCount} personne${branch.personCount > 1 ? 's' : ''} rangée${branch.personCount > 1 ? 's' : ''} · part de ${shortName(root)}`
+              : `${branch.name} n’a encore personne dont partir`;
+            return (
+              <button
+                key={branch.id}
+                type="button"
+                className="branch-chip"
+                style={{ '--branch': branch.color } as CSSProperties}
+                onClick={() => {
+                  if (!branch.rootPersonId) return;
+                  onSelect(branch.rootPersonId);
+                  focusPerson(branch.rootPersonId);
+                }}
+                disabled={!branch.rootPersonId}
+                title={note}
+              >
+                <span className="branch-dot" />
+                {branch.name}
+                <span className="branch-count">{branch.personCount}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {layout.crossLinks.length > 0 && (
         <div className="canvas-legend">
