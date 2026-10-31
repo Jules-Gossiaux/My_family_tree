@@ -24,7 +24,14 @@ import {
   scheduleAutoBackup,
 } from './backup';
 import { buildExport, exportFileName } from './export';
-import { listNotices, notify } from './notices';
+import { listNotices } from './notices';
+import {
+  ConfigError,
+  patchConfig,
+  readConfig,
+  repairConfigAfterDelete,
+  type AppConfig,
+} from './app-config';
 import {
   MAX_BYTES,
   MediaError,
@@ -55,33 +62,9 @@ const app = express();
 app.use(express.json({ limit: '4mb' }));
 
 const PORT = Number.parseInt(process.env.PORT ?? '', 10) || 4321;
-const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
 
 /** Le dossier de données se choisit dans ce fichier à la racine du projet, jamais versionné. */
 const LOCAL_CONFIG_PATH = path.resolve(process.cwd(), 'config.local.json');
-
-interface AppConfig {
-  rootPersonId: string | null;
-}
-
-function readConfig(): AppConfig {
-  try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      const parsed = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as Partial<AppConfig>;
-      return { rootPersonId: parsed.rootPersonId ?? null };
-    }
-  } catch (error) {
-    // Le fichier reste sur le disque : la panne est dite à l'écran, pas remplacée par un vide.
-    console.error(`[réglages] ${CONFIG_PATH} est illisible, la personne de référence est perdue.`);
-    console.error(String(error));
-    notify('Le fichier de réglages est abîmé : la souche de l’arbre est à choisir à nouveau.');
-  }
-  return { rootPersonId: null };
-}
-
-function writeConfig(config: AppConfig): void {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
-}
 
 /** Le fichier est écrit entier : un réglage déjà présent reste, seul le dossier change. */
 function writeLocalConfig(dataDir: string): void {
@@ -233,6 +216,7 @@ app.get('/api/state', (_req, res) => {
     dataDir: DATA_DIR,
     dataDirFromEnv: Boolean(process.env.FAMILY_DATA_DIR?.trim()),
     rootPersonId: config.rootPersonId,
+    mePersonId: config.mePersonId,
     counts: { persons: persons.n, couples: couples.n, media: media.n, mediaUnattached: unattached.n },
     backup: lastBackup(),
     warnings: listNotices(),
@@ -417,10 +401,8 @@ app.post('/api/persons', (req, res) => {
     const relation = body.relation;
     if (relation?.ofPersonId) attachRelation(id, relation);
 
-    const config = readConfig();
-    if (!config.rootPersonId) {
-      writeConfig({ rootPersonId: id });
-    }
+    // Le premier visage de l'arbre devient son point de départ : « moi » reste un choix explicite.
+    if (!readConfig().rootPersonId) patchConfig({ rootPersonId: id });
   });
 
   try {
@@ -532,11 +514,7 @@ app.delete('/api/persons/:id', (req, res) => {
   const remove = db.transaction(() => {
     db.prepare('DELETE FROM person WHERE id = ?').run(req.params.id);
     pruneEmptyCouples();
-    const config = readConfig();
-    if (config.rootPersonId === req.params.id) {
-      const next = db.prepare('SELECT id FROM person LIMIT 1').get() as Row | undefined;
-      writeConfig({ rootPersonId: next?.id ?? null });
-    }
+    repairConfigAfterDelete(req.params.id);
   });
   remove();
   res.json({ ok: true });
@@ -609,7 +587,12 @@ const rawBytes = express.raw({
  * qu'il faut corriger. Le reste est une panne, et une panne ne s'habille pas des mots d'un refus.
  */
 function sendWriteError(res: Response, error: unknown): void {
-  if (error instanceof MediaError || error instanceof RelationError || error instanceof BranchError) {
+  if (
+    error instanceof MediaError ||
+    error instanceof RelationError ||
+    error instanceof BranchError ||
+    error instanceof ConfigError
+  ) {
     res.status(error.status).json({ error: error.message });
     return;
   }
@@ -726,11 +709,18 @@ app.delete('/api/media/:id/persons/:personId', (req, res) => {
   }
 });
 
+/**
+ * Les deux personnes de référence se règlent ici, séparément : `rootPersonId` d'où part l'arbre,
+ * `mePersonId` qui vous êtes dedans. Un champ absent laisse ce qui est déjà écrit, un champ à `null`
+ * le rend vide — « moi » se retire aussi bien qu'il se met.
+ */
 app.put('/api/config', (req, res) => {
-  const body = req.body as Partial<AppConfig>;
-  const config = readConfig();
-  writeConfig({ rootPersonId: body.rootPersonId ?? config.rootPersonId });
-  res.json({ ok: true });
+  try {
+    const next = patchConfig(req.body as Partial<AppConfig>);
+    res.json({ ok: true, rootPersonId: next.rootPersonId, mePersonId: next.mePersonId });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
 });
 
 /**

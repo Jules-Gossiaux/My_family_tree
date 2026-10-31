@@ -66,6 +66,12 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ rootPersonId }),
     }),
+  /** Qui vous êtes dans l'arbre — le réglage que « Me recentrer » retrouve. */
+  setMe: (mePersonId: string | null) =>
+    request<{ ok: true }>('/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({ mePersonId }),
+    }),
   setDataDir: (dataDir: string) =>
     request<DataDirResult>('/api/config/data-dir', {
       method: 'PUT',

@@ -25,6 +25,8 @@ interface Props {
   layout: LayoutResult;
   selectedId: string | null;
   branches: Branch[];
+  /** La personne que l'on est dans l'arbre, si elle a été réglée. */
+  mePersonId: string | null;
   onSelect: (personId: string) => void;
   onContextMenu: (personId: string, x: number, y: number) => void;
 }
@@ -121,7 +123,7 @@ function Card({
 }
 
 const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
-  { layout, selectedId, branches, onSelect, onContextMenu },
+  { layout, selectedId, branches, mePersonId, onSelect, onContextMenu },
   ref,
 ) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -135,6 +137,9 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
     const byId = new Map(branches.map((branch) => [branch.id, branch]));
     return (person: Person): Branch | null => (person.branchId ? (byId.get(person.branchId) ?? null) : null);
   }, [branches]);
+
+  // « Moi » peut désigner une personne effacée depuis : le recentrage se taisait alors sans raison.
+  const me = mePersonId ? (layout.personById.get(mePersonId) ?? null) : null;
 
   const fit = useCallback(() => {
     const el = wrapRef.current;
@@ -342,8 +347,26 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
         </g>
       </svg>
 
-      {branches.length > 0 && (
+      {(branches.length > 0 || me) && (
         <div className="canvas-branches">
+          <button
+            type="button"
+            className="branch-chip me-chip"
+            onClick={() => {
+              if (!me) return;
+              onSelect(me.id);
+              focusPerson(me.id);
+            }}
+            disabled={!me}
+            title={
+              me
+                ? `Revenir sur ${shortName(me)}, la personne que vous êtes dans l’arbre`
+                : 'Qui êtes-vous ? Le menu d’une personne — « C’est moi » — ou les Réglages le disent'
+            }
+          >
+            <span className="branch-dot" />
+            Me recentrer
+          </button>
           {branches.map((branch) => {
             const root = branch.rootPersonId ? layout.personById.get(branch.rootPersonId) : null;
             const note = root

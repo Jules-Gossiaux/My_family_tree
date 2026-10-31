@@ -48,6 +48,7 @@ export default function App() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [dataDir, setDataDir] = useState('');
   const [dataDirFromEnv, setDataDirFromEnv] = useState(false);
+  const [meId, setMeId] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
   const [inbox, setInbox] = useState(false);
   const [unattached, setUnattached] = useState(0);
@@ -63,6 +64,7 @@ export default function App() {
       const [data, state] = await Promise.all([api.graph(), api.state()]);
       setGraph(data);
       setBackup(state.backup);
+      setMeId(state.mePersonId);
       setWarnings(state.warnings ?? []);
       setUnattached(state.counts.mediaUnattached);
       setDataDir(state.dataDir);
@@ -212,6 +214,29 @@ export default function App() {
       setToast('Souche de l’arbre modifiée');
     },
     [load],
+  );
+
+  /**
+   * « Moi » n'est pas la souche : la souche dit d'où l'on part, « moi » dit qui l'on est. Les deux
+   * se règlent séparément, et le recentrage ne demande jamais de refaire le tour de l'arbre.
+   */
+  const handleSetMe = useCallback(
+    async (id: string) => {
+      const next: string | null = id === '' ? null : id;
+      try {
+        await api.setMe(next);
+        setMeId(next);
+        const who = next ? personById.get(next) : null;
+        setToast(
+          who
+            ? `Vous êtes ${fullName(who)} — « Me recentrer » vous retrouve`
+            : 'Plus personne désignée comme « moi » — la pastille se met en veille',
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'La personne « moi » n’a pas pu être réglée');
+      }
+    },
+    [personById],
   );
 
   const confirmDelete = useCallback(async () => {
@@ -378,6 +403,7 @@ export default function App() {
                 layout={layout}
                 selectedId={selectedId}
                 branches={graph?.branches ?? []}
+                mePersonId={meId}
                 onSelect={selectPerson}
                 onContextMenu={openMenu}
               />
@@ -441,6 +467,13 @@ export default function App() {
             </button>
             <button type="button" onClick={() => { void handleSetRoot(menu.personId); setMenu(null); }}>
               Faire la souche de l'arbre
+            </button>
+            <button
+              type="button"
+              onClick={() => { void handleSetMe(menu.personId); setMenu(null); }}
+              title="La personne que vous êtes dans l'arbre : « Me recentrer » vous ramènera dessus"
+            >
+              C’est moi
             </button>
             <button
               type="button"
@@ -541,10 +574,12 @@ export default function App() {
           dataDir={dataDir}
           dataDirFromEnv={dataDirFromEnv}
           rootPersonId={graph?.rootId ?? null}
+          mePersonId={meId}
           persons={graph?.persons ?? []}
           branches={graph?.branches ?? []}
           onClose={() => setSettings(false)}
           onRootChange={handleSetRoot}
+          onMeChange={handleSetMe}
           onBranchesChanged={reloadTree}
           onBackup={setBackup}
           onToast={setToast}

@@ -47,7 +47,8 @@ Pour voir la famille, il faut partir du **couple souche** (le plus ancien ancêt
   **« moi »**, et il est **distinct de la souche**. L'arbre descend de la souche ; les phrases du type
   « cousin issu de germain, par les Gossiaux » partent de la personne que chacun se choisit. Confondre
   les deux, c'est dessiner la famille autour d'un seul individu et perdre le principe du §1.
-  Centrer la vue reste possible sur n'importe qui.
+  Le réglage est écrit : `mePersonId` dans `config.json`, posé par le menu d’une personne (« C’est moi »)
+  ou par les Réglages, et retiré de là. Centrer la vue reste possible sur n'importe qui.
 - Un chemin est toujours calculable entre deux personnes reliées : c'est une propriété des données, pas
   encore un écran. Le calculateur de parenté du §4.5 est ce qui le dira en mots.
 
@@ -97,12 +98,12 @@ arrière-grand-père ». Le calculateur de parenté (« cousin issu de germain �
 n'est pas un gadget : ce sera la fonction la plus consultée du logiciel.
 
 Il est rangé en **passe 7**, et non en v1 comme l'écriture de cette spec le promettait. Ce n'est pas un
-désintérêt : c'est qu'il a deux dépendances que rien d'autre n'exige. Il lui faut un « moi » (§4.1), donc
-le réglage et l'écran qui le posent ; et il lui faut des liens stables, alors que la saisie — les couples
-déclarés, les demi-frères, les branches à rattacher — change encore de forme passe après passe. Une
-parenté calculée trop tôt s'affiche faux souvent, et le doute qu'elle installe coûte plus qu'elle ne rend.
-La ligne « comment elle est liée à toi » de la fiche (§8.2) attend donc la passe 7 : la fiche montre
-aujourd'hui les liens directs — parents, conjoints, enfants — et n'interprète rien.
+désintérêt : c'est qu'il a deux dépendances que rien d'autre n'exige. Il lui faut un « moi » (§4.1) — le
+réglage et les deux écrans qui le posent sont écrits depuis la passe 3 ; et il lui faut des liens stables,
+alors que la saisie — les couples déclarés, les demi-frères, les branches à rattacher — change encore de
+forme passe après passe. Une parenté calculée trop tôt s'affiche faux souvent, et le doute qu'elle installe
+coûte plus qu'elle ne rend. La ligne « comment elle est liée à toi » de la fiche (§8.2) attend donc la
+passe 7 : la fiche montre aujourd'hui les liens directs — parents, conjoints, enfants — et n'interprète rien.
 
 ## 5. Stack
 
@@ -322,18 +323,22 @@ seule fois**, ses conjoints étant alignés autour d'elle dans le même bloc.
 
 Ce que la barre de l'arbre sait faire aujourd'hui : rechercher un nom et zoomer dessus, agrandir, réduire,
 ajuster la vue, déplacer le canevas à la souris, ouvrir la fiche d'une personne par un clic, et passer par
-un menu contextuel pour la modifier, la rattacher, la supprimer, la définir comme souche ou créer une
-branche qui part d'elle. Les liens que la descendance ne dessine pas — second parent, boucle, union dont
-les deux cases sont ailleurs — paraissent en pointillés, avec une légende qui les compte (§4.3).
+un menu contextuel pour la modifier, la rattacher, la supprimer, la définir comme souche ou comme « moi »,
+ou créer une branche qui part d'elle. Les liens que la descendance ne dessine pas — second parent, boucle,
+union dont les deux cases sont ailleurs — paraissent en pointillés, avec une légende qui les compte (§4.3).
 
 Une branche se remplit et se lit sans quitter l'arbre : la case porte une teinte au bas de son encadrement
 (nom de la branche dans l'infobulle), et une ligne de pastilles au-dessus du canevas les énumère avec le
 compte de leurs cases — cliquer l'une d'elles ouvre la tête de ligne et amène l'arbre sur elle. Une branche
 sans tête de ligne reste affichée, grisée, et dit pourquoi elle ne se clique pas.
 
-Ce qui manque et attend son fil : **me recentrer** (il exige le réglage « moi », §4.1) et le filtre par
-branche — les branches sont remplies (§7.3), mais la barre de filtres n'est pas encore dessinée ; le filtre
-vivants/décédés n'a pas non plus de ligne de commande.
+La même barre porte une pastille à part, dorée : **« Me recentrer »** saute sur la personne « moi » (§4.1),
+l'ouvre et amène l'arbre dessus. Tant que ce choix n'est pas fait — ou tant que la personne désignée a quitté
+l'arbre depuis — la pastille reste visible, éteinte, et dit où le régler plutôt que de disparaître sans
+raison.
+
+Ce qui manque et attend son fil : le filtre par branche — les branches sont remplies (§7.3), mais la barre
+de filtres n'est pas encore dessinée ; le filtre vivants/décédés n'a pas non plus de ligne de commande.
 
 ### 8.2 La fiche personne — « dossier de vie »
 
@@ -448,7 +453,7 @@ d'utilisable.
 | **0** | Base, ajouter 3 personnes, arbre minimal, fiche minimale | Ça clique et ça répond, de bout en bout | faite |
 | **1** | Saisie rapide au clavier, dates floues, unions, demi-frères | La famille se saisit pour de vrai | faite |
 | **2** | Sauvegarde automatique en ZIP daté, réglages, export JSON, restauration | Les données ne peuvent plus être perdues | faite |
-| **3** | Arbre de descendance, blocs couples, zoom, recentrer, branches colorées | Le projet devient réel et beau | à faire |
+| **3** | Arbre de descendance, blocs couples, zoom, recentrer, branches colorées | Le projet devient réel et beau | faite |
 | **4** | Médias : import, vignettes, bac d'entrée, rattachement par lot, choix du portrait | Les visages arrivent | faite |
 | **5** | Fiche complète : dossier de vie, chronologie, notes, documents | Cliquer sur quelqu'un raconte sa vie | à faire |
 | **6** | Poster : deux modèles, avec portraits ; cadre de recadrage interactif | Un objet à offrir | à faire |

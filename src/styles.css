@@ -354,6 +354,11 @@ input::placeholder {
   font-size: 11px;
 }
 
+/* « Moi » n'est pas une branche : sa pastille se distingue, mais se clique comme les autres. */
+.me-chip {
+  --branch: var(--gold);
+}
+
 .card {
   cursor: pointer;
 }

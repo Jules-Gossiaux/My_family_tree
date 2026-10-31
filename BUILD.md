@@ -1,6 +1,6 @@
 # Plan de construction
 
-Ce document détaille les passes 0, 1, 2 et 4, et suit l'avancement. La vision et le modèle de données
+Ce document détaille les passes 0 à 4, et suit l'avancement. La vision et le modèle de données
 sont dans [`SPEC.md`](SPEC.md).
 
 ## Principe
@@ -13,7 +13,7 @@ version minuscule mais complète (« balle traçante »), puis on épaissit.
 | 0 | Socle : base, ajout de personnes, arbre minimal, fiche minimale | faite |
 | 1 | Saisie rapide, dates floues, couples, demi-frères | faite |
 | 2 | Sauvegarde automatique en ZIP daté, réglages, export JSON, restauration | faite |
-| 3 | Arbre de descendance abouti, branches colorées, réglage « moi » et « me recentrer » | à faire |
+| 3 | Arbre de descendance abouti, branches colorées, réglage « moi » et « me recentrer » | faite |
 | 4 | Médias : import, vignettes, bac d'entrée, rattachement par lot, choix du portrait | faite |
 | 5 | Fiche complète : dossier de vie, chronologie, notes | à faire |
 | 6 | Poster PDF, deux modèles, avec portraits ; cadre de recadrage interactif | à faire |
@@ -29,6 +29,7 @@ server/          API HTTP + accès SQLite
   dates.ts       analyse des dates floues
   migrations.ts  ajustements du schéma pour les bases déjà remplies
   notices.ts     ce que le serveur sait et doit afficher
+  app-config.ts  les deux personnes de référence : la souche de l'arbre et « moi »
   relations.ts   rattachement d'une personne à une autre, avec ses refus
   branches.ts    lignes de famille : nom, teinte, tête de ligne et personnes rangées
   backup.ts      archive ZIP datée, au démarrage et pendant la session
@@ -44,14 +45,14 @@ src/             interface React
   PersonSheet.tsx fiche latérale, galerie de la personne, portrait et branche
   AddPersonDialog.tsx saisie rapide
   AttachDialog.tsx choix d'une personne déjà existante à rattacher
-  SettingsDialog.tsx écran Réglages : dossier, souche, branches, copies, export
+  SettingsDialog.tsx écran Réglages : dossier, souche, « moi », branches, copies, export
   saveFile.ts    écrire un fichier produit par le serveur là où l'utilisateur le veut
   thumbnails.ts  vignette dessinée par le navigateur, type et date pris du fichier
   MediaInbox.tsx bac d'entrée : importer en lot puis rattacher à plusieurs personnes
   MediaLightbox.tsx visionneuse plein écran, avec ou sans éditeur à l'intérieur
   MediaEditor.tsx légende, date lue et type d'un média déjà en place
-tests/           dates, relations, branches, intégrité, migration, export, archives, restauration,
-                 médias (`npm test`)
+tests/           dates, relations, branches, réglages, intégrité, migration, export, archives,
+                 restauration, médias (`npm test`)
 start.bat        démarrer l'application
 restore.bat      recharger une archive de sauvegarde
 ```
@@ -207,18 +208,18 @@ deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 
 | Méthode | Route | Rôle |
 |---|---|---|
-| GET | `/api/state` | dossier de données, statistiques (personnes, couples, médias, médias à rattacher), personne racine, dernière archive, avertissements |
+| GET | `/api/state` | dossier de données, statistiques (personnes, couples, médias, médias à rattacher), personne racine, personne « moi », dernière archive, avertissements |
 | GET | `/api/graph` | personnes, couples, liens parent-enfant, branches, en une requête |
 | GET | `/api/persons/:id` | fiche complète : relations, événements et médias de la personne |
 | POST | `/api/persons` | création, avec rattachement optionnel |
 | POST | `/api/persons/:id/relations` | rattacher deux personnes déjà dans la base |
 | PATCH | `/api/persons/:id` | modification, `portraitMediaId` et `branchId` compris (mettre `null` retire le portrait, rend la personne au hors-classe) |
-| DELETE | `/api/persons/:id` | suppression |
+| DELETE | `/api/persons/:id` | suppression ; la souche repart d'une personne qui existe encore, « moi » s'éteint |
 | POST | `/api/branches` | création ; avec `rootPersonId`, range toute la descendance de cette personne |
 | PATCH | `/api/branches/:id` | nom, teinte, tête de ligne — ne déplace aucune personne |
 | POST | `/api/branches/:id/descendants` | range la descendance de la tête (ou de `rootPersonId` donné) ; répond `assigned: 0` si tout le monde était déjà classé |
 | DELETE | `/api/branches/:id` | efface la branche et rend ses personnes au hors-classe |
-| PUT | `/api/config` | personne racine de l'arbre |
+| PUT | `/api/config` | `rootPersonId` (la souche) et `mePersonId` (« moi »), réglés séparément : un champ absent laisse ce qui est écrit, `null` le retire, une id inconnue est refusée en 400 sans rien déplacer |
 | PUT | `/api/config/data-dir` | dossier de données : écrit `config.local.json`, demande un redémarrage |
 | POST | `/api/backup` | archive ZIP immédiate |
 | GET | `/api/backups` | archives gardées dans le dossier de données |
@@ -350,12 +351,17 @@ pas la réduire serait perdre une preuve pour un problème d'affichage.
 - [x] une branche ne déplace jamais une personne déjà rangée ailleurs, et ne tourne pas en rond dans une
   boucle de famille ; son nom et sa teinte ne se partagent pas
 - [x] pastilles des branches au-dessus du canevas : elles comptent les cases de chaque ligne, colorent la
-  case d'un coup d'œil et amenent l'arbre sur la tête de ligne quand on les clique
+  case d'un coup d'œil et amènent l'arbre sur la tête de ligne quand on les clique
 - [x] migration 2 : `branch.root_person_id` devient une vraie référence en `SET NULL`, et une tête qui ne
   désignait plus personne est remise à zéro plutôt que de rester pendante
 - [x] tests serveur des branches (`tests/branches.test.ts`), et reprise d'une base ancienne peuplée de
   branches dans `tests/migration.test.ts`
-- [ ] réglage « moi » et bouton « me recentrer »
+- [x] réglage « moi », distinct de la souche : « C'est moi » dans le menu d'une personne, une ligne dans
+  Réglages, et la pastille « Me recentrer » de la barre du canevas, qui saute sur cette personne et ouvre
+  sa fiche ; éteinte et expliquée quand le choix n'est pas fait ou que la personne a quitté l'arbre
+- [x] `PUT /api/config` tenu par `server/app-config.ts` et testé (`tests/config.test.ts`) : un champ absent
+  laisse l'autre, `null` retire, une id inconnue est refusée sans rien écrire, et effacer une personne de
+  référence ne laisse aucun réglage pendu
 - [ ] filtre par branche, filtre vivants/décédés
 
 ## Passe 4 — photos et documents

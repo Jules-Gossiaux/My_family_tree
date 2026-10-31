@@ -147,6 +147,8 @@ export interface AppState {
   /** Le dossier courant vient de la variable FAMILY_DATA_DIR : ce choix prime sur l'écran Réglages. */
   dataDirFromEnv: boolean;
   rootPersonId: string | null;
+  /** Qui vous êtes dans l'arbre — distinct de la souche, qui dit seulement d'où part la descendance. */
+  mePersonId: string | null;
   counts: { persons: number; couples: number; media: number; mediaUnattached: number };
   backup: BackupInfo | null;
   /** Ce que le serveur sait et ne doit pas taire : sauvegarde manquée, schéma abîmé. */

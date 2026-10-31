@@ -8,10 +8,12 @@ interface Props {
   dataDir: string;
   dataDirFromEnv: boolean;
   rootPersonId: string | null;
+  mePersonId: string | null;
   persons: Person[];
   branches: Branch[];
   onClose: () => void;
   onRootChange: (personId: string) => void;
+  onMeChange: (personId: string) => void;
   /** Une branche a bougé : l'arbre doit reprendre ses teintes et ses compteurs. */
   onBranchesChanged: () => void;
   onBackup: (info: BackupInfo) => void;
@@ -214,10 +216,12 @@ export default function SettingsDialog({
   dataDir,
   dataDirFromEnv,
   rootPersonId,
+  mePersonId,
   persons,
   branches,
   onClose,
   onRootChange,
+  onMeChange,
   onBranchesChanged,
   onBackup,
   onToast,
@@ -378,6 +382,29 @@ export default function SettingsDialog({
               <p className="settings-note">
                 L’arbre et l’export partent de cette personne. Le bouton « Faire la souche de l’arbre
                 » du menu d’une personne fait la même chose.
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="section">
+          <h3 className="section-title">Moi dans l’arbre</h3>
+          {persons.length === 0 ? (
+            <p className="settings-note">Ajoutez d’abord une personne.</p>
+          ) : (
+            <>
+              <select value={mePersonId ?? ''} onChange={(event) => onMeChange(event.target.value)}>
+                <option value="">Personne n’est « moi »</option>
+                {persons.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {fullName(person)}
+                  </option>
+                ))}
+              </select>
+              <p className="settings-note">
+                La pastille « Me recentrer », en haut de l’arbre, saute sur cette personne. Ce n’est pas la
+                souche : la souche dit d’où l’on part, « moi » dit qui l’on cherche. Le menu d’une personne
+                — « C’est moi » — règle la même chose, et revenir au premier choix de cette liste le retire.
               </p>
             </>
           )}
