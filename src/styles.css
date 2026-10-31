@@ -281,6 +281,35 @@ input::placeholder {
   opacity: 0.5;
 }
 
+/* Un lien que la descendance ne peut pas placer : il reste dit, en pointillés. */
+.edge-cross {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+  opacity: 0.8;
+}
+
+.cross-links .edge-cross {
+  cursor: pointer;
+}
+
+.canvas-legend {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  max-width: 320px;
+}
+
 .card {
   cursor: pointer;
 }

@@ -68,10 +68,17 @@ Deux cousins qui se marient créent une boucle : le graphe cesse d'être un arbr
 page doit **casser le cycle** (choisir un arbre couvrant) et signaler le lien supplémentaire par un
 trait discret, sans planter ni boucler à l'infini. Cas réel dans toutes les grandes familles.
 
-De ces trois exigences, deux tiennent : la mise en page ne plante pas et ne boucle pas, et une écriture
-qui créerait une boucle est refusée en 409. La troisième — le trait discret qui signale le lien
-transversal — n'est pas dessinée : un cycle déjà présent dans la base est ignoré au second passage, sans
-signalement à l'écran. Ce qui est attendu là est écrit dans « Limites connues » de [`BUILD.md`](BUILD.md).
+De ces trois exigences, les trois tiennent. La mise en page ne plante pas et ne boucle pas ; une écriture
+qui créerait une boucle est refusée en 409 ; et un lien que la descendance ne peut pas dessiner — une boucle
+déjà présente dans la base, un enfant dont la case est dessinée sous un autre bloc, une union dont les deux
+cases vivent chacune ailleurs — sort du calcul sous le nom de `crossLink` et se trace **en pointillés**, du
+bas de la case du parent au haut de celle de l'enfant, ou de bord à bord pour une union. Une légende, en bas
+à gauche du canevas, compte ces traits et dit de quoi il s'agit ; chacun se clique et ouvre la fiche de la
+personne visée. Se taire là-dessus ferait croire que la famille ne contient pas ces liens.
+
+Une règle commande le tout : **une personne a une seule case**. Un enfant réclamé par deux blocs n'est
+placé que par le premier — sinon ses deux cases se croiraient deux personnes différentes et la largeur du
+sous-arbre serait comptée deux fois. Le bloc qui voit son conjoint déjà posé ailleurs ne le duplique pas.
 
 ### 4.4 Il y a des branches orphelines
 
@@ -79,7 +86,9 @@ On découvre souvent « la cousine germaine de mamie » sans savoir où l'accroc
 accepter des **personnes et des groupes non rattachés**, visibles dans un espace dédié, en attente
 d'être connectés. Refuser cette possibilité, c'est obliger à inventer des liens faux. **En place** : les
 non rattachés sont dessinés à part, et le bouton « Rattacher… » relie deux personnes déjà saisies sans
-jamais inventer le conjoint qui manque.
+jamais inventer le conjoint qui manque. Une branche non rattachée se pose dans un ordre qui compte : les
+personnes qui n'ont aucun parent connu deviennent racines **avant** les autres, sans quoi un enfant posé le
+premier deviendrait sa propre branche et perdrait la descendance de son parent.
 
 ### 4.5 La parenté se calcule, elle ne se devine pas
 
@@ -300,12 +309,13 @@ seule fois**, ses conjoints étant alignés autour d'elle dans le même bloc.
 
 Ce que la barre de l'arbre sait faire aujourd'hui : rechercher un nom et zoomer dessus, agrandir, réduire,
 ajuster la vue, déplacer le canevas à la souris, ouvrir la fiche d'une personne par un clic, et passer par
-un menu contextuel pour la modifier, la rattacher, la supprimer ou la définir comme souche.
+un menu contextuel pour la modifier, la rattacher, la supprimer ou la définir comme souche. Les liens que
+la descendance ne dessine pas — second parent, boucle, union dont les deux cases sont ailleurs — paraissent
+en pointillés, avec une légende qui les compte (§4.3).
 
-Ce qui manque et attend son fil : **me recentrer** (il exige le réglage « moi », §4.1), le filtre par
-branche (il exige que `branch` soit remplie, §7.3) et le filtre vivants/décédés. La vue courante ne gère
-pas non plus les cycles : un lien transversal déjà présent dans la base est ignoré au second passage, sans
-signalement à l'écran.
+Ce qui manque et attend son fil : **me recentrer** (il exige le réglage « moi », §4.1) et le filtre par
+branche (il exige que `branch` soit remplie, §7.3) ; le filtre vivants/décédés n'a pas encore de ligne de
+commande.
 
 ### 8.2 La fiche personne — « dossier de vie »
 

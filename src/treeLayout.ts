@@ -33,15 +33,39 @@ export interface Edge {
   bus: number;
 }
 
+/**
+ * Un lien que la descendance ne peut pas dessiner. Trois motifs, tous réels :
+ * `parent` — la case de l'enfant est déjà dessinée ailleurs (deux parents solos qui n'ont jamais
+ * déclaré d'union, un conjoint dont les parents vivent aussi dans l'arbre) ;
+ * `cycle` — le graphe n'est plus un arbre (deux cousins mariés, un ancêtre qui redevient
+ * descendant) ; `union` — les deux membres d'un couple ont chacun leur case dans un autre bloc.
+ */
+export interface CrossLink {
+  kind: 'parent' | 'cycle' | 'union';
+  fromId: string;
+  toId: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 export interface LayoutResult {
   units: Unit[];
   byKey: Map<string, Unit>;
   unitByPerson: Map<string, string>;
   edges: Edge[];
+  crossLinks: CrossLink[];
   width: number;
   height: number;
   rootKeys: string[];
   personById: Map<string, Person>;
+}
+
+/** Un enfant et le parent qui l'a engendré : le trait transversal part d'une case précise. */
+interface ChildRef {
+  childId: string;
+  parentId: string;
 }
 
 /**
@@ -50,6 +74,10 @@ export interface LayoutResult {
  * Une personne = une seule case, jamais dupliquée. Ses conjoints sont dessinés dans le même
  * bloc, de part et d'autre : [conjoint] [personne] [conjoint]. Les enfants pendent sous la
  * jonction du couple dont ils sont issus, ce qui rend les demi-frères lisibles.
+ *
+ * Ce que cette règle empêche de dessiner — un second parent, une boucle, une union où chacun a
+ * déjà sa place — ne disparaît pas pour autant : ces liens sortent dans `crossLinks` et se tracent
+ * en pointillés. Les taire, ce serait faire croire que la famille ne les contient pas.
  */
 export function buildLayout(graph: GraphData): LayoutResult {
   const personById = new Map(graph.persons.map((p) => [p.id, p]));
@@ -64,19 +92,18 @@ export function buildLayout(graph: GraphData): LayoutResult {
     }
   }
 
-  const childrenByCouple = new Map<string, string[]>();
-  const childrenByPerson = new Map<string, string[]>();
+  // `(parent_id, child_id)` est unique en base : chaque lien parent-enfant entre une fois dans ces
+  // listes, y compris quand deux parents se partagent le même enfant.
+  const childrenByCouple = new Map<string, ChildRef[]>();
+  const childrenByPerson = new Map<string, ChildRef[]>();
   for (const link of graph.parentChild) {
-    if (!personById.has(link.childId)) continue;
-    if (link.coupleId) {
-      const list = childrenByCouple.get(link.coupleId) ?? [];
-      if (!list.includes(link.childId)) list.push(link.childId);
-      childrenByCouple.set(link.coupleId, list);
-    } else {
-      const list = childrenByPerson.get(link.parentId) ?? [];
-      if (!list.includes(link.childId)) list.push(link.childId);
-      childrenByPerson.set(link.parentId, list);
-    }
+    if (!personById.has(link.childId) || !personById.has(link.parentId)) continue;
+    const ref: ChildRef = { childId: link.childId, parentId: link.parentId };
+    const target = link.coupleId ? childrenByCouple : childrenByPerson;
+    const key = link.coupleId ?? link.parentId;
+    const list = target.get(key) ?? [];
+    list.push(ref);
+    target.set(key, list);
   }
 
   const partnerOf = (couple: Couple, personId: string): string | null => {
@@ -86,36 +113,67 @@ export function buildLayout(graph: GraphData): LayoutResult {
 
   const byKey = new Map<string, Unit>();
   const unitByPerson = new Map<string, string>();
+  /** Qui dessine la case de cette personne — ou, pour un enfant, qui l'a rattachée le premier. */
+  const cardOwner = new Map<string, string>();
+  /** Les liens parent-enfant déjà tirés vers un enfant, pour ne pas signaler une parenté deux fois. */
+  const drawnLinks = new Map<string, Set<string>>();
+  const crossKeys = new Set<string>();
+  const pendingCross: { kind: CrossLink['kind']; fromId: string; toId: string }[] = [];
 
   function buildUnit(personId: string, visited: Set<string>): Unit {
     const cached = byKey.get(personId);
     if (cached) return cached;
 
+    // Le long du chemin parcouru pour arriver ici : personne de ce chemin ne redescendra d'en bas.
+    const nextVisited = new Set(visited);
+    nextVisited.add(personId);
+
+    const addCross = (kind: CrossLink['kind'], fromId: string, toId: string) => {
+      const key = `${kind}:${fromId}>${toId}`;
+      if (crossKeys.has(key)) return;
+      crossKeys.add(key);
+      pendingCross.push({ kind, fromId, toId });
+    };
+
+    const slots: string[] = [personId];
+    const junctions: Junction[] = [];
+
+    /**
+     * Un conjoint qui entre dans la famille s'aligne dans le bloc. Un conjoint qui a déjà sa case
+     * ailleurs — deux cousins mariés, un descendant qui reparaît dans une autre branche — n'est pas
+     * dupliqué : l'union se dira par un trait discret.
+     */
+    const addPartner = (couple: Couple, side: 'left' | 'right') => {
+      const partnerId = partnerOf(couple, personId);
+      if (!partnerId || slots.includes(partnerId)) return;
+      if (cardOwner.has(partnerId)) {
+        const [first, second] = personId < partnerId ? [personId, partnerId] : [partnerId, personId];
+        addCross('union', first, second);
+        return;
+      }
+      if (side === 'left') {
+        slots.unshift(partnerId);
+        junctions.unshift({ coupleId: couple.id, after: 0 });
+      } else {
+        junctions.push({ coupleId: couple.id, after: slots.length - 1 });
+        slots.push(partnerId);
+      }
+      nextVisited.add(partnerId);
+    };
+
     const couples = couplesByPerson.get(personId) ?? [];
     const hasChildren = (couple: Couple) => (childrenByCouple.get(couple.id) ?? []).length > 0;
     const ordered = [...couples].sort((a, b) => Number(hasChildren(b)) - Number(hasChildren(a)));
 
+    // Le conjoint à gauche n'existe que si trois cases tiennent dans le bloc.
     const leftCouple = ordered.length > 1 ? ordered[ordered.length - 1] : null;
     const rightCouples = ordered.length > 1 ? ordered.slice(0, ordered.length - 1) : ordered;
 
-    const slots: string[] = [];
-    const junctions: Junction[] = [];
+    if (leftCouple) addPartner(leftCouple, 'left');
+    for (const couple of rightCouples) addPartner(couple, 'right');
 
-    if (leftCouple) {
-      const partnerId = partnerOf(leftCouple, personId);
-      if (partnerId) {
-        slots.push(partnerId);
-        junctions.push({ coupleId: leftCouple.id, after: 0 });
-      }
-    }
-    slots.push(personId);
-
-    for (const couple of rightCouples) {
-      const partnerId = partnerOf(couple, personId);
-      if (!partnerId) continue;
-      junctions.push({ coupleId: couple.id, after: slots.length - 1 });
-      slots.push(partnerId);
-    }
+    /** Les unions dessinées dans ce bloc ; les autres pendent sous la case du parent. */
+    const jointCouples = new Set(junctions.map((junction) => junction.coupleId));
 
     const w = slots.length * CARD_W + (slots.length - 1) * CARD_GAP;
     const children: string[] = [];
@@ -126,6 +184,31 @@ export function buildLayout(graph: GraphData): LayoutResult {
       -w / 2 + (after + 1) * CARD_W + after * CARD_GAP + CARD_GAP / 2;
     /** Au centre d'une case : les enfants rattachés à un parent seul. */
     const slotOffset = (index: number) => -w / 2 + index * (CARD_W + CARD_GAP) + CARD_W / 2;
+
+    /**
+     * Un enfant ne se place qu'une fois. Le rattacher aussi au second bloc produirait deux cases de
+     * la même personne et une largeur de sous-arbre comptée deux fois ; le taire effacerait un lien
+     * que la base, elle, contient.
+     */
+    const claim = (childId: string, offset: number, parentId: string) => {
+      const owner = cardOwner.get(childId);
+      const drawn = drawnLinks.get(childId);
+      if (owner === personId) {
+        drawn?.add(parentId);
+        return;
+      }
+      if (owner || nextVisited.has(childId)) {
+        // Une boucle d'abord : « parent » se lit comme un oubli de déclaration, pas comme une erreur.
+        if (!drawn?.has(parentId)) {
+          addCross(nextVisited.has(childId) ? 'cycle' : 'parent', parentId, childId);
+        }
+        return;
+      }
+      cardOwner.set(childId, personId);
+      children.push(childId);
+      childOffset.set(childId, offset);
+      drawnLinks.set(childId, new Set([parentId]));
+    };
 
     const unit: Unit = {
       key: personId,
@@ -143,32 +226,25 @@ export function buildLayout(graph: GraphData): LayoutResult {
     byKey.set(personId, unit);
     for (const slot of slots) {
       if (!unitByPerson.has(slot)) unitByPerson.set(slot, personId);
+      if (!cardOwner.has(slot)) cardOwner.set(slot, personId);
     }
 
-    const nextVisited = new Set(visited);
-    for (const slot of slots) nextVisited.add(slot);
-
-    const claim = (childId: string, offset: number) => {
-      if (nextVisited.has(childId) || !personById.has(childId)) return;
-      if (children.includes(childId)) return;
-      children.push(childId);
-      childOffset.set(childId, offset);
-    };
-
     for (const junction of junctions) {
-      for (const childId of childrenByCouple.get(junction.coupleId) ?? []) {
-        claim(childId, junctionOffset(junction.after));
+      for (const ref of childrenByCouple.get(junction.coupleId) ?? []) {
+        claim(ref.childId, junctionOffset(junction.after), ref.parentId);
       }
     }
 
     // Enfant hors union, ou issu d'une union que ce bloc ne dessine pas : il pend sous la
     // case de son parent. L'inverse le ferait disparaître de l'arbre.
     slots.forEach((slotId, index) => {
-      for (const childId of childrenByPerson.get(slotId) ?? []) claim(childId, slotOffset(index));
+      for (const ref of childrenByPerson.get(slotId) ?? []) {
+        claim(ref.childId, slotOffset(index), slotId);
+      }
       for (const couple of couplesByPerson.get(slotId) ?? []) {
-        if (junctions.some((junction) => junction.coupleId === couple.id)) continue;
-        for (const childId of childrenByCouple.get(couple.id) ?? []) {
-          claim(childId, slotOffset(index));
+        if (jointCouples.has(couple.id)) continue;
+        for (const ref of childrenByCouple.get(couple.id) ?? []) {
+          claim(ref.childId, slotOffset(index), ref.parentId);
         }
       }
     });
@@ -178,18 +254,27 @@ export function buildLayout(graph: GraphData): LayoutResult {
     return unit;
   }
 
+  /** Le parent qui dessinera cette personne sous sa case, s'il y en a un dans le graphe. */
+  const knownParentOf = (personId: string): string | undefined =>
+    graph.parentChild.find((pc) => pc.childId === personId && personById.has(pc.parentId))?.parentId;
+
   const rootPersonId =
     graph.rootId && personById.has(graph.rootId)
       ? graph.rootId
-      : (graph.persons.find((p) => !graph.parentChild.some((pc) => pc.childId === p.id))?.id ??
-        graph.persons[0]?.id ??
-        null);
+      : (graph.persons.find((p) => !knownParentOf(p.id))?.id ?? graph.persons[0]?.id ?? null);
 
   const rootKeys: string[] = [];
   if (rootPersonId) rootKeys.push(buildUnit(rootPersonId, new Set()).key);
 
-  // Branches non rattachées : une personne sans lien connu doit rester visible.
-  for (const person of graph.persons) {
+  /**
+   * Branches non rattachées : une personne que rien n'a encore dessinée doit rester visible, donc
+   * devenir racine. Les sans-parent d'abord — prendre pour racine un enfant dont le parent est dans
+   * la base volerait la descendance de ce parent et ferait ressortir le lien en pointillés.
+   */
+  const loose = [...graph.persons].sort(
+    (a, b) => Number(Boolean(knownParentOf(a.id))) - Number(Boolean(knownParentOf(b.id))),
+  );
+  for (const person of loose) {
     if (unitByPerson.has(person.id)) continue;
     const unit = buildUnit(person.id, new Set());
     if (!rootKeys.includes(unit.key)) rootKeys.push(unit.key);
@@ -257,11 +342,44 @@ export function buildLayout(graph: GraphData): LayoutResult {
   const maxX = units.reduce((max, u) => Math.max(max, u.x + u.w / 2), 0);
   const maxY = units.reduce((max, u) => Math.max(max, u.y + CARD_H), 0);
 
+  /** Le centre d'une case : un trait transversal s'accroche à son bord, pas au bloc entier. */
+  function slotCenter(personId: string): { x: number; y: number } | null {
+    const key = unitByPerson.get(personId);
+    const unit = key ? byKey.get(key) : undefined;
+    if (!unit) return null;
+    const index = unit.slots.indexOf(personId);
+    if (index < 0) return { x: unit.x, y: unit.y };
+    return { x: unit.x - unit.w / 2 + index * (CARD_W + CARD_GAP) + CARD_W / 2, y: unit.y };
+  }
+
+  const crossLinks: CrossLink[] = [];
+  for (const link of pendingCross) {
+    const from = slotCenter(link.fromId);
+    const to = slotCenter(link.toId);
+    if (!from || !to) continue;
+    if (link.kind === 'union') {
+      // Deux cases côte à côte : le trait relie leurs bords, à hauteur de carte.
+      const left = from.x <= to.x ? from : to;
+      const right = from.x <= to.x ? to : from;
+      crossLinks.push({
+        ...link,
+        x1: left.x + CARD_W / 2,
+        y1: left.y + CARD_H / 2,
+        x2: right.x - CARD_W / 2,
+        y2: right.y + CARD_H / 2,
+      });
+      continue;
+    }
+    // Un lien de parenté tombe du bas de la case du parent au haut de celle de l'enfant.
+    crossLinks.push({ ...link, x1: from.x, y1: from.y + CARD_H, x2: to.x, y2: to.y });
+  }
+
   return {
     units,
     byKey,
     unitByPerson,
     edges,
+    crossLinks,
     width: Math.max(maxX + PAD, 600),
     height: Math.max(maxY + PAD, 400),
     rootKeys,

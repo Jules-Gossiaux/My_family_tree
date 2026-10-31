@@ -8,7 +8,14 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { CARD_GAP, CARD_H, CARD_W, type LayoutResult, type Unit } from './treeLayout';
+import {
+  CARD_GAP,
+  CARD_H,
+  CARD_W,
+  type CrossLink,
+  type LayoutResult,
+  type Unit,
+} from './treeLayout';
 import { lifeSpan, shortName, truncate } from './dates';
 import type { Person } from '../shared/types';
 
@@ -33,6 +40,31 @@ interface View {
 
 const MIN_ZOOM = 0.12;
 const MAX_ZOOM = 2.4;
+
+/** Ce que dit un trait qui n'a rien d'une descendance. */
+const CROSS_LABELS: Record<CrossLink['kind'], string> = {
+  parent: 'un parent que l’arbre ne peut pas placer au-dessus de son enfant',
+  cycle: 'une boucle dans la famille',
+  union: 'une union dont les deux cases sont ailleurs',
+};
+
+function kindsOf(links: CrossLink[]): CrossLink['kind'][] {
+  return [...new Set(links.map((link) => link.kind))];
+}
+
+/** Un trait qui ne descend pas : une courbe douce, jamais l'angle droit d'une descendance. */
+function crossPath(link: CrossLink): string {
+  if (link.kind === 'union') {
+    const bend = 38 * (link.x2 >= link.x1 ? 1 : -1);
+    return `M ${link.x1} ${link.y1} C ${link.x1 + bend} ${link.y1}, ${link.x2 - bend} ${link.y2}, ${
+      link.x2
+    } ${link.y2}`;
+  }
+  const bend = 44 * (link.y2 >= link.y1 ? 1 : -1);
+  return `M ${link.x1} ${link.y1} C ${link.x1} ${link.y1 + bend}, ${link.x2} ${link.y2 - bend}, ${
+    link.x2
+  } ${link.y2}`;
+}
 
 function Card({
   person,
@@ -260,9 +292,42 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
               return <path key={`${edge.from}-${edge.to}`} d={d} className="edge" />;
             })}
           </g>
+          <g className="cross-links">
+            {layout.crossLinks.map((link) => {
+              const parent = layout.personById.get(link.fromId);
+              const child = layout.personById.get(link.toId);
+              if (!parent || !child) return null;
+              return (
+                <path
+                  key={`${link.kind}-${link.fromId}-${link.toId}`}
+                  d={crossPath(link)}
+                  className={`edge-cross is-${link.kind}`}
+                  onClick={() => handleSelect(link.toId)}
+                >
+                  <title>{`${shortName(parent)} — ${shortName(child)} : ${CROSS_LABELS[link.kind]}`}</title>
+                </path>
+              );
+            })}
+          </g>
           <g className="units">{layout.units.map(renderUnit)}</g>
         </g>
       </svg>
+
+      {layout.crossLinks.length > 0 && (
+        <div className="canvas-legend">
+          <svg width="24" height="6" aria-hidden="true">
+            <line x1="1" y1="3" x2="23" y2="3" className="edge-cross" />
+          </svg>
+          <span>
+            {layout.crossLinks.length} lien
+            {layout.crossLinks.length > 1 ? 's' : ''} en pointillés :{' '}
+            {kindsOf(layout.crossLinks)
+              .map((kind) => CROSS_LABELS[kind])
+              .join(', ')}
+            .
+          </span>
+        </div>
+      )}
 
       <div className="canvas-controls">
         <button type="button" onClick={() => zoomBy(1.25)} aria-label="Agrandir">

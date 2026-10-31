@@ -38,7 +38,7 @@ server/          API HTTP + accès SQLite
   schema.sql     schéma complet
 shared/          types partagés serveur / client
 src/             interface React
-  treeLayout.ts  calcul de position des cases
+  treeLayout.ts  calcul de position des cases, et des liens que la descendance ne peut pas dessiner
   TreeCanvas.tsx rendu SVG, zoom et déplacement
   PersonSheet.tsx fiche latérale, galerie de la personne et portrait
   AddPersonDialog.tsx saisie rapide
@@ -327,6 +327,22 @@ pas la réduire serait perdre une preuve pour un problème d'affichage.
 - [x] export JSON de l'arbre, lisible sans l'application
 - [x] restauration d'une archive (`restore.bat`) : contrôle, copie de sûreté, échange de fichiers
 
+## Passe 3 — lire l'arbre
+
+- [x] un lien que la descendance ne peut pas dessiner sort du calcul (`crossLinks`) et se trace en pointillés
+- [x] trois motifs distingués : un parent qu'aucun trait ne relie à son enfant déjà posé ailleurs, une
+  boucle dans la famille, une union dont les deux cases vivent dans deux blocs
+- [x] légende en bas du canevas : elle compte les traits et dit ce qu'ils signifient ; chaque trait se clique
+  et ouvre la fiche de la personne visée
+- [x] une seule case par personne, même réclamée par deux blocs — sans quoi la largeur du sous-arbre se
+  compte deux fois et le doublon se croyait une autre personne
+- [x] branches non rattachées posées dans un ordre qui ne vole pas leur descendance aux parents
+- [x] tests de mise en page (`tests/layout.test.ts`) : cycle, deux parents solos, cousins mariés dans les
+  deux ordres d'arêtes, double union, enfant né du couple dessiné
+- [ ] branches remplissables et colorées sur les cases
+- [ ] réglage « moi » et bouton « me recentrer »
+- [ ] filtre par branche, filtre vivants/décédés
+
 ## Passe 4 — photos et documents
 
 - [x] import par glisser-déposer et par bouton, en lot, sur la fiche et dans le bac
@@ -345,17 +361,8 @@ pas la réduire serait perdre une preuve pour un problème d'affichage.
 
 ## Limites connues
 
-À traiter en passe 3 :
+Ce qui manque encore, avec le fil qui le reprend :
 
-- **Deux parents solos et l'enfant pend des deux blocs.** Luc fils de Paul sans union déclarée, et
-  aussi fils de Marie sans union déclarée, est dessiné **une seule fois** mais rattaché aux deux
-  cases : la mise en page ne peut le placer que sous l'un des deux, et le second lien traverse
-  l'arbre à l'horizontale. Déclarer l'union de Paul et Marie (« Rattacher… » → conjoint, ou
-  « Et l'autre parent est… » pendant la saisie) ramène l'enfant sous la jonction du couple et
-  supprime le trait qui traverse.
-- **Pas de gestion visuelle des cycles.** Un mariage entre cousins est ignoré au-delà du premier
-  passage, sans signalement. Une écriture qui créerait une boucle est refusée, mais un cycle déjà
-  présent dans la base n'est pas signalé à l'écran.
 - **Aucun recadrage.** Les colonnes `crop_x`, `crop_y` et `crop_size` de `media_person` sont vides :
   le portrait est l'image entière, telle quelle. Le cadre de recadrage interactif appartient à la
   passe 6, parce que c'est le poster qui a besoin d'un visage centré, pas la fiche.
@@ -396,6 +403,12 @@ pas la réduire serait perdre une preuve pour un problème d'affichage.
 
 Résolu : une personne ayant plusieurs unions n'apparaît plus qu'une seule fois, ses conjoints étant
 dessinés dans le même bloc `[conjoint] [personne] [conjoint]`.
+
+Résolu en passe 3 : le trait qui traversait l'arbre sans rien dire — l'enfant de deux parents solos, la
+boucle d'un mariage entre cousins — est maintenant un lien signalé, compté dans la légende et cliquable.
+Déclarer l'union de Paul et Marie (« Rattacher… » → conjoint, ou « Et l'autre parent est… » pendant la
+saisie) ramène toujours l'enfant sous la jonction du couple et fait le pointillé disparaître : le trait
+signale un lien que la base tient, pas une façon de le dessiner.
 
 À assumer, ce n'est pas un bug : supprimer une personne emporte ses liens de parenté. Ses enfants
 gardent l'autre parent et l'union dont ils sont issus, mais le parent effacé ne revient que par une
