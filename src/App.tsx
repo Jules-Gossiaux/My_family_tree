@@ -6,6 +6,7 @@ import AttachDialog from './AttachDialog';
 import MediaInbox from './MediaInbox';
 import SettingsDialog from './SettingsDialog';
 import { api } from './api';
+import { signOut, useMember } from './session';
 import { buildLayout } from './treeLayout';
 import { fullName, lifeSpan } from './dates';
 import type {
@@ -62,6 +63,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const canvas = useRef<TreeCanvasHandle>(null);
+  const member = useMember();
 
   const load = useCallback(async () => {
     try {
@@ -378,6 +380,25 @@ export default function App() {
         >
           Réglages
         </button>
+
+        {member && (
+          <>
+            <span
+              className="who"
+              title={member.canWrite ? 'Cette adresse peut modifier l’arbre' : 'Cette adresse lit l’arbre sans le modifier'}
+            >
+              {member.email}
+            </span>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => void signOut()}
+              title={`Quitter la session de ${member.email}`}
+            >
+              Quitter
+            </button>
+          </>
+        )}
 
         <button type="button" className="primary" onClick={() => setDialog({ relation: null })}>
           Ajouter une personne
