@@ -263,3 +263,13 @@ create policy "medias effacement" on storage.objects
 -- un script SQL peut rester fermee au role du front selon le reglage de l'API de donnees.
 -- `anon` ne recoit rien : sans compte, il n'y a pas d'arbre a lire.
 grant select, insert, update, delete on all tables in schema public to authenticated;
+
+-- Supabase accorde par defaut plus que ce qu'on demande : la lecture au role `anon` et tous les
+-- verbes au role `authenticated`, y compris sur la liste des membres. Les regles de lignes
+-- filtraient deja ces acces a zero ligne, mais un privilege de trop dort : une vue, une politique
+-- ajoutee plus tard, et il se reveille. On le ferme a la source.
+revoke all on public.person, public.branch, public.name_variant, public.place, public.couple,
+  public.parent_child, public.event, public.media, public.media_person, public.media_event,
+  public.note, public.source, public.family_member, public.tree_setting from anon;
+revoke insert, update, delete on public.family_member from authenticated;
+revoke all on all tables in schema storage from anon;
