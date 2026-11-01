@@ -18,6 +18,9 @@ import type {
   SourceRow,
 } from '../shared/types';
 import { SANS_ADRESSE, supabase } from './supabase';
+// La grammaire des dates françaises ne vit qu'à un seul endroit : le navigateur la lit, la base
+// range ce qu'elle en a tiré. Le réécrire en SQL ferait deux règles distinctes.
+import { parseGenealogyDate } from '../server/dates';
 
 /**
  * Une vue de l'arbre se lit d'un seul coup. Les fonctions SQL posées dans
@@ -122,9 +125,10 @@ export const api = {
   deleteBranch: (id: string) => pasEncoreEnLigne(),
 
   /** Un fait de la vie : il porte une personne ou une union, et se date en français libre. */
-  createEvent: (input: EventInput) => pasEncoreEnLigne() as Promise<{ event: EventRow }>,
+  createEvent: (input: EventInput) =>
+    vue<EventRow>('create_event', { p: { ...input, date: parseGenealogyDate(input.dateText) } }),
   updateEvent: (id: string, input: EventInput) => pasEncoreEnLigne() as Promise<{ event: EventRow }>,
-  deleteEvent: (id: string) => pasEncoreEnLigne(),
+  deleteEvent: (id: string) => vue<void>('delete_event', { p_id: id }),
 
   /** Renommer ne déplace aucun fait : les lignes qui pointaient déjà ici suivent le nouveau nom. */
   updatePlace: (id: string, name: string) => pasEncoreEnLigne() as Promise<{ place: PlaceRow }>,
