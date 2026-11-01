@@ -195,15 +195,23 @@ create table tree_setting (
 -- Les droits
 -- ---------------------------------------------------------------------------
 
--- Security definer : cette fonction lit family_member, qui est lui meme protege par les
--- regles ci-dessous. Sans elle, decider si on a le droit de lire la table des membres
--- demanderait d'avoir le droit de lire la table des membres.
+-- Security invoker, pas definer : cette fonction lit family_member, dont la regle propre ne
+-- laisse voir que la ligne de celui qui demande. Elle ne peut donc pas servir de porte de
+-- sortie. Un definer ici ferait de can_write() un endpoint public contournant les droits.
+create function is_member() returns boolean
+language sql stable security invoker set search_path = ''
+as $$
+  select exists (
+    select 1 from public.family_member m where m.auth_uid = (select auth.uid())
+  );
+$$;
+
 create function can_write() returns boolean
-language sql stable security definer set search_path = ''
+language sql stable security invoker set search_path = ''
 as $$
   select exists (
     select 1 from public.family_member m
-    where m.auth_uid = auth.uid() and m.can_write
+    where m.auth_uid = (select auth.uid()) and m.can_write
   );
 $$;
 
@@ -215,11 +223,15 @@ begin
     'event', 'media', 'media_person', 'media_event', 'note', 'source', 'tree_setting'
   ] loop
     execute format('alter table public.%I enable row level security', t);
-    -- Tout compte invite lit tout : la famille complete est le sujet de l'application.
-    execute format($f$ create policy "lecture" on public.%I for select to authenticated using (true) $f$, t);
-    execute format($f$ create policy "ajout" on public.%I for insert to authenticated with check (can_write()) $f$, t);
-    execute format($f$ create policy "modification" on public.%I for update to authenticated using (can_write()) with check (can_write()) $f$, t);
-    execute format($f$ create policy "effacement" on public.%I for delete to authenticated using (can_write()) $f$, t);
+    -- La famille complete est le sujet de l'application : tout membre lit tout. Le filtre n'est
+    -- pas la ligne mais le compte, et il vient de family_member -- retirer un membre coupe la
+    -- lecture a la requete suivante, sans attendre que son jeton expire.
+    -- Chaque test est ecrit en sous-requete non correlee pour que Postgres l'evalue une fois
+    -- par instruction au lieu d'une fois par ligne.
+    execute format($f$ create policy "lecture" on public.%I for select to authenticated using ((select public.is_member())) $f$, t);
+    execute format($f$ create policy "ajout" on public.%I for insert to authenticated with check ((select public.can_write())) $f$, t);
+    execute format($f$ create policy "modification" on public.%I for update to authenticated using ((select public.can_write())) with check ((select public.can_write())) $f$, t);
+    execute format($f$ create policy "effacement" on public.%I for delete to authenticated using ((select public.can_write())) $f$, t);
   end loop;
 end $$;
 
@@ -228,19 +240,26 @@ end $$;
 -- tableau de bord, jamais depuis le navigateur.
 alter table public.family_member enable row level security;
 create policy "chacun se voit" on public.family_member
-  for select to authenticated using (auth_uid = auth.uid());
+  for select to authenticated using (auth_uid = (select auth.uid()));
 
 -- Les fichiers de la famille : bucket prive, donc passe par une URL signee delivree a un
 -- compte invite. Sans regle ici, le bucket serait illisible meme pour son proprietaire.
+-- Le role `authenticated` recoit les quatre verbes : un depot qui remplace un fichier
+-- existant (upsert) a besoin de lire et de modifier, pas seulement d'inserer.
 insert into storage.buckets (id, name, public)
 values ('medias', 'medias', false)
 on conflict (id) do nothing;
 
 create policy "medias lecture" on storage.objects
-  for select to authenticated using (bucket_id = 'medias');
+  for select to authenticated using (bucket_id = 'medias' and (select public.is_member()));
 create policy "medias depot" on storage.objects
-  for insert to authenticated with check (bucket_id = 'medias' and can_write());
+  for insert to authenticated with check (bucket_id = 'medias' and (select public.can_write()));
 create policy "medias remplacement" on storage.objects
-  for update to authenticated using (bucket_id = 'medias' and can_write());
+  for update to authenticated using (bucket_id = 'medias' and (select public.can_write()));
 create policy "medias effacement" on storage.objects
-  for delete to authenticated using (bucket_id = 'medias' and can_write());
+  for delete to authenticated using (bucket_id = 'medias' and (select public.can_write()));
+
+-- Dernier etage, distinct des droits de lignes : les privileges de role. Une table creee par
+-- un script SQL peut rester fermee au role du front selon le reglage de l'API de donnees.
+-- `anon` ne recoit rien : sans compte, il n'y a pas d'arbre a lire.
+grant select, insert, update, delete on all tables in schema public to authenticated;
