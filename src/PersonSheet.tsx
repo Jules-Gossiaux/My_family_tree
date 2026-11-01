@@ -3,6 +3,7 @@ import { api } from './api';
 import LifeTimeline from './LifeTimeline';
 import MediaEditor from './MediaEditor';
 import MediaLightbox from './MediaLightbox';
+import { MediaImg } from './MediaView';
 import NoteList from './NoteList';
 import { kindOf, prepareUpload, takenOf } from './thumbnails';
 import { formatDate, fullName, initials, lifeSpan } from './dates';
@@ -230,7 +231,6 @@ export default function PersonSheet({
     : portrait?.mime?.startsWith('image/')
       ? 'original'
       : null;
-  const portraitUrl = portrait && portraitPart ? api.mediaUrl(portrait.id, portraitPart) : null;
   const viewedIndex = viewer === null ? -1 : person.media.findIndex((one) => one.id === viewer);
   const viewed = viewedIndex >= 0 ? person.media[viewedIndex] : null;
   const branch = branches.find((one) => one.id === person.branchId) ?? null;
@@ -243,11 +243,12 @@ export default function PersonSheet({
 
       <header className="sheet-header">
         <div className="avatar">
-          {portraitUrl ? (
-            <img className="avatar-img" src={portraitUrl} alt="" />
-          ) : (
-            initials(person)
-          )}
+          <MediaImg
+            media={portrait}
+            part={portraitPart ?? 'thumb'}
+            className="avatar-img"
+            fallback={initials(person)}
+          />
         </div>
         <div className="sheet-id">
           <h2 className="sheet-name">{name}</h2>
@@ -391,7 +392,7 @@ export default function PersonSheet({
                   title={media.caption || (media.kind === 'photo' ? 'Photo' : 'Document')}
                 >
                   {media.hasThumb ? (
-                    <img src={api.mediaUrl(media.id, 'thumb')} alt="" loading="lazy" />
+                    <MediaImg media={media} part="thumb" />
                   ) : (
                     <span className="media-placeholder">
                       {media.kind === 'document' ? 'document' : 'sans aperçu'}

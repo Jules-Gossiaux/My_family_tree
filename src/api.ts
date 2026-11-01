@@ -17,158 +17,150 @@ import type {
   SourceInput,
   SourceRow,
 } from '../shared/types';
+import { SANS_ADRESSE, supabase } from './supabase';
 
-/** Un refus du serveur se dit en français ; une page HTML rendue à la place n'est pas un refus. */
-async function unwrap<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    let message = `Erreur ${response.status}`;
-    try {
-      const body = (await response.json()) as { error?: string };
-      if (body.error) message = body.error;
-    } catch {
-      /* le serveur n'a pas rendu de JSON */
-    }
-    throw new Error(message);
-  }
-  return (await response.json()) as T;
+/**
+ * Une vue de l'arbre se lit d'un seul coup. Les fonctions SQL posées dans
+ * `supabase/migrations/20261101183000_ecran_en_ligne.sql` rendent exactement les objets de
+ * `shared/types.ts`, camelCase compris : ce qui change est le transport, pas les écrans.
+ *
+ * Elles sont `security invoker` côté serveur, donc un compte qui n'est pas de la famille reçoit
+ * des tableaux vides — jamais une erreur à afficher.
+ */
+async function vue<T>(nom: string, parametres?: Record<string, unknown>): Promise<T> {
+  if (!supabase) throw new Error(SANS_ADRESSE);
+  const { data, error } = await supabase.rpc(nom, parametres ?? {});
+  if (error) throw new Error(error.message);
+  return data as T;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  return unwrap(
-    await fetch(path, {
-      headers: { 'Content-Type': 'application/json' },
-      ...init,
-    }),
+/**
+ * Ce qui n'est pas encore écrit. La base SQLite du disque n'est plus la source de vérité depuis
+ * que l'arbre vit sur le serveur : l'enregistrer là produirait des changements que personne
+ * d'autre ne verrait jamais, et un arbre à moitié écrit ne se rattrape pas. Un refus net vaut
+ * mieux qu'une perte.
+ */
+function pasEncoreEnLigne(): Promise<never> {
+  return Promise.reject(
+    new Error(
+      "L'enregistrement en ligne n'est pas encore écrit : depuis cette adresse, l'arbre se consulte mais ne se modifie pas.",
+    ),
   );
 }
 
-/** Une photo entre par ses octets, sans entête JSON : mêmes mots d'erreur, autre transport. */
-async function sendBinary<T>(path: string, method: string, body: BodyInit): Promise<T> {
-  return unwrap(await fetch(path, { method, body }));
+/** Une heure, puis le navigateur redemande : le seau reste privé et le lien ne circule pas. */
+const DUREE_SIGNATURE = 3600;
+
+/** URL signées déjà délivrées, par clé de fichier — une galerie de 200 photos ne signe pas 200 fois. */
+const signatures = new Map<string, { url: string; expireAt: number }>();
+
+/**
+ * L'adresse temporaire d'un fichier du coffre. La clé seule ne ouvre rien : c'est la signature,
+ * contrôlée à chaque demande par les règles de la table `storage.objects`, qui fait le droit.
+ */
+export async function mediaUrl(media: Media, part: 'original' | 'thumb'): Promise<string> {
+  const cle = part === 'original' ? media.key : media.thumbKey;
+  if (!cle) throw new Error('Ce fichier n’a pas de vignette.');
+
+  const tenue = signatures.get(cle);
+  if (tenue && tenue.expireAt > Date.now()) return tenue.url;
+  if (!supabase) throw new Error(SANS_ADRESSE);
+
+  const { data, error } = await supabase.storage.from('medias').createSignedUrl(cle, DUREE_SIGNATURE);
+  if (error || !data?.signedUrl) throw new Error(error?.message ?? 'Ce fichier n’a pas pu être délivré.');
+
+  signatures.set(cle, { url: data.signedUrl, expireAt: Date.now() + (DUREE_SIGNATURE - 300) * 1000 });
+  return data.signedUrl;
 }
 
 export const api = {
-  graph: () => request<GraphData>('/api/graph'),
-  state: () => request<AppState>('/api/state'),
-  backup: () => request<BackupInfo>('/api/backup', { method: 'POST' }),
-  backups: () => request<{ backups: BackupInfo[] }>('/api/backups'),
+  graph: () => vue<GraphData>('graph_json'),
+
+  state: () => vue<AppState>('state_json'),
+
+  person: async (id: string) => {
+    const detail = await vue<PersonDetail | null>('person_detail_json', { p_id: id });
+    if (!detail) throw new Error('Personne introuvable');
+    return detail;
+  },
+
+  /** Les lieux connus, pour proposer ce qui est déjà écrit plutôt que de le recopier. */
+  places: async () => ({ places: await vue<PlaceRow[]>('places_json') }),
+
+  /** Les sources connues, pour qu'un fait en choisisse une plutôt que de la réécrire. */
+  sources: async () => ({ sources: await vue<SourceRow[]>('sources_json') }),
+
+  /** Ce qui attend encore un visage. */
+  unattachedMedia: async () => ({ media: await vue<Media[]>('unattached_media_json') }),
+
+  backup: () => pasEncoreEnLigne(),
+  backups: () => pasEncoreEnLigne() as Promise<{ backups: BackupInfo[] }>,
   /** Adresses des fichiers que l'on enregistre ailleurs que dans le dossier de données. */
   backupFileUrl: (name: string) => `/api/backups/file?name=${encodeURIComponent(name)}`,
   exportJsonUrl: '/api/export/json',
-  person: (id: string) => request<PersonDetail>(`/api/persons/${id}`),
-  createPerson: (input: CreatePersonInput) =>
-    request<{ id: string }>('/api/persons', { method: 'POST', body: JSON.stringify(input) }),
+
+  createPerson: (input: CreatePersonInput) => pasEncoreEnLigne() as Promise<{ id: string }>,
   updatePerson: (
     id: string,
     input: Partial<CreatePersonInput> & { nickname?: string; branchId?: string | null },
-  ) => request<{ ok: true }>(`/api/persons/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
-  deletePerson: (id: string) => request<{ ok: true }>(`/api/persons/${id}`, { method: 'DELETE' }),
-  attachRelation: (id: string, relation: RelationInput) =>
-    request<{ ok: true }>(`/api/persons/${id}/relations`, {
-      method: 'POST',
-      body: JSON.stringify(relation),
-    }),
-  setRoot: (rootPersonId: string | null) =>
-    request<{ ok: true }>('/api/config', {
-      method: 'PUT',
-      body: JSON.stringify({ rootPersonId }),
-    }),
+  ) => pasEncoreEnLigne(),
+  deletePerson: (id: string) => pasEncoreEnLigne(),
+  attachRelation: (id: string, relation: RelationInput) => pasEncoreEnLigne(),
+  setRoot: (rootPersonId: string | null) => pasEncoreEnLigne(),
   /** Qui vous êtes dans l'arbre — le réglage que « Me recentrer » retrouve. */
-  setMe: (mePersonId: string | null) =>
-    request<{ ok: true }>('/api/config', {
-      method: 'PUT',
-      body: JSON.stringify({ mePersonId }),
-    }),
-  setDataDir: (dataDir: string) =>
-    request<DataDirResult>('/api/config/data-dir', {
-      method: 'PUT',
-      body: JSON.stringify({ dataDir }),
-    }),
+  setMe: (mePersonId: string | null) => pasEncoreEnLigne(),
+  setDataDir: (dataDir: string) => pasEncoreEnLigne() as Promise<DataDirResult>,
 
   /** Une branche : un nom, une couleur, et la personne dont elle part. */
   createBranch: (input: BranchInput & { includeDescendants?: boolean }) =>
-    request<{ branch: Branch }>('/api/branches', { method: 'POST', body: JSON.stringify(input) }),
-  updateBranch: (id: string, input: BranchInput) =>
-    request<{ branch: Branch }>(`/api/branches/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+    pasEncoreEnLigne() as Promise<{ branch: Branch }>,
+  updateBranch: (id: string, input: BranchInput) => pasEncoreEnLigne() as Promise<{ branch: Branch }>,
   /** Range la descendance d'une personne sous une branche ; dit combien de cases ont suivi. */
   branchDescendants: (id: string, rootPersonId?: string) =>
-    request<{ assigned: number }>(`/api/branches/${id}/descendants`, {
-      method: 'POST',
-      body: JSON.stringify({ rootPersonId }),
-    }),
-  deleteBranch: (id: string) => request<{ ok: true }>(`/api/branches/${id}`, { method: 'DELETE' }),
+    pasEncoreEnLigne() as Promise<{ assigned: number }>,
+  deleteBranch: (id: string) => pasEncoreEnLigne(),
 
   /** Un fait de la vie : il porte une personne ou une union, et se date en français libre. */
-  createEvent: (input: EventInput) =>
-    request<{ event: EventRow }>('/api/events', { method: 'POST', body: JSON.stringify(input) }),
-  updateEvent: (id: string, input: EventInput) =>
-    request<{ event: EventRow }>(`/api/events/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
-  deleteEvent: (id: string) => request<{ ok: true }>(`/api/events/${id}`, { method: 'DELETE' }),
+  createEvent: (input: EventInput) => pasEncoreEnLigne() as Promise<{ event: EventRow }>,
+  updateEvent: (id: string, input: EventInput) => pasEncoreEnLigne() as Promise<{ event: EventRow }>,
+  deleteEvent: (id: string) => pasEncoreEnLigne(),
 
-  /** Les lieux connus, pour proposer ce qui est déjà écrit plutôt que de le recopier. */
-  places: () => request<{ places: PlaceRow[] }>('/api/places'),
   /** Renommer ne déplace aucun fait : les lignes qui pointaient déjà ici suivent le nouveau nom. */
-  updatePlace: (id: string, name: string) =>
-    request<{ place: PlaceRow }>(`/api/places/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  updatePlace: (id: string, name: string) => pasEncoreEnLigne() as Promise<{ place: PlaceRow }>,
   /** Effacer un lieu rend ses faits et ses fichiers à un lieu inconnu, sans rien effacer d'eux. */
-  deletePlace: (id: string) =>
-    request<{ ok: true; events: number; media: number }>(`/api/places/${id}`, { method: 'DELETE' }),
+  deletePlace: (id: string) => pasEncoreEnLigne() as Promise<{ ok: true; events: number; media: number }>,
 
-  /** Les sources connues, pour qu'un fait en choisisse une plutôt que de la réécrire. */
-  sources: () => request<{ sources: SourceRow[] }>('/api/sources'),
-  createSource: (input: SourceInput) =>
-    request<{ source: SourceRow }>('/api/sources', { method: 'POST', body: JSON.stringify(input) }),
+  createSource: (input: SourceInput) => pasEncoreEnLigne() as Promise<{ source: SourceRow }>,
   /** Corriger une référence suit les faits qui la citent : la source reste la même ligne. */
-  updateSource: (id: string, input: SourceInput) =>
-    request<{ source: SourceRow }>(`/api/sources/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(input),
-    }),
+  updateSource: (id: string, input: SourceInput) => pasEncoreEnLigne() as Promise<{ source: SourceRow }>,
   /** Une source encore citée se refuse : le message compte les citations à retirer avant. */
-  deleteSource: (id: string) => request<{ ok: true }>(`/api/sources/${id}`, { method: 'DELETE' }),
+  deleteSource: (id: string) => pasEncoreEnLigne(),
 
   /** Une note se pose sur ce qu'elle commente : son texte part avec la cible qu'on lui donne. */
-  createNote: (input: NoteInput) =>
-    request<{ note: NoteRow }>('/api/notes', { method: 'POST', body: JSON.stringify(input) }),
+  createNote: (input: NoteInput) => pasEncoreEnLigne() as Promise<{ note: NoteRow }>,
   /** Corriger une note n'en change pas la date : l'écran dit « écrite le », pas « modifiée le ». */
-  updateNote: (id: string, body: string) =>
-    request<{ note: NoteRow }>(`/api/notes/${id}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
-  deleteNote: (id: string) => request<{ ok: true }>(`/api/notes/${id}`, { method: 'DELETE' }),
+  updateNote: (id: string, body: string) => pasEncoreEnLigne() as Promise<{ note: NoteRow }>,
+  deleteNote: (id: string) => pasEncoreEnLigne(),
 
-  /** Ce qui attend encore un visage. */
-  unattachedMedia: () => request<{ media: Media[] }>('/api/media?state=a-relier'),
   uploadMedia: (
     file: File,
     meta: { kind: MediaKind; taken?: string | null; width?: number | null; height?: number | null },
-  ) => {
-    const query = new URLSearchParams({ kind: meta.kind, mime: file.type || 'application/octet-stream' });
-    if (meta.taken) query.set('taken', meta.taken);
-    if (meta.width) query.set('width', String(meta.width));
-    if (meta.height) query.set('height', String(meta.height));
-    return sendBinary<{ media: Media; deduped: boolean }>(`/api/media?${query}`, 'POST', file);
-  },
-  uploadThumbnail: (mediaId: string, blob: Blob) =>
-    sendBinary<{ media: Media }>(`/api/media/${mediaId}/thumbnail`, 'PUT', blob),
+  ) => pasEncoreEnLigne() as Promise<{ media: Media; deduped: boolean }>,
+  uploadThumbnail: (mediaId: string, blob: Blob) => pasEncoreEnLigne() as Promise<{ media: Media }>,
   patchMedia: (
     id: string,
-    patch: { caption?: string | null; kind?: MediaKind; documentType?: string | null; dateText?: string | null },
-  ) => request<{ media: Media }>(`/api/media/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
-  deleteMedia: (id: string) => request<{ ok: true }>(`/api/media/${id}`, { method: 'DELETE' }),
+    patch: {
+      caption?: string | null;
+      kind?: MediaKind;
+      documentType?: string | null;
+      dateText?: string | null;
+    },
+  ) => pasEncoreEnLigne() as Promise<{ media: Media }>,
+  deleteMedia: (id: string) => pasEncoreEnLigne(),
   attachMedia: (id: string, personIds: string[], role = 'sujet') =>
-    request<{ media: Media }>(`/api/media/${id}/persons`, {
-      method: 'POST',
-      body: JSON.stringify({ personIds, role }),
-    }),
-  detachMedia: (mediaId: string, personId: string) =>
-    request<{ media: Media }>(`/api/media/${mediaId}/persons/${personId}`, { method: 'DELETE' }),
-  setPortrait: (personId: string, portraitMediaId: string | null) =>
-    request<{ ok: true }>(`/api/persons/${personId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ portraitMediaId }),
-    }),
-  /** Une image ne se charge pas par l'API JSON : le navigateur la demande directement. */
-  mediaUrl: (id: string, part: 'original' | 'thumb') =>
-    `/api/media/${id}/${part === 'original' ? 'original' : 'thumbnail'}`,
+    pasEncoreEnLigne() as Promise<{ media: Media }>,
+  detachMedia: (mediaId: string, personId: string) => pasEncoreEnLigne() as Promise<{ media: Media }>,
+  setPortrait: (personId: string, portraitMediaId: string | null) => pasEncoreEnLigne(),
 };
 
 /** Le dossier choisi est écrit sur le disque ; l'ouverture réelle attend un redémarrage. */

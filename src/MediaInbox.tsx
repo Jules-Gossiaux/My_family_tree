@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import MediaEditor from './MediaEditor';
 import MediaLightbox from './MediaLightbox';
+import { MediaImg } from './MediaView';
 import { kindOf, prepareUpload, takenOf } from './thumbnails';
 import { formatDate, fullName, lifeSpan } from './dates';
 import type { Media, Person } from '../shared/types';
@@ -227,7 +228,7 @@ export default function MediaInbox({ persons, onClose, onChanged, onToast }: Pro
                   title={media.caption || 'Ouvrir'}
                 >
                   {media.hasThumb ? (
-                    <img src={api.mediaUrl(media.id, 'thumb')} alt="" loading="lazy" />
+                    <MediaImg media={media} part="thumb" />
                   ) : (
                     <span className="media-placeholder">{media.kind === 'photo' ? 'photo' : 'document'}</span>
                   )}

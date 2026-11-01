@@ -190,8 +190,8 @@ export interface MediaPersonRef {
 }
 
 /**
- * Un média tel que l'écran le voit. Les chemins ne sont jamais envoyés : on ne dessine que par
- * identifiant, ce qui ferme la porte à un chemin qui sortirait du dossier de données.
+ * Un média tel que l'écran le voit. Les fichiers ne se dessinent jamais par un chemin : la clé
+ * désigne l'objet dans le coffre, et sans URL signée elle ne donne accès à rien.
  */
 export interface Media {
   id: string;
@@ -203,6 +203,10 @@ export interface Media {
   documentType: string | null;
   date: GDate | null;
   hasThumb: boolean;
+  /** L'original dans le coffre `medias`. */
+  key: string;
+  /** Sa vignette, quand elle existe. */
+  thumbKey: string | null;
   persons: MediaPersonRef[];
   createdAt: string;
 }

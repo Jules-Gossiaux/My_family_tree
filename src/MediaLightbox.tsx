@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { api } from './api';
+import { MediaFrame, MediaImg } from './MediaView';
 import { formatDate } from './dates';
 import type { Media } from '../shared/types';
 
@@ -44,9 +44,9 @@ export default function MediaLightbox({ items, index, onIndex, onClose, children
     <div className="lightbox" onMouseDown={onClose}>
       <div className="lightbox-frame" onMouseDown={(event) => event.stopPropagation()}>
         {isPdf ? (
-          <iframe className="lightbox-pdf" src={api.mediaUrl(media.id, 'original')} title="Document" />
+          <MediaFrame media={media} className="lightbox-pdf" alt="Document" />
         ) : (
-          <img className="lightbox-image" src={api.mediaUrl(media.id, 'original')} alt={media.caption ?? ''} />
+          <MediaImg media={media} part="original" className="lightbox-image" alt={media.caption ?? ''} />
         )}
 
         <figcaption className="lightbox-caption">

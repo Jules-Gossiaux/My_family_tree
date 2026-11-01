@@ -186,6 +186,8 @@ function mapMedia(row: Row): Media {
     documentType: row.document_type,
     date,
     hasThumb: Boolean(row.thumb_path),
+    key: (row.original_path as string).replace(/^medias\//, ''),
+    thumbKey: row.thumb_path ? (row.thumb_path as string).replace(/^medias\//, '') : null,
     persons,
     createdAt: row.created_at,
   };
