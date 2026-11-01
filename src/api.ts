@@ -102,13 +102,28 @@ export const api = {
   backupFileUrl: (name: string) => `/api/backups/file?name=${encodeURIComponent(name)}`,
   exportJsonUrl: '/api/export/json',
 
-  createPerson: (input: CreatePersonInput) => pasEncoreEnLigne() as Promise<{ id: string }>,
+  /**
+   * Une personne nouvelle, ses deux dates de vie et le premier lien que l'on en dit. La fonction
+   * SQL refuse un lecteur avant d'écrire, et ne touche jamais la souche : l'arbre en ligne n'en
+   * garde pas.
+   */
+  createPerson: async (input: CreatePersonInput) => ({
+    id: await vue<string>('create_person', {
+      p: {
+        ...input,
+        birthDate: parseGenealogyDate(input.birthText),
+        deathDate: parseGenealogyDate(input.deathText),
+      },
+    }),
+  }),
   updatePerson: (
     id: string,
     input: Partial<CreatePersonInput> & { nickname?: string; branchId?: string | null },
   ) => pasEncoreEnLigne(),
   deletePerson: (id: string) => pasEncoreEnLigne(),
-  attachRelation: (id: string, relation: RelationInput) => pasEncoreEnLigne(),
+  /** Deux personnes que la base connaît déjà : un enfant, un parent, une union. */
+  attachRelation: (id: string, relation: RelationInput) =>
+    vue<void>('attach_relation', { p_subject_id: id, p: relation }),
   /** La souche se règle en ligne : la fonction SQL refuse un lecteur avant de toucher la ligne. */
   setRoot: (rootPersonId: string | null) => vue<void>('set_root', { p_person_id: rootPersonId }),
   /** Qui vous êtes dans l'arbre — le réglage que « Me recentrer » retrouve. */
