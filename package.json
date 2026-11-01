@@ -15,6 +15,7 @@
     "start": "tsx server/index.ts",
     "restore": "tsx server/restore.ts",
     "snapshot": "tsx server/snapshot.ts",
+    "import-cloud": "tsx server/import-cloud.ts",
     "test": "node --import tsx --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
