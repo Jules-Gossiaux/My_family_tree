@@ -1,6 +1,6 @@
 # Plan de construction
 
-Ce document détaille les passes 0 à 4, et suit l'avancement. La vision et le modèle de données
+Ce document détaille les passes 0 à 5, et suit l'avancement. La vision et le modèle de données
 sont dans [`SPEC.md`](SPEC.md).
 
 ## Principe
@@ -32,6 +32,7 @@ server/          API HTTP + accès SQLite
   app-config.ts  les deux personnes de référence : la souche de l'arbre et « moi »
   relations.ts   rattachement d'une personne à une autre, avec ses refus
   branches.ts    lignes de famille : nom, teinte, tête de ligne et personnes rangées
+  life-events.ts faits d'une vie : type, date libre, lieu, source, confiance
   backup.ts      archive ZIP datée, au démarrage et pendant la session
   export.ts      tout l'arbre en un JSON lisible sans l'application
   restore.ts     recharge une archive : contrôle, copie de sûreté, échange
@@ -43,6 +44,7 @@ src/             interface React
   treeLayout.ts  calcul de position des cases, et des liens que la descendance ne peut pas dessiner
   TreeCanvas.tsx rendu SVG, zoom, déplacement, teintes de branche et leurs pastilles
   PersonSheet.tsx fiche latérale, galerie de la personne, portrait et branche
+  LifeTimeline.tsx chronologie de la vie : ajouter, corriger et retirer un fait
   AddPersonDialog.tsx saisie rapide
   AttachDialog.tsx choix d'une personne déjà existante à rattacher
   SettingsDialog.tsx écran Réglages : dossier, souche, « moi », branches, copies, export
@@ -51,8 +53,8 @@ src/             interface React
   MediaInbox.tsx bac d'entrée : importer en lot puis rattacher à plusieurs personnes
   MediaLightbox.tsx visionneuse plein écran, avec ou sans éditeur à l'intérieur
   MediaEditor.tsx légende, date lue et type d'un média déjà en place
-tests/           dates, relations, branches, réglages, intégrité, migration, export, archives,
-                 restauration, médias (`npm test`)
+tests/           dates, relations, branches, réglages, faits de la vie, intégrité, migration, export,
+                 archives, restauration, médias (`npm test`)
 start.bat        démarrer l'application
 restore.bat      recharger une archive de sauvegarde
 ```
@@ -204,13 +206,13 @@ union, ses actes de mariage, et par `SET NULL` la mémoire de l'union dont venai
 deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 `pruneEmptyCouples()` que quand plus rien ne la justifie — ni un enfant, ni un acte, ni un membre.
 
-## Contrat d'API (passes 0 à 4)
+## Contrat d'API (passes 0 à 5)
 
 | Méthode | Route | Rôle |
 |---|---|---|
 | GET | `/api/state` | dossier de données, statistiques (personnes, couples, médias, médias à rattacher), personne racine, personne « moi », dernière archive, avertissements |
 | GET | `/api/graph` | personnes, couples, liens parent-enfant, branches, en une requête |
-| GET | `/api/persons/:id` | fiche complète : relations, événements et médias de la personne |
+| GET | `/api/persons/:id` | fiche complète : relations, vie triée du plus ancien au plus récent, médias de la personne |
 | POST | `/api/persons` | création, avec rattachement optionnel |
 | POST | `/api/persons/:id/relations` | rattacher deux personnes déjà dans la base |
 | PATCH | `/api/persons/:id` | modification, `portraitMediaId` et `branchId` compris (mettre `null` retire le portrait, rend la personne au hors-classe) |
@@ -219,6 +221,9 @@ deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 | PATCH | `/api/branches/:id` | nom, teinte, tête de ligne — ne déplace aucune personne |
 | POST | `/api/branches/:id/descendants` | range la descendance de la tête (ou de `rootPersonId` donné) ; répond `assigned: 0` si tout le monde était déjà classé |
 | DELETE | `/api/branches/:id` | efface la branche et rend ses personnes au hors-classe |
+| POST | `/api/events` | un fait de la vie : `personId` **ou** `coupleId`, `type`, `dateText` en français libre, `description`, `confidence`, `placeId`, `sourceId` — 400 si la forme ne convient pas, 404 si le sujet est inconnu, 409 si c'est une seconde naissance ou un second décès |
+| PATCH | `/api/events/:id` | corrige un fait : un champ absent laisse ce qui est écrit, `dateText: ""` rend la date, `placeId` ou `sourceId` à `null` rendent le lieu ou la source |
+| DELETE | `/api/events/:id` | efface un fait ; un fichier qui y était relié garde son image, il perd le lien |
 | PUT | `/api/config` | `rootPersonId` (la souche) et `mePersonId` (« moi »), réglés séparément : un champ absent laisse ce qui est écrit, `null` le retire, une id inconnue est refusée en 400 sans rien déplacer |
 | PUT | `/api/config/data-dir` | dossier de données : écrit `config.local.json`, demande un redémarrage |
 | POST | `/api/backup` | archive ZIP immédiate |
@@ -380,6 +385,37 @@ pas la réduire serait perdre une preuve pour un problème d'affichage.
 - [x] détacher (rend au bac) et supprimer (efface les fichiers), avec confirmation à deux temps
 - [x] tests serveur sur de vrais fichiers dans un dossier temporaire (`tests/media.test.ts`)
 
+## Passe 5 — le dossier de vie
+
+Les faits d'une vie, d'abord, parce que tout le reste du dossier s'accroche à eux.
+
+- [x] `server/life-events.ts` : un fait porte une personne **ou** une union, jamais les deux ni aucune
+- [x] sept types (naissance, baptême, décès, inhumation, profession, résidence, autre) et trois degrés
+  de confiance (certain, probable, douteux) ; ailleurs que dans ces listes, c'est un 400 qui les cite
+- [x] une naissance et un décès par personne : le second est refusé en 409 et nomme le fait à reprendre
+- [x] la date se tape en français libre ; ce que l'analyseur ne lit pas reste du texte en « unknown »,
+  sans année inventée, et se range à la fin de la vie
+- [x] la date de naissance et le décès de la fiche écrivent le fait du même nom (`setPersonDateEvent`) :
+  un fait n'a pas deux lignes selon l'endroit où on l'a tapé
+- [x] routes `POST`, `PATCH` et `DELETE /api/events` ; `GET /api/persons/:id` rend la vie triée, avec son
+  lieu, sa source et le compte de fichiers reliés
+- [x] `src/LifeTimeline.tsx` : la section « Vie » est une chronologie — ajout, édition en place, retrait à
+  deux temps, et le refus du serveur montré tel quel
+- [x] la fiche n'a plus qu'un seul callback de rechargement (`onChanged`) là où brancher et média en
+  avaient deux qui faisaient la même chose
+- [x] tests serveur des faits de la vie (`tests/life-events.test.ts`, 25 cas ; 121 tests au total)
+
+Ce qui reste de la passe 5 :
+
+- [ ] un écran pour les faits d'une union : le serveur les accepte et les rend déjà dans l'ordre
+  (`eventsOfCouple`), la fiche ne les montre pas encore
+- [ ] les lieux : `server/places.ts`, un nom trouvé ou créé, et le champ lieu dans l'éditeur d'un fait
+- [ ] les notes et les sources : `server/notes.ts`, `server/sources.ts`, une source encore citée ne
+  s'efface pas ; les notes se lisent et s'écrivent sur la fiche
+- [ ] rattacher un fichier à un fait (`media_event`), le montrer sur la ligne de chronologie et porter
+  la table à l'export JSON
+- [ ] la frise familiale globale et les albums par époque (§8.6), qui demandent les médias datés
+
 ## Limites connues
 
 Ce qui manque encore, avec le fil qui le reprend :
@@ -398,9 +434,10 @@ Ce qui manque encore, avec le fil qui le reprend :
 - **Supprimer une personne rend ses photos au bac.** `media_person` est en `ON DELETE CASCADE` : les
   fichiers restent sur le disque, les médias retournent dans « à rattacher », mais recréer la personne
   ne repeuple pas sa galerie — il faut les rattacher à nouveau.
-- **Le bac ne voit que les personnes.** Une image rattachée à un événement (`media_event`) ou à un lieu
-  (`place_id`, `source_id`) n'a aucun écran : ces colonnes sont là depuis le schéma, la passe 5 les
-  remplira avec le dossier de vie.
+- **Le bac ne voit que les personnes.** Une image rattachée à un événement (`media_event`) n'a encore
+  aucun écran, et le lieu comme la source d'un fait se lisent sur la chronologie mais ne se choisissent
+  pas encore : les tables `place` et `source` restent vides tant que la suite de la passe 5 ne les a pas
+  remplies.
 - **La recherche ne voit pas les surnoms.** Elle filtre sur les prénoms, le nom de famille et le nom de
   naissance, jamais sur `name_variant` : « Tata Michèle » ne se trouve pas, alors que c'est souvent le seul
   nom que la famille connaît. Ce n'est pas un `OR` à ajouter côté client — `/api/graph` ne renvoie pas les

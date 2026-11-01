@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import express, { type Request, type Response } from 'express';
 import { db, now, newId } from './db';
 import { DATA_DIR } from './config';
-import { parseGenealogyDate, readDateRow as toDate } from './dates';
+import { readDateRow as toDate } from './dates';
 import { RelationError, attachRelation, pruneEmptyCouples } from './relations';
 import {
   BranchError,
@@ -16,6 +16,14 @@ import {
   setPersonBranch,
   updateBranch,
 } from './branches';
+import {
+  LifeEventError,
+  createEvent,
+  deleteEvent,
+  eventsOfPerson,
+  setPersonDateEvent,
+  updateEvent,
+} from './life-events';
 import {
   backupFile,
   forceBackup,
@@ -50,6 +58,7 @@ import type {
   BranchInput,
   Couple,
   CreatePersonInput,
+  EventInput,
   GraphData,
   MediaKind,
   ParentChild,
@@ -165,31 +174,6 @@ function loadParentChild(): ParentChild[] {
   }));
 }
 
-function setLifeEvent(personId: string, type: 'naissance' | 'deces', text?: string | null): void {
-  const existing = db
-    .prepare('SELECT id FROM event WHERE person_id = ? AND type = ?')
-    .get(personId, type) as Row | undefined;
-
-  if (!text || !text.trim()) {
-    if (existing) db.prepare('DELETE FROM event WHERE id = ?').run(existing.id);
-    return;
-  }
-
-  const date = parseGenealogyDate(text);
-  if (!date) return;
-
-  if (existing) {
-    db.prepare(
-      'UPDATE event SET date_min = ?, date_max = ?, date_qualifier = ?, date_text = ? WHERE id = ?',
-    ).run(date.min, date.max, date.qualifier, date.text, existing.id);
-  } else {
-    db.prepare(
-      `INSERT INTO event (id, person_id, type, date_min, date_max, date_qualifier, date_text, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(newId(), personId, type, date.min, date.max, date.qualifier, date.text, now());
-  }
-}
-
 /** Un refus de relation se montre tel quel : la personne doit comprendre ce qu'elle peut corriger. */
 function sendRelationError(res: Response, error: unknown): void {
   if (error instanceof RelationError) {
@@ -296,23 +280,7 @@ app.get('/api/persons/:id', (req, res) => {
     db.prepare('SELECT name FROM name_variant WHERE person_id = ?').all(person.id) as Row[]
   ).map((r) => r.name);
 
-  const events = (
-    db
-      .prepare(
-        `SELECT e.*, p.name AS place_name
-           FROM event e
-           LEFT JOIN place p ON p.id = e.place_id
-          WHERE e.person_id = ?
-          ORDER BY COALESCE(e.date_min, e.date_max, '9999')`,
-      )
-      .all(person.id) as Row[]
-  ).map((e) => ({
-    id: e.id,
-    type: e.type,
-    date: toDate(e, 'date'),
-    place: e.place_name ?? null,
-    description: e.description ?? null,
-  }));
+  const events = eventsOfPerson(person.id);
 
   const fetchPersons = (ids: string[]): Person[] => {
     if (ids.length === 0) return [];
@@ -395,8 +363,8 @@ app.post('/api/persons', (req, res) => {
       timestamp,
     );
 
-    setLifeEvent(id, 'naissance', body.birthText);
-    setLifeEvent(id, 'deces', body.deathText);
+    setPersonDateEvent(id, 'naissance', body.birthText);
+    setPersonDateEvent(id, 'deces', body.deathText);
 
     const relation = body.relation;
     if (relation?.ofPersonId) attachRelation(id, relation);
@@ -469,9 +437,9 @@ app.patch('/api/persons/:id', (req, res) => {
       db.prepare(`UPDATE person SET ${fields.join(', ')} WHERE id = ?`).run(...values);
     }
 
-    if (body.birthText !== undefined) setLifeEvent(req.params.id, 'naissance', body.birthText);
+    if (body.birthText !== undefined) setPersonDateEvent(req.params.id, 'naissance', body.birthText);
     if (body.deathText !== undefined) {
-      setLifeEvent(req.params.id, 'deces', body.deathText);
+      setPersonDateEvent(req.params.id, 'deces', body.deathText);
       if (body.deathText && body.deathText.trim()) {
         db.prepare('UPDATE person SET living = 0 WHERE id = ?').run(req.params.id);
       }
@@ -518,6 +486,36 @@ app.delete('/api/persons/:id', (req, res) => {
   });
   remove();
   res.json({ ok: true });
+});
+
+/**
+ * Les faits d'une vie se saisissent ici : un type, une date écrite en français, un lieu, une source,
+ * un degré de confiance. Le serveur analyse la date et garde le texte tel quel quand il ne la lit
+ * pas — rien n'est jamais rangé comme une année inventée.
+ */
+app.post('/api/events', (req, res) => {
+  try {
+    res.status(201).json({ event: createEvent(req.body as EventInput) });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+app.patch('/api/events/:id', (req, res) => {
+  try {
+    res.json({ event: updateEvent(req.params.id, req.body as EventInput) });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+app.delete('/api/events/:id', (req, res) => {
+  try {
+    deleteEvent(req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
 });
 
 /**
@@ -583,7 +581,7 @@ const rawBytes = express.raw({
 });
 
 /**
- * Un refus d'écriture se montre tel quel : ces trois-là portent déjà un message français qui dit ce
+ * Un refus d'écriture se montre tel quel : ces erreurs-là portent déjà un message français qui dit ce
  * qu'il faut corriger. Le reste est une panne, et une panne ne s'habille pas des mots d'un refus.
  */
 function sendWriteError(res: Response, error: unknown): void {
@@ -591,7 +589,8 @@ function sendWriteError(res: Response, error: unknown): void {
     error instanceof MediaError ||
     error instanceof RelationError ||
     error instanceof BranchError ||
-    error instanceof ConfigError
+    error instanceof ConfigError ||
+    error instanceof LifeEventError
   ) {
     res.status(error.status).json({ error: error.message });
     return;

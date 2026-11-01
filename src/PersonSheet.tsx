@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api } from './api';
+import LifeTimeline from './LifeTimeline';
 import MediaEditor from './MediaEditor';
 import MediaLightbox from './MediaLightbox';
 import { kindOf, prepareUpload, takenOf } from './thumbnails';
@@ -17,11 +18,9 @@ interface Props {
   onClose: () => void;
   onSetRoot: (personId: string) => void;
   onDelete: (personId: string) => void;
-  /** Changement de branche : les teintes des cases et le compteur de la branche doivent suivre. */
-  onBranchChanged: () => void;
   onCreateBranch: (personId: string) => void;
-  /** Prévient l'application qu'un média a bougé : le compteur du bac et l'arbre doivent suivre. */
-  onMediaChanged: () => void;
+  /** Un fait de la vie, une branche ou un média a bougé : l'arbre, les compteurs et la fiche repartent de la même image. */
+  onChanged: () => void;
 }
 
 function RelationRow({ person, onSelect }: { person: Person; onSelect: (id: string) => void }) {
@@ -59,9 +58,8 @@ export default function PersonSheet({
   onClose,
   onSetRoot,
   onDelete,
-  onBranchChanged,
   onCreateBranch,
-  onMediaChanged,
+  onChanged,
 }: Props) {
   const [person, setPerson] = useState<PersonDetail | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
@@ -139,7 +137,7 @@ export default function PersonSheet({
     if (failed) parts.push(`${failed} refusé${failed > 1 ? 's' : ''}`);
     setNotice(parts.length ? `${parts.join(', ')}.` : null);
     setUploading(false);
-    onMediaChanged();
+    onChanged();
   };
 
   /**
@@ -152,7 +150,7 @@ export default function PersonSheet({
     setBranchError(null);
     try {
       await api.updatePerson(personId, { branchId });
-      onBranchChanged();
+      onChanged();
     } catch (err) {
       setBranchError(err instanceof Error ? err.message : 'La branche n’a pas pu être réglée.');
     } finally {
@@ -165,7 +163,7 @@ export default function PersonSheet({
     setMediaError(null);
     try {
       await api.setPortrait(personId, media.id);
-      onMediaChanged();
+      onChanged();
     } catch (err) {
       setMediaError(err instanceof Error ? err.message : 'Le portrait n’a pas pu être réglé.');
     }
@@ -176,7 +174,7 @@ export default function PersonSheet({
     setMediaError(null);
     try {
       await api.setPortrait(personId, null);
-      onMediaChanged();
+      onChanged();
     } catch (err) {
       setMediaError(err instanceof Error ? err.message : 'Le portrait n’a pas pu être retiré.');
     }
@@ -188,7 +186,7 @@ export default function PersonSheet({
     try {
       await api.detachMedia(media.id, personId);
       setViewer(null);
-      onMediaChanged();
+      onChanged();
     } catch (err) {
       setMediaError(err instanceof Error ? err.message : 'Le média n’a pas pu être détaché.');
     }
@@ -210,8 +208,6 @@ export default function PersonSheet({
 
   const name = fullName(person);
   const span = lifeSpan(person);
-  const birth = formatDate(person.birth);
-  const death = formatDate(person.death);
 
   const portrait = person.media.find((one) => one.id === person.portraitMediaId);
   const portraitPart: 'thumb' | 'original' | null = portrait?.hasThumb
@@ -308,17 +304,10 @@ export default function PersonSheet({
         {branchError && <p className="dialog-error">{branchError}</p>}
       </Section>
 
-      <Section title="Vie">
-        <dl className="facts">
-          <div>
-            <dt>Naissance</dt>
-            <dd>{birth || '—'}</dd>
-          </div>
-          <div>
-            <dt>Décès</dt>
-            <dd>{death || '—'}</dd>
-          </div>
-        </dl>
+      <Section
+        title={person.events.length > 0 ? `Vie (${person.events.length})` : 'Vie'}
+      >
+        <LifeTimeline personId={person.id} events={person.events} onChanged={onChanged} />
       </Section>
 
       <Section title={person.media.length > 0 ? `Photos et documents (${person.media.length})` : 'Photos et documents'}>
@@ -464,7 +453,7 @@ export default function PersonSheet({
               Retirer de ce dossier
             </button>
           </span>
-          <MediaEditor media={viewed} onSaved={onMediaChanged} />
+          <MediaEditor media={viewed} onSaved={onChanged} />
         </MediaLightbox>
       )}
     </aside>

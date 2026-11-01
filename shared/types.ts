@@ -57,12 +57,41 @@ export interface Branch {
   personCount: number;
 }
 
+/**
+ * Un fait de la vie, tel que la fiche le montre. La date garde son texte d'origine : « vers 1912 »
+ * s'affiche tel qu'il a été écrit, pas converti en une année sèche.
+ */
 export interface EventRow {
   id: string;
+  personId: string | null;
+  coupleId: string | null;
   type: string;
+  /** Le même type, dit en français pour l'écran. */
+  label: string;
   date: GDate | null;
   place: string | null;
+  placeId: string | null;
   description: string | null;
+  /** certain / probable / douteux — porté par le fait, pas par la personne. */
+  confidence: string;
+  sourceId: string | null;
+  /** La référence telle qu'elle se cite sur l'acte, et le genre du document. */
+  source: string | null;
+  sourceKind: string | null;
+  /** Combien de photos ou de documents sont reliés à ce fait. */
+  mediaCount: number;
+}
+
+/** Ce que l'on écrit d'un fait : le type seul est obligatoire, le reste se tait ou se met à `null`. */
+export interface EventInput {
+  personId?: string | null;
+  coupleId?: string | null;
+  type?: string;
+  dateText?: string | null;
+  placeId?: string | null;
+  description?: string | null;
+  confidence?: string;
+  sourceId?: string | null;
 }
 
 export interface GraphData {

@@ -271,6 +271,16 @@ deux membres n'est jamais rangé dans le couple.
 **event** — `id`, `person_id`, `couple_id`, `type` (naissance, baptême, décès, inhumation, profession,
 résidence, autre), `date_*`, `place_id`, `description`, `source_id`, `confidence`
 
+Trois règles la tiennent debout, et le serveur les écrit telles qu'il les refuse :
+
+- **un fait porte une personne ou une union, jamais les deux ni aucune** : sans sujet, il ne s'affiche
+  sur aucun écran et devient une ligne perdue dans la base ;
+- **une naissance et un décès par personne** : une seconde est refusée en 409 et nomme le fait à
+  reprendre. Les autres types se répètent librement — une vie compte trois résidences ;
+- **la date tapée sur la fiche est le fait du même nom** : « 12 mars 1912 » écrit une ligne `event`
+  de type `naissance`, pas une colonne de plus dans `person`. Un fait aurait deux dates selon
+  l'endroit où on l'a saisi sinon.
+
 **media** — `id`, `kind` (photo / document), `original_path`, `thumb_path`, `sha256`, `mime`,
 `width`, `height`, `date_*`, `caption`, `place_id`, `source_id`,
 `document_type` (acte de naissance, livret de famille, lettre, carte postale…)
@@ -295,7 +305,8 @@ jour de doute sur les clés — mais toutes ne sont pas encore nourries. Ce qui 
 
 | Table | Écriture |
 |---|---|
-| `person`, `couple`, `parent_child`, `event`, `name_variant` | remplies et lues par l'interface |
+| `person`, `couple`, `parent_child`, `name_variant` | remplies et lues par l'interface |
+| `event` | **écrite et lue en entier depuis la passe 5** : la chronologie de la fiche montre tous les faits, les écrit, les corrige, les efface — et la date tapée sur la fiche reste le fait du même nom |
 | `media`, `media_person` | **remplies et lues depuis la passe 4** : le bac, la galerie d'une personne, le portrait |
 | `branch` | **remplie et lue depuis la passe 3** : nom, teinte, tête de ligne, personnes rangées |
 | `place`, `note`, `source` | posées, traversées par l'export JSON, **rien ne les remplit** : les notes et les sources viennent en passe 5 |
@@ -355,13 +366,25 @@ L'écran central. Cliquer sur une personne ouvre **tout** ce qui la concerne, en
 - ses sources et niveaux de confiance (passe 5)
 
 Ce que la fiche sait déjà faire : un en-tête avec nom, nom de naissance, surnoms et dates telles qu'elles
-sont écrites ; une section « Vie » qui range les événements dans l'ordre ; quatre sections de relations —
-Parents, Unions, Fratrie, Enfants — où chaque nom est cliquable ; un bouton « Rattacher… » pour relier
-deux personnes déjà saisies ; la modification en place ; et la suppression confirmée, y compris par la
-touche Suppr. Depuis la passe 4, elle est aussi une galerie : glisser des fichiers dessus les importe et
-les rattacher à cette personne, chaque vignette s'ouvre en grand dans la visionneuse, la légende et la
-date lue se corrigent là, « Faire le portrait » donne à cette image le visage de la case et de l'en-tête,
-et « Retirer de ce dossier » rend le fichier au bac sans rien effacer.
+sont écrites ; une section « Vie » qui est une chronologie — chaque fait de la base y passe, du plus
+ancien au plus récent, une date non lisible se range à la fin avec son texte intact ; chaque ligne donne
+le nom du fait, la date telle qu'elle a été tapée, le lieu, la description, le degré de confiance, la
+source citée et le compte de fichiers qui s'y rattachent ; « Modifier » ouvre le fait en place (type,
+date libre, ce qui s'est passé, confiance), « + Un fait de plus » en ajoute un, « Retirer ce fait » le
+supprime après une seconde question ; une seconde naissance ou un second décès est refusé, et le refus
+dit lequel reprendre. La date de naissance et le décès affichés en haut de la fiche sont la même ligne
+que le fait de la chronologie : la saisie rapide et l'éditeur de vie écrivent au même endroit. Quatre
+sections de relations — Parents, Unions, Fratrie, Enfants — où chaque nom est cliquable ; un bouton
+« Rattacher… » pour relier deux personnes déjà saisies ; la modification en place ; et la suppression
+confirmée, y compris par la touche Suppr. Depuis la passe 4, elle est aussi une galerie : glisser des
+fichiers dessus les importe et les rattacher à cette personne, chaque vignette s'ouvre en grand dans la
+visionneuse, la légende et la date lue se corrigent là, « Faire le portrait » donne à cette image le
+visage de la case et de l'en-tête, et « Retirer de ce dossier » rend le fichier au bac sans rien effacer.
+
+Y manquent encore, et c'est la suite de la passe 5 : le lieu et la source d'un fait se lisent mais ne se
+choisissent pas (ils arrivent avec les tables `place` et `source`), les notes de la fiche, les faits d'une
+union — le serveur les accepte et les rend déjà, la fiche ne les montre pas — et le rattachement d'un
+fichier à un fait.
 
 ### 8.3 L'annuaire
 
@@ -411,8 +434,9 @@ dans l'arbre, rangées à part, depuis la passe 1.
 
 Trois échelles sur les mêmes données : frise par personne, frise familiale globale, albums par époque.
 Superposition du contexte historique (guerres, exode) depuis un fichier local. **Passe 5** — la première
-des trois échelles n'est que le tri des événements déjà dans la fiche ; les deux autres demandent les
-médias de la passe 4 pour être autre chose qu'une liste de dates.
+des trois échelles est en place : la section « Vie » de la fiche (§8.2) trie les faits de la personne et
+s'y saisit ; les deux autres demandent les médias de la passe 4 pour être autre chose qu'une liste de
+dates, et viennent avec les lieux et les sources.
 
 ### 8.7 Export
 

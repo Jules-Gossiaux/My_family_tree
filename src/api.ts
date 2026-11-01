@@ -4,6 +4,8 @@ import type {
   Branch,
   BranchInput,
   CreatePersonInput,
+  EventInput,
+  EventRow,
   GraphData,
   Media,
   MediaKind,
@@ -90,6 +92,13 @@ export const api = {
       body: JSON.stringify({ rootPersonId }),
     }),
   deleteBranch: (id: string) => request<{ ok: true }>(`/api/branches/${id}`, { method: 'DELETE' }),
+
+  /** Un fait de la vie : il porte une personne ou une union, et se date en français libre. */
+  createEvent: (input: EventInput) =>
+    request<{ event: EventRow }>('/api/events', { method: 'POST', body: JSON.stringify(input) }),
+  updateEvent: (id: string, input: EventInput) =>
+    request<{ event: EventRow }>(`/api/events/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deleteEvent: (id: string) => request<{ ok: true }>(`/api/events/${id}`, { method: 'DELETE' }),
 
   /** Ce qui attend encore un visage. */
   unattachedMedia: () => request<{ media: Media[] }>('/api/media?state=a-relier'),

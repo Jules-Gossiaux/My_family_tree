@@ -419,9 +419,8 @@ export default function App() {
               onClose={() => setSelectedId(null)}
               onSetRoot={handleSetRoot}
               onDelete={(id) => setPendingDelete(id)}
-              onBranchChanged={reloadTree}
               onCreateBranch={(personId) => void createBranchHere(personId)}
-              onMediaChanged={reloadTree}
+              onChanged={reloadTree}
             />
           </>
         )}
