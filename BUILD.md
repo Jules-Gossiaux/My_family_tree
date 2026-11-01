@@ -35,6 +35,7 @@ server/          API HTTP + accès SQLite
   life-events.ts faits d'une vie : type, date libre, lieu, source, confiance
   places.ts      lieux trouvés ou posés par le nom qu'écrit un fait, renommés et effacés
   sources.ts     sources déclarées dans Réglages et citées par un fait, refusées tant qu'on les cite
+  notes.ts       notes posées sur une personne, une union, un fait, un fichier ou un lieu
   backup.ts      archive ZIP datée, au démarrage et pendant la session
   export.ts      tout l'arbre en un JSON lisible sans l'application
   restore.ts     recharge une archive : contrôle, copie de sûreté, échange
@@ -47,6 +48,7 @@ src/             interface React
   TreeCanvas.tsx rendu SVG, zoom, déplacement, teintes de branche et leurs pastilles
   PersonSheet.tsx fiche latérale, galerie de la personne, portrait et branche
   LifeTimeline.tsx chronologie de la vie : ajouter, corriger et retirer un fait, son lieu et sa source
+  NoteList.tsx   marge écrite d'un objet : ajouter, corriger et retirer une note
   AddPersonDialog.tsx saisie rapide
   AttachDialog.tsx choix d'une personne déjà existante à rattacher
   SettingsDialog.tsx écran Réglages : dossier, souche, « moi », branches, lieux, sources, copies, export
@@ -76,6 +78,7 @@ Le serveur sert l'API et, en production, le front compilé par Vite. Un seul pro
 | Unions | jamais créées sans qu'on les déclare | un enfant rattaché à un parent seul n'implique pas l'existence d'un second parent |
 | Refus d'écriture | message en français compréhensible, code HTTP 400/404/409 | la personne doit savoir quoi faire sans lire une pile d'appels |
 | Source citée | ne s'efface pas : `event.source_id` et `media.source_id` n'ont pas de clé étrangère | supprimer quand même laisserait un fait pointant une ligne disparue, et l'écran n'aurait plus rien à montrer à la place de sa source |
+| Notes | une seule table `note` avec `target_type` + `target_id`, plutôt qu'une colonne `note` par objet ou cinq tables de notes | la marge d'un acte et celle d'une personne sont la même chose ; une colonne ne peut pas porter de clé étrangère vers cinq tables, donc c'est le serveur qui vérifie la cible et l'effacement qui entraîne les notes |
 | Upload des médias | octets bruts (`express.raw`), jamais de JSON base64 | un JPEG de 20 Mo en base64 pèse 27 Mo de texte et encrera le tas Node ; les octets entrent tels quels |
 | Déduplication | empreinte `sha256` de l'original, calculée à l'écriture | la même photo scannée deux fois ne doit pas remplir le dossier ni peupler le bac de deux cases identiques |
 | Vignettes | dessinées par le navigateur dans un `<canvas>`, `sharp` écarté | pas de binaire natif de plus à recompiler quand Node change ; le serveur range des octets, il ne décode rien |
@@ -215,7 +218,7 @@ deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 |---|---|---|
 | GET | `/api/state` | dossier de données, statistiques (personnes, couples, médias, médias à rattacher), personne racine, personne « moi », dernière archive, avertissements |
 | GET | `/api/graph` | personnes, couples, liens parent-enfant, branches, en une requête |
-| GET | `/api/persons/:id` | fiche complète : relations, vie triée du plus ancien au plus récent, médias de la personne |
+| GET | `/api/persons/:id` | fiche complète : relations, vie triée du plus ancien au plus récent, médias et notes de la personne |
 | POST | `/api/persons` | création, avec rattachement optionnel |
 | POST | `/api/persons/:id/relations` | rattacher deux personnes déjà dans la base |
 | PATCH | `/api/persons/:id` | modification, `portraitMediaId` et `branchId` compris (mettre `null` retire le portrait, rend la personne au hors-classe) |
@@ -234,6 +237,9 @@ deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 | POST | `/api/sources` | déclarer une source : `kind` (acte, photo, temoignage, web, livre), `reference`, `reliability` — 400 hors de ces listes ou sans référence, 409 si la référence est déjà prise, et le refus nomme le genre de la ligne qui la porte |
 | PATCH | `/api/sources/:id` | corrige genre, référence ou fiabilité sans déplacer une citation ; 404 si la source est inconnue, 409 si la référence est celle d'une voisine |
 | DELETE | `/api/sources/:id` | efface une source que plus rien ne cite ; tant qu'un fait ou un fichier la nomme, c'est un 409 qui compte les citations à retirer |
+| POST | `/api/notes` | une note posée sur une ligne qui existe : `targetType` (person, couple, event, media, place), `targetId`, `body` — 400 hors de ces cinq cibles ou sans texte, 404 si la ligne visée n'est pas dans la base |
+| PATCH | `/api/notes/:id` | corrige le texte ; la date d'écriture ne bouge pas, la base n'en garde qu'une |
+| DELETE | `/api/notes/:id` | efface une note ; 404 si elle est inconnue |
 | PUT | `/api/config` | `rootPersonId` (la souche) et `mePersonId` (« moi »), réglés séparément : un champ absent laisse ce qui est écrit, `null` le retire, une id inconnue est refusée en 400 sans rien déplacer |
 | PUT | `/api/config/data-dir` | dossier de données : écrit `config.local.json`, demande un redémarrage |
 | POST | `/api/backup` | archive ZIP immédiate |
@@ -448,6 +454,25 @@ Les sources d'un fait, ensuite, parce qu'une cote recopiée en texte libre ne se
 - [x] un refus d'ajout, dans Réglages, ne s'écrit plus au bas du défilement : l'épingler au bord visible
   de la boîte est ce qui fait qu'on le lit
 - [x] tests serveur des sources (`tests/sources.test.ts`, 13 cas ; 147 tests au total)
+
+Les notes, enfin, parce qu'une phrase qu'on ne peut pas dater n'a rien à faire dans la chronologie :
+
+- [x] `server/notes.ts` : une note se pose sur `person`, `couple`, `event`, `media` ou `place`, et la
+  ligne visée doit exister — `note` n'a pas de clé étrangère, une seule colonne ne peut pas désigner
+  cinq tables, donc c'est le serveur qui refuse la cible inventée en 404 et le type inconnu en 400
+- [x] une note n'a ni date généalogique, ni confiance, ni source : elle garde ce que l'on sait sans le
+  prouver, et ne concurrence pas le fait de la chronologie
+- [x] corriger une note n'en change pas la date — la base n'en a qu'une — et l'écran dit « écrite le »
+- [x] ce que l'on efface emporte ses notes : `dropNotesFor` est appelé par le retrait d'un fait, la date
+  vidée sur la fiche, l'effacement d'un fichier ou d'un lieu, l'union élaguée et la personne supprimée,
+  chacun dans sa propre transaction
+- [x] routes `POST`, `PATCH` et `DELETE /api/notes` ; `GET /api/persons/:id` rend les notes de la personne
+  dans l'ordre où elles ont été écrites
+- [x] `src/NoteList.tsx` : la section « Notes » de la fiche — cadre de texte, édition en place, retrait à
+  deux temps, et le refus du serveur montré tel quel
+- [x] `body` se relit tel qu'il est tapé, ses sauts de ligne gardés : aucun moteur Markdown pour trois
+  phrases de marge
+- [x] tests serveur des notes (`tests/notes.test.ts`, 12 cas ; 159 tests au total)
 
 Ce qui reste de la passe 5 :
 

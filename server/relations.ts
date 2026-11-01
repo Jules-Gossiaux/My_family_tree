@@ -1,4 +1,5 @@
 import { db, newId, now } from './db';
+import { dropNotesFor } from './notes';
 import type { RelationInput } from '../shared/types';
 
 type Row = Record<string, any>;
@@ -101,12 +102,16 @@ function attributeChildrenToCouple(coupleId: string, a: string, b: string): void
  * ni un enfant, ni un acte, ni l'un de ses deux membres.
  */
 export function pruneEmptyCouples(): void {
-  db.prepare(
-    `DELETE FROM couple
-      WHERE partner_a IS NULL AND partner_b IS NULL
-        AND id NOT IN (SELECT couple_id FROM parent_child WHERE couple_id IS NOT NULL)
-        AND id NOT IN (SELECT couple_id FROM event WHERE couple_id IS NOT NULL)`,
-  ).run();
+  // Une union à effacer se relève avant de partir : `note` n'a pas de clé étrangère et ne la suivrait pas.
+  const empty = `partner_a IS NULL AND partner_b IS NULL
+    AND id NOT IN (SELECT couple_id FROM parent_child WHERE couple_id IS NOT NULL)
+    AND id NOT IN (SELECT couple_id FROM event WHERE couple_id IS NOT NULL)`;
+  const doomed = db.prepare(`SELECT id FROM couple WHERE ${empty}`).all() as { id: string }[];
+  if (!doomed.length) return;
+  db.transaction(() => {
+    for (const couple of doomed) dropNotesFor('couple', couple.id);
+    db.prepare(`DELETE FROM couple WHERE ${empty}`).run();
+  })();
 }
 
 /**

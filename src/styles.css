@@ -99,7 +99,8 @@ button.link:hover {
 }
 
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: var(--text);
   background: var(--bg);
@@ -112,7 +113,8 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--gold);
 }
 
@@ -120,7 +122,8 @@ select {
   cursor: pointer;
 }
 
-input::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--dim);
 }
 
@@ -750,6 +753,66 @@ input::placeholder {
 
 .life-form .settings-note {
   margin: 0;
+}
+
+.notes {
+  display: grid;
+  gap: 12px;
+}
+
+.note-row {
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.note-row.is-editing {
+  border-color: var(--gold);
+}
+
+.note-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.note-meta {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.note-actions button {
+  font-size: 11px;
+  padding: 3px 9px;
+}
+
+.note-form {
+  display: grid;
+  gap: 8px;
+}
+
+.note-form textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.note-form-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .rel-row {

@@ -1,5 +1,6 @@
 import { db, newId, now } from './db';
 import { parseGenealogyDate, readDateRow } from './dates';
+import { dropNotesFor } from './notes';
 import { findOrCreatePlace } from './places';
 import { knownSource } from './sources';
 import type { EventInput, EventRow, GDate } from '../shared/types';
@@ -288,7 +289,10 @@ export function updateEvent(id: string, input: EventInput): EventRow {
 export function deleteEvent(id: string): void {
   const current = db.prepare('SELECT id FROM event WHERE id = ?').get(id) as Row | undefined;
   if (!current) throw new LifeEventError(404, 'Cet événement n’existe pas dans la base.');
-  db.prepare('DELETE FROM event WHERE id = ?').run(id);
+  db.transaction(() => {
+    dropNotesFor('event', id);
+    db.prepare('DELETE FROM event WHERE id = ?').run(id);
+  })();
 }
 
 /**
@@ -307,7 +311,12 @@ export function setPersonDateEvent(
 
   const trimmed = (text ?? '').trim();
   if (!trimmed) {
-    if (existing) db.prepare('DELETE FROM event WHERE id = ?').run(existing.id);
+    if (existing) {
+      db.transaction(() => {
+        dropNotesFor('event', existing.id);
+        db.prepare('DELETE FROM event WHERE id = ?').run(existing.id);
+      })();
+    }
     return;
   }
 

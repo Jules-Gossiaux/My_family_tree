@@ -132,6 +132,27 @@ export interface SourceInput {
   reliability?: string;
 }
 
+/**
+ * Une note telle qu'elle s'affiche : le texte, et la ligne qu'elle commente. La cible se dit par un
+ * type et un identifiant parce qu'une marge se pose aussi bien sur une personne que sur un acte.
+ */
+export interface NoteRow {
+  id: string;
+  body: string;
+  /** personne, union, fait, fichier ou lieu — les cinq lignes que l'on peut noter. */
+  targetType: string;
+  targetId: string;
+  /** Écrite une fois : corriger le texte ne change pas la date, la fiche dit donc « écrite le ». */
+  createdAt: string;
+}
+
+/** Ce que l'on écrit d'une note : son texte et sur quoi il se pose. */
+export interface NoteInput {
+  body?: string | null;
+  targetType?: string | null;
+  targetId?: string | null;
+}
+
 export interface GraphData {
   persons: Person[];
   couples: Couple[];
@@ -156,6 +177,8 @@ export interface PersonDetail extends Person {
   partners: Person[];
   children: Person[];
   media: Media[];
+  /** Ce que l'on a écrit en marge de cette personne, dans l'ordre où ça l'a été. */
+  notes: NoteRow[];
 }
 
 export type MediaKind = 'photo' | 'document';

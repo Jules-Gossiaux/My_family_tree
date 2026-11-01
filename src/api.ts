@@ -9,6 +9,8 @@ import type {
   GraphData,
   Media,
   MediaKind,
+  NoteInput,
+  NoteRow,
   PlaceRow,
   PersonDetail,
   RelationInput,
@@ -124,6 +126,14 @@ export const api = {
     }),
   /** Une source encore citée se refuse : le message compte les citations à retirer avant. */
   deleteSource: (id: string) => request<{ ok: true }>(`/api/sources/${id}`, { method: 'DELETE' }),
+
+  /** Une note se pose sur ce qu'elle commente : son texte part avec la cible qu'on lui donne. */
+  createNote: (input: NoteInput) =>
+    request<{ note: NoteRow }>('/api/notes', { method: 'POST', body: JSON.stringify(input) }),
+  /** Corriger une note n'en change pas la date : l'écran dit « écrite le », pas « modifiée le ». */
+  updateNote: (id: string, body: string) =>
+    request<{ note: NoteRow }>(`/api/notes/${id}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
+  deleteNote: (id: string) => request<{ ok: true }>(`/api/notes/${id}`, { method: 'DELETE' }),
 
   /** Ce qui attend encore un visage. */
   unattachedMedia: () => request<{ media: Media[] }>('/api/media?state=a-relier'),

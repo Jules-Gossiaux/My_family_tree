@@ -33,6 +33,14 @@ import {
   updateSource,
 } from './sources';
 import {
+  NoteError,
+  createNote,
+  deleteNote,
+  dropNotesFor,
+  notesOf,
+  updateNote,
+} from './notes';
+import {
   backupFile,
   forceBackup,
   lastBackup,
@@ -69,6 +77,7 @@ import type {
   EventInput,
   GraphData,
   MediaKind,
+  NoteInput,
   ParentChild,
   Person,
   PersonDetail,
@@ -341,6 +350,7 @@ app.get('/api/persons/:id', (req, res) => {
     partners,
     children,
     media: listMedia({ personId: person.id }),
+    notes: notesOf('person', person.id),
   };
   res.json(detail);
 });
@@ -489,6 +499,7 @@ app.patch('/api/persons/:id', (req, res) => {
 
 app.delete('/api/persons/:id', (req, res) => {
   const remove = db.transaction(() => {
+    dropNotesFor('person', req.params.id);
     db.prepare('DELETE FROM person WHERE id = ?').run(req.params.id);
     pruneEmptyCouples();
     repairConfigAfterDelete(req.params.id);
@@ -589,6 +600,36 @@ app.delete('/api/sources/:id', (req, res) => {
 });
 
 /**
+ * Une note se pose sur ce qui existe déjà : une personne, une union, un fait, un fichier, un lieu.
+ * Elle n'est ni un fait ni une source — elle dit ce que l'on sait sans le dater ni le prouver.
+ */
+app.post('/api/notes', (req, res) => {
+  try {
+    res.status(201).json({ note: createNote(req.body as NoteInput) });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+app.patch('/api/notes/:id', (req, res) => {
+  const body = req.body as { body?: string };
+  try {
+    res.json({ note: updateNote(req.params.id, body.body ?? '') });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+app.delete('/api/notes/:id', (req, res) => {
+  try {
+    deleteNote(req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+/**
  * Une branche est un nom et une couleur posés sur une ligne de l'arbre. Rien n'est deviné : créer
  * une branche sans dire de qui elle part ne range personne.
  */
@@ -662,7 +703,8 @@ function sendWriteError(res: Response, error: unknown): void {
     error instanceof ConfigError ||
     error instanceof LifeEventError ||
     error instanceof PlaceError ||
-    error instanceof SourceError
+    error instanceof SourceError ||
+    error instanceof NoteError
   ) {
     res.status(error.status).json({ error: error.message });
     return;

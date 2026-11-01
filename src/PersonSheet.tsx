@@ -3,6 +3,7 @@ import { api } from './api';
 import LifeTimeline from './LifeTimeline';
 import MediaEditor from './MediaEditor';
 import MediaLightbox from './MediaLightbox';
+import NoteList from './NoteList';
 import { kindOf, prepareUpload, takenOf } from './thumbnails';
 import { formatDate, fullName, initials, lifeSpan } from './dates';
 import type {
@@ -326,6 +327,15 @@ export default function PersonSheet({
           events={person.events}
           places={places}
           sources={sources}
+          onChanged={onChanged}
+        />
+      </Section>
+
+      <Section title={person.notes.length > 0 ? `Notes (${person.notes.length})` : 'Notes'}>
+        <NoteList
+          targetType="person"
+          targetId={person.id}
+          notes={person.notes}
           onChanged={onChanged}
         />
       </Section>

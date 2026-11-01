@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { DATA_DIR, MEDIA_DIR } from './config';
 import { db, newId, now } from './db';
 import { parseGenealogyDate, readDateRow } from './dates';
+import { dropNotesFor } from './notes';
 import type { GDate, Media, MediaKind } from '../shared/types';
 
 /** Un scan de 600 dpi dépasse vite 20 Mo ; au-delà de 60 Mo, ce n'est plus une photo qui arrive. */
@@ -316,7 +317,10 @@ export function deleteMedia(id: string): void {
   const row = db.prepare('SELECT * FROM media WHERE id = ?').get(id) as Row | undefined;
   if (!row) return;
 
-  db.prepare('DELETE FROM media WHERE id = ?').run(id);
+  db.transaction(() => {
+    dropNotesFor('media', id);
+    db.prepare('DELETE FROM media WHERE id = ?').run(id);
+  })();
   for (const relative of [row.original_path, row.thumb_path]) {
     if (!relative) continue;
     const target = absolute(relative as string);

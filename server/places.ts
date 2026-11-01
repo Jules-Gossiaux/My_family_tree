@@ -1,4 +1,5 @@
 import { db, newId } from './db';
+import { dropNotesFor } from './notes';
 import type { PlaceRow } from '../shared/types';
 
 /**
@@ -99,6 +100,9 @@ export function deletePlace(id: string): { events: number; media: number } {
               (SELECT COUNT(*) FROM media WHERE place_id = ?) AS media`,
     )
     .get(id, id) as Row;
-  db.prepare('DELETE FROM place WHERE id = ?').run(id);
+  db.transaction(() => {
+    dropNotesFor('place', id);
+    db.prepare('DELETE FROM place WHERE id = ?').run(id);
+  })();
   return { events: Number(usage.events), media: Number(usage.media) };
 }

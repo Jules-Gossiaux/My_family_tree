@@ -307,7 +307,20 @@ les cousins utilisables.
 
 **media_event** — `media_id`, `event_id`
 
-**note** — `id`, `body` (Markdown), `target_type`, `target_id`, `created_at`
+**note** — `id`, `body` (le texte tel qu'il est tapé, ses sauts de ligne gardés), `target_type`,
+`target_id`, `created_at`
+
+Trois choses la distinguent d'un fait et d'une source :
+
+- **elle se pose sur une ligne qui existe** : `target_type` est l'un des cinq noms que la base connaît
+  (`person`, `couple`, `event`, `media`, `place`) et `target_id` un identifiant de cette table. `note`
+  ne porte pas de clé étrangère — une colonne ne peut pas désigner cinq tables à la fois — donc c'est
+  le serveur qui refuse une cible inventée ;
+- **elle ne se date pas et ne se prouve pas** : pas de `date_*`, pas de `confidence`, pas de `source_id`.
+  Elle garde la phrase d'un cousin, une présomption, une piste à reprendre — ce qui ne remplira jamais
+  une ligne de la chronologie ;
+- **ce que l'on efface emporte ses notes** : retirer une personne, un fait, un fichier, un lieu ou une
+  union élaguée efface les commentaires posés dessus, sinon la marge survivrait à ce qu'elle annotait.
 
 **source** — `id`, `kind` (acte / photo / témoignage / web / livre), `reference`, `reliability`
 (`certain` / `probable` / `douteux`, porté par la source elle-même, pas par le fait qui la cite)
@@ -340,7 +353,7 @@ jour de doute sur les clés — mais toutes ne sont pas encore nourries. Ce qui 
 | `branch` | **remplie et lue depuis la passe 3** : nom, teinte, tête de ligne, personnes rangées |
 | `place` | **remplie et lue depuis la passe 5** : le nom tapé sur un fait trouve la ligne ou la pose ; Réglages la renomme et l'efface. `lat`, `lon`, `parent_place_id` restent vides |
 | `source` | **remplie et lue depuis la passe 5** : déclarée dans Réglages, choisie par le fait qui la cite ; genre, référence et fiabilité se corrigent, l'effacement se refuse tant qu'un fait la nomme |
-| `note` | posée, traversée par l'export JSON, **rien ne la remplit** : les notes de la fiche viennent avec la suite de la passe 5 |
+| `note` | **remplie et lue depuis la passe 5** : la fiche les écrit, les corrige et les efface ; un fait, un fichier, un lieu ou une union se notent par la même route. `target_type` ne sort pas de ces cinq-là |
 | `media_event` | posée, et absente de l'export : le rattachement d'un média à un événement se joue en passe 5 |
 
 L'export JSON porte donc des listes vides plutôt que de les inventer, et une table vide n'est pas une
@@ -392,7 +405,7 @@ L'écran central. Cliquer sur une personne ouvre **tout** ce qui la concerne, en
 - événements de sa vie, dans l'ordre
 - toutes ses photos et tous ses documents, **dans l'ordre chronologique** — la vie se lit du plus ancien
   au plus récent, une date inconnue se range à la fin (§8.4 pour l'import)
-- ses notes (passe 5)
+- ses notes, dans l'ordre où elles ont été écrites
 - ses relations (parents, fratrie, unions, enfants) cliquables
 - ses sources et niveaux de confiance (passe 5)
 
@@ -413,6 +426,10 @@ confirmée, y compris par la touche Suppr. Depuis la passe 4, elle est aussi une
 fichiers dessus les importe et les rattacher à cette personne, chaque vignette s'ouvre en grand dans la
 visionneuse, la légende et la date lue se corrigent là, « Faire le portrait » donne à cette image le
 visage de la case et de l'en-tête, et « Retirer de ce dossier » rend le fichier au bac sans rien effacer.
+Depuis la passe 5, une section « Notes » tient ce que la chronologie ne peut pas porter : chaque note se
+tape dans un cadre, se corrige en place, s'efface après une seconde question, et se relit dans l'ordre où
+elle a été écrite — avec sa date d'écriture, jamais une date de correction, parce que la base ne garde que
+la première.
 
 L'écran Réglages, lui, tient la liste des lieux et celle des sources : chaque ligne de lieu porte le
 compte de faits — et de fichiers — qui y pointent, se renomme sur place, et s'efface après une seconde
@@ -420,9 +437,10 @@ question qui dit ce qui reste sans lieu. On n'y ajoute aucun lieu : il entre par
 elles, ne se déclarent qu'ici — genre, référence, fiabilité — et leur ligne dit combien de faits la
 citent ; le bouton d'effacement se refuse tant qu'il en reste un, avec le compte dans son explication.
 
-Y manquent encore, et c'est la suite de la passe 5 : les notes de la fiche, les faits d'une union — le
+Y manquent encore, et c'est la suite de la passe 5 : les faits d'une union — le
 serveur les accepte et les rend déjà, la fiche ne les montre pas — et le rattachement d'un fichier à un
-fait.
+fait. Les notes, elles, s'écrivent sur tous ces objets-là par la même route, mais seule la fiche d'une
+personne les affiche : la marge d'un acte ou d'un fichier attend l'écran qui saura la montrer.
 
 ### 8.3 L'annuaire
 
