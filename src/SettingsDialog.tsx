@@ -14,7 +14,7 @@ interface Props {
   places: PlaceRow[];
   sources: SourceRow[];
   onClose: () => void;
-  onRootChange: (personId: string) => void;
+  onRootChange: (personId: string | null) => void;
   onMeChange: (personId: string) => void;
   /**
    * Une branche, un lieu ou une source a bougé : l'arbre, la fiche et les compteurs repartent de la
@@ -685,9 +685,9 @@ export default function SettingsDialog({
             <>
               <select
                 value={rootPersonId ?? ''}
-                onChange={(event) => onRootChange(event.target.value)}
+                onChange={(event) => onRootChange(event.target.value || null)}
               >
-                <option value="" disabled>
+                <option value="">
                   Aucune personne de référence
                 </option>
                 {persons.map((person) => (
@@ -698,7 +698,8 @@ export default function SettingsDialog({
               </select>
               <p className="settings-note">
                 L’arbre et l’export partent de cette personne. Le bouton « Faire la souche de l’arbre
-                » du menu d’une personne fait la même chose.
+                » du menu d’une personne fait la même chose. Sans personne de référence, l’écran
+                remonte de lui-même à qui n’a aucun parent dans la base.
               </p>
             </>
           )}

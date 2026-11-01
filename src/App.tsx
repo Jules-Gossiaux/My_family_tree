@@ -221,10 +221,10 @@ export default function App() {
   );
 
   const handleSetRoot = useCallback(
-    async (id: string) => {
+    async (id: string | null) => {
       await api.setRoot(id);
       await load();
-      setToast('Souche de l’arbre modifiée');
+      setToast(id ? 'Souche de l’arbre modifiée' : 'Plus de souche : l’arbre part de ses aïeux');
     },
     [load],
   );
