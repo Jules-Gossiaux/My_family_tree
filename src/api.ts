@@ -106,7 +106,8 @@ export const api = {
   ) => pasEncoreEnLigne(),
   deletePerson: (id: string) => pasEncoreEnLigne(),
   attachRelation: (id: string, relation: RelationInput) => pasEncoreEnLigne(),
-  setRoot: (rootPersonId: string | null) => pasEncoreEnLigne(),
+  /** La souche se règle en ligne : la fonction SQL refuse un lecteur avant de toucher la ligne. */
+  setRoot: (rootPersonId: string | null) => vue<void>('set_root', { p_person_id: rootPersonId }),
   /** Qui vous êtes dans l'arbre — le réglage que « Me recentrer » retrouve. */
   setMe: (mePersonId: string | null) => pasEncoreEnLigne(),
   setDataDir: (dataDir: string) => pasEncoreEnLigne() as Promise<DataDirResult>,
