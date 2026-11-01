@@ -60,8 +60,8 @@ export default function SignIn() {
           <>
             <h1>Qui ouvre l’arbre ?</h1>
             <p className="signin-hint">
-              Écrivez votre adresse email. Vous y recevrez un code qui ne sert qu’une fois : rien à
-              retenir, rien à inventer.
+              Écrivez votre adresse email. Vous y recevrez un message avec un lien à cliquer — et, si
+              le lien ne vous arrange pas, huit chiffres à recopier. Rien à retenir, rien à inventer.
             </p>
             <input
               type="email"
@@ -73,15 +73,19 @@ export default function SignIn() {
               required
             />
             <button className="primary" type="submit" disabled={occuped || !email.includes('@')}>
-              {occuped ? 'Un code part…' : 'Recevoir un code'}
+              {occuped ? 'Le message part…' : 'Recevoir le message'}
             </button>
           </>
         ) : (
           <>
-            <h1>Votre code</h1>
+            <h1>Votre email vous attend</h1>
             <p className="signin-hint">
-              Huit chiffres viennent d’être envoyés à <strong>{email.trim().toLowerCase()}</strong>.
-              Le dernier email reçu est le bon : un code plus ancien ne fonctionne plus.
+              Un message part vers <strong>{email.trim().toLowerCase()}</strong>. Ouvrez-le et
+              cliquez sur son bouton : c’est le chemin le plus court, et le lien ne sert qu’une fois.
+            </p>
+            <p className="signin-hint">
+              Si le lien ne vous convient pas — vous lisez votre mail sur le téléphone et voulez
+              l’arbre sur la tablette, par exemple — tapez ici les huit chiffres du message.
             </p>
             <input
               ref={champCode}
@@ -95,7 +99,7 @@ export default function SignIn() {
               required
             />
             <button className="primary" type="submit" disabled={occuped || code.length < 6}>
-              {occuped ? 'On vérifie…' : 'Entrer dans l’arbre'}
+              {occuped ? 'On vérifie…' : 'Entrer avec ce code'}
             </button>
             <button className="link" type="button" onClick={() => setEtape('adresse')}>
               Ce n’est pas cette adresse ?

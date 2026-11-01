@@ -38,12 +38,16 @@ function enFrancais(message: string): string {
   return message;
 }
 
-/** Le code arrive par email ; aucun compte ne se crée au passage, les inscriptions sont fermées. */
+/**
+ * Le code arrive par email ; aucun compte ne se crée au passage, les inscriptions sont fermées.
+ * Le même email porte aussi un lien : on lui demande de revenir sur l'adresse où l'on se trouve,
+ * pour que le clic ouvre l'arbre sur ce poste-ci et non sur le site réglé par défaut.
+ */
 export async function sendCode(email: string): Promise<string | null> {
   if (!supabase) return SANS_ADRESSE;
   const { error } = await supabase.auth.signInWithOtp({
     email: email.trim().toLowerCase(),
-    options: { shouldCreateUser: false },
+    options: { shouldCreateUser: false, emailRedirectTo: window.location.origin },
   });
   return error ? enFrancais(error.message) : null;
 }
