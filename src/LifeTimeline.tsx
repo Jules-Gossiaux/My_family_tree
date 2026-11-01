@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { formatDate } from './dates';
-import type { EventInput, EventRow, PlaceRow } from '../shared/types';
+import type { EventInput, EventRow, PlaceRow, SourceRow } from '../shared/types';
 
 /** Les mêmes types que le serveur connaît : la valeur s'écrit sans accent, le libellé en français. */
 const TYPES: { value: string; label: string }[] = [
@@ -27,6 +27,7 @@ interface Draft {
   type: string;
   dateText: string;
   place: string;
+  sourceId: string;
   description: string;
   confidence: string;
 }
@@ -36,6 +37,7 @@ function draftOf(event: EventRow | null): Draft {
     type: event?.type ?? 'autre',
     dateText: event?.date?.text ?? '',
     place: event?.place ?? '',
+    sourceId: event?.sourceId ?? '',
     description: event?.description ?? '',
     confidence: event?.confidence ?? 'probable',
   };
@@ -50,13 +52,24 @@ function toInput(draft: Draft): EventInput {
     type: draft.type,
     dateText: draft.dateText.trim() || null,
     placeName: draft.place.trim(),
+    sourceId: draft.sourceId || null,
     description: draft.description.trim() || null,
     confidence: draft.confidence,
   };
 }
 
+/**
+ * Le genre d'une source se stocke sans accent dans la base (« temoignage ») : le survol le dit en
+ * français, d'après la liste des sources plutôt que d'une étiquette recopiée ici.
+ */
+function sourceKind(sources: SourceRow[], sourceId: string | null, fallback: string | null): string {
+  return sources.find((source) => source.id === sourceId)?.label ?? (fallback ?? 'Source citée');
+}
+
 function EventForm({
   draft,
+  places,
+  sources,
   busy,
   onChange,
   onSubmit,
@@ -64,6 +77,8 @@ function EventForm({
   submitLabel,
 }: {
   draft: Draft;
+  places: PlaceRow[];
+  sources: SourceRow[];
   busy: boolean;
   onChange: (next: Draft) => void;
   onSubmit: () => void;
@@ -103,16 +118,43 @@ function EventForm({
           />
         </label>
       </div>
-      <label className="field">
-        <span>Lieu</span>
-        <input
-          value={draft.place}
-          onChange={(event) => onChange({ ...draft, place: event.target.value })}
-          placeholder="ville, hameau, pays…"
-          list={PLACE_LIST_ID}
-          disabled={busy}
-        />
-      </label>
+      <div className="life-form-top">
+        <label className="field">
+          <span>Lieu</span>
+          <input
+            value={draft.place}
+            onChange={(event) => onChange({ ...draft, place: event.target.value })}
+            placeholder="ville, hameau, pays…"
+            list={PLACE_LIST_ID}
+            disabled={busy}
+          />
+        </label>
+        <label className="field">
+          <span>Source</span>
+          <select
+            value={draft.sourceId}
+            onChange={(event) => onChange({ ...draft, sourceId: event.target.value })}
+            disabled={busy}
+            title="D'où vient ce fait : l'acte, le livre, la conversation"
+          >
+            <option value="">Aucune source</option>
+            {sources.map((source) => (
+              <option key={source.id} value={source.id}>
+                {source.label} — {source.reference}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {/* Une seule liste pour toutes les saisies de lieu : elle porte ce que la base connaît déjà. */}
+      <datalist id={PLACE_LIST_ID}>
+        {places
+          // Un nom sans fait ni fichier derrière est une faute de frappe : le proposer la propagerait.
+          .filter((place) => place.eventCount + place.mediaCount > 0)
+          .map((place) => (
+            <option key={place.id} value={place.name} />
+          ))}
+      </datalist>
       <label className="field">
         <span>Ce qui s'est passé</span>
         <input
@@ -147,7 +189,7 @@ function EventForm({
       <p className="settings-note">
         Une date que l'ordinateur ne sait pas lire reste écrite telle quelle : aucune année n'est
         inventée. Un lieu déjà écrit se propose pendant la frappe ; un nom neuf devient une ligne de
-        la liste des lieux.
+        la liste des lieux. Une source neuve se déclare dans Réglages, puis se choisit ici.
       </p>
     </form>
   );
@@ -158,6 +200,8 @@ interface Props {
   events: EventRow[];
   /** Les lieux de la base : seuls ceux qui portent déjà quelque chose se proposent à la frappe. */
   places: PlaceRow[];
+  /** Les sources déclarées dans Réglages, que le fait peut citer. */
+  sources: SourceRow[];
   /** Un fait écrit ou effacé : la fiche et l'arbre repartent de la même ligne. */
   onChanged: () => void;
 }
@@ -167,7 +211,7 @@ interface Props {
  * ici, pas ailleurs : la saisie rapide du dossier « Modifier » écrit la même ligne, sinon un fait
  * aurait deux dates selon l'endroit où on l'a tapé.
  */
-export default function LifeTimeline({ personId, events, places, onChanged }: Props) {
+export default function LifeTimeline({ personId, events, places, sources, onChanged }: Props) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -254,6 +298,8 @@ export default function LifeTimeline({ personId, events, places, onChanged }: Pr
               {editingId === event.id ? (
                 <EventForm
                   draft={draft}
+                  places={places}
+                  sources={sources}
                   busy={busy}
                   onChange={setDraft}
                   onSubmit={() => void submit()}
@@ -271,7 +317,10 @@ export default function LifeTimeline({ personId, events, places, onChanged }: Pr
                   <p className="life-meta">
                     <span className={`life-conf is-${event.confidence}`}>{event.confidence}</span>
                     {event.source && (
-                      <span className="life-source" title={event.sourceKind ?? undefined}>
+                      <span
+                        className="life-source"
+                        title={sourceKind(sources, event.sourceId, event.sourceKind)}
+                      >
                         {event.source}
                       </span>
                     )}
@@ -328,6 +377,8 @@ export default function LifeTimeline({ personId, events, places, onChanged }: Pr
       {adding && (
         <EventForm
           draft={draft}
+          places={places}
+          sources={sources}
           busy={busy}
           onChange={setDraft}
           onSubmit={() => void submit()}
@@ -344,16 +395,6 @@ export default function LifeTimeline({ personId, events, places, onChanged }: Pr
         </div>
       )}
       {error && <p className="dialog-error">{error}</p>}
-
-      {/* Une seule liste pour toutes les saisies de lieu du dossier : elle porte ce que la base connaît déjà. */}
-      <datalist id={PLACE_LIST_ID}>
-        {places
-          // Un nom sans fait ni fichier derrière est une faute de frappe : le proposer la propagerait.
-          .filter((place) => place.eventCount + place.mediaCount > 0)
-          .map((place) => (
-            <option key={place.id} value={place.name} />
-          ))}
-      </datalist>
     </div>
   );
 }

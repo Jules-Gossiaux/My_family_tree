@@ -5,7 +5,15 @@ import MediaEditor from './MediaEditor';
 import MediaLightbox from './MediaLightbox';
 import { kindOf, prepareUpload, takenOf } from './thumbnails';
 import { formatDate, fullName, initials, lifeSpan } from './dates';
-import type { Branch, Media, Person, PersonDetail, PlaceRow, RelationInput } from '../shared/types';
+import type {
+  Branch,
+  Media,
+  Person,
+  PersonDetail,
+  PlaceRow,
+  RelationInput,
+  SourceRow,
+} from '../shared/types';
 
 interface Props {
   personId: string | null;
@@ -13,6 +21,8 @@ interface Props {
   branches: Branch[];
   /** Les lieux connus de la base, proposés pendant la saisie d'un fait. */
   places: PlaceRow[];
+  /** Les sources déclarées dans Réglages, qu'un fait peut citer. */
+  sources: SourceRow[];
   onSelect: (personId: string) => void;
   onAdd: (relation: RelationInput, anchorName: string) => void;
   onAttach: (personId: string) => void;
@@ -54,6 +64,7 @@ export default function PersonSheet({
   refreshKey,
   branches,
   places,
+  sources,
   onSelect,
   onAdd,
   onAttach,
@@ -314,6 +325,7 @@ export default function PersonSheet({
           personId={person.id}
           events={person.events}
           places={places}
+          sources={sources}
           onChanged={onChanged}
         />
       </Section>

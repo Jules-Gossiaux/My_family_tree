@@ -34,6 +34,7 @@ server/          API HTTP + accès SQLite
   branches.ts    lignes de famille : nom, teinte, tête de ligne et personnes rangées
   life-events.ts faits d'une vie : type, date libre, lieu, source, confiance
   places.ts      lieux trouvés ou posés par le nom qu'écrit un fait, renommés et effacés
+  sources.ts     sources déclarées dans Réglages et citées par un fait, refusées tant qu'on les cite
   backup.ts      archive ZIP datée, au démarrage et pendant la session
   export.ts      tout l'arbre en un JSON lisible sans l'application
   restore.ts     recharge une archive : contrôle, copie de sûreté, échange
@@ -45,10 +46,10 @@ src/             interface React
   treeLayout.ts  calcul de position des cases, et des liens que la descendance ne peut pas dessiner
   TreeCanvas.tsx rendu SVG, zoom, déplacement, teintes de branche et leurs pastilles
   PersonSheet.tsx fiche latérale, galerie de la personne, portrait et branche
-  LifeTimeline.tsx chronologie de la vie : ajouter, corriger et retirer un fait et son lieu
+  LifeTimeline.tsx chronologie de la vie : ajouter, corriger et retirer un fait, son lieu et sa source
   AddPersonDialog.tsx saisie rapide
   AttachDialog.tsx choix d'une personne déjà existante à rattacher
-  SettingsDialog.tsx écran Réglages : dossier, souche, « moi », branches, lieux, copies, export
+  SettingsDialog.tsx écran Réglages : dossier, souche, « moi », branches, lieux, sources, copies, export
   saveFile.ts    écrire un fichier produit par le serveur là où l'utilisateur le veut
   thumbnails.ts  vignette dessinée par le navigateur, type et date pris du fichier
   MediaInbox.tsx bac d'entrée : importer en lot puis rattacher à plusieurs personnes
@@ -74,6 +75,7 @@ Le serveur sert l'API et, en production, le front compilé par Vite. Un seul pro
 | Table des couples | nommée `couple` et non `union` | `UNION` est un mot réservé SQL |
 | Unions | jamais créées sans qu'on les déclare | un enfant rattaché à un parent seul n'implique pas l'existence d'un second parent |
 | Refus d'écriture | message en français compréhensible, code HTTP 400/404/409 | la personne doit savoir quoi faire sans lire une pile d'appels |
+| Source citée | ne s'efface pas : `event.source_id` et `media.source_id` n'ont pas de clé étrangère | supprimer quand même laisserait un fait pointant une ligne disparue, et l'écran n'aurait plus rien à montrer à la place de sa source |
 | Upload des médias | octets bruts (`express.raw`), jamais de JSON base64 | un JPEG de 20 Mo en base64 pèse 27 Mo de texte et encrera le tas Node ; les octets entrent tels quels |
 | Déduplication | empreinte `sha256` de l'original, calculée à l'écriture | la même photo scannée deux fois ne doit pas remplir le dossier ni peupler le bac de deux cases identiques |
 | Vignettes | dessinées par le navigateur dans un `<canvas>`, `sharp` écarté | pas de binaire natif de plus à recompiler quand Node change ; le serveur range des octets, il ne décode rien |
@@ -228,6 +230,10 @@ deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 | GET | `/api/places` | tous les lieux, triés par nom, avec le compte de faits et de fichiers qui y pointent |
 | PATCH | `/api/places/:id` | renommer : les lignes qui pointaient déjà ici suivent le nouveau nom ; 409 si un autre lieu le porte déjà, et le refus nomme lequel |
 | DELETE | `/api/places/:id` | effacer un nom : ses faits et ses fichiers restent, ils deviennent sans lieu ; la réponse compte ce qui reste |
+| GET | `/api/sources` | toutes les sources, triées par genre puis par référence, avec le compte de faits et de fichiers qui les citent |
+| POST | `/api/sources` | déclarer une source : `kind` (acte, photo, temoignage, web, livre), `reference`, `reliability` — 400 hors de ces listes ou sans référence, 409 si la référence est déjà prise, et le refus nomme le genre de la ligne qui la porte |
+| PATCH | `/api/sources/:id` | corrige genre, référence ou fiabilité sans déplacer une citation ; 404 si la source est inconnue, 409 si la référence est celle d'une voisine |
+| DELETE | `/api/sources/:id` | efface une source que plus rien ne cite ; tant qu'un fait ou un fichier la nomme, c'est un 409 qui compte les citations à retirer |
 | PUT | `/api/config` | `rootPersonId` (la souche) et `mePersonId` (« moi »), réglés séparément : un champ absent laisse ce qui est écrit, `null` le retire, une id inconnue est refusée en 400 sans rien déplacer |
 | PUT | `/api/config/data-dir` | dossier de données : écrit `config.local.json`, demande un redémarrage |
 | POST | `/api/backup` | archive ZIP immédiate |
@@ -424,12 +430,30 @@ Les lieux d'un fait, ensuite, parce qu'une ville sans écran se recopie et se di
   suppression à deux temps
 - [x] tests serveur des lieux (`tests/places.test.ts`, 13 cas ; 134 tests au total)
 
+Les sources d'un fait, ensuite, parce qu'une cote recopiée en texte libre ne se retrouve plus :
+
+- [x] `server/sources.ts` : la référence désigne la source — une cote, un titre, une adresse — sans
+  distinction de casse ni espace de trop ; un même texte déjà pris est refusé en 409 et dit sous quel
+  genre la ligne existe
+- [x] cinq genres et trois fiabilités, stockés sans accent, dits en français à l'écran ; hors de ces
+  listes c'est un 400 qui les cite, et rien ne s'écrit
+- [x] une source encore citée ne s'efface pas : `event.source_id` et `media.source_id` n'ont pas de clé
+  étrangère, donc le refus vaut mieux qu'une ligne effacée sous un fait qui la nommait — et il compte
+- [x] routes `GET`, `POST`, `PATCH` et `DELETE /api/sources` ; `knownSource` vit dans ce module et
+  `life-events.ts` la lui demande, au lieu de la redupliquer
+- [x] le champ « Source » de la chronologie, à côté du lieu : la liste des sources déclarées, « Aucune
+  source » pour la rendre à l'ignorée, et le genre en explication au survol de la ligne
+- [x] une section « Sources » dans Réglages : ajout par genre choisi, ligne qui porte sa référence, son
+  genre, sa fiabilité et son compte de citations, effacement qui se refuse tant qu'il reste un fait
+- [x] un refus d'ajout, dans Réglages, ne s'écrit plus au bas du défilement : l'épingler au bord visible
+  de la boîte est ce qui fait qu'on le lit
+- [x] tests serveur des sources (`tests/sources.test.ts`, 13 cas ; 147 tests au total)
+
 Ce qui reste de la passe 5 :
 
 - [ ] un écran pour les faits d'une union : le serveur les accepte et les rend déjà dans l'ordre
   (`eventsOfCouple`), la fiche ne les montre pas encore
-- [ ] les notes et les sources : `server/notes.ts`, `server/sources.ts`, une source encore citée ne
-  s'efface pas ; les notes se lisent et s'écrivent sur la fiche
+- [ ] les notes : `server/notes.ts`, une note se lit et s'écrit sur la fiche, sur un fait, sur un fichier
 - [ ] rattacher un fichier à un fait (`media_event`), le montrer sur la ligne de chronologie et porter
   la table à l'export JSON
 - [ ] la frise familiale globale et les albums par époque (§8.6), qui demandent les médias datés
@@ -453,8 +477,12 @@ Ce qui manque encore, avec le fil qui le reprend :
   fichiers restent sur le disque, les médias retournent dans « à rattacher », mais recréer la personne
   ne repeuple pas sa galerie — il faut les rattacher à nouveau.
 - **Le bac ne voit que les personnes.** Une image rattachée à un événement (`media_event`) n'a encore
-  aucun écran, et la source d'un fait se lit sur la chronologie mais ne se choisit pas encore : la table
-  `source` reste vide tant que la suite de la passe 5 ne l'a pas remplie.
+  aucun écran, et le compte de fichiers affiché sur une ligne de chronologie reste donc à zéro.
+- **Une source se cite, elle ne se montre pas.** Le champ « Source » d'un fait choisit dans ce que
+  Réglages a déclaré, et la référence corrigée suit les faits qui la citent. Mais `media.source_id`
+  n'est écrit par aucun écran — un fichier ne dit toujours pas de quoi il témoigne — et une source ne
+  porte ni date, ni extrait, ni lien : la table `source` ne garde que son genre, sa référence et sa
+  fiabilité.
 - **Un lieu n'a que son nom.** `lat`, `lon` et `parent_place_id` ne sont remplis par personne : ni
   hiérarchie ville → pays, ni carte. `media.place_id` attend son écran aussi, donc une photo ne dit
   toujours pas où elle a été prise. Et deux orthographes d'un même lieu ne se fusionnent pas encore :

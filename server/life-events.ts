@@ -1,6 +1,7 @@
 import { db, newId, now } from './db';
 import { parseGenealogyDate, readDateRow } from './dates';
 import { findOrCreatePlace } from './places';
+import { knownSource } from './sources';
 import type { EventInput, EventRow, GDate } from '../shared/types';
 
 /**
@@ -53,10 +54,6 @@ function knownCouple(id: string): boolean {
 
 function knownPlace(id: string): boolean {
   return Boolean(db.prepare('SELECT id FROM place WHERE id = ?').get(id));
-}
-
-function knownSource(id: string): boolean {
-  return Boolean(db.prepare('SELECT id FROM source WHERE id = ?').get(id));
 }
 
 function checkedType(type: string): string {

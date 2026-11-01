@@ -107,6 +107,31 @@ export interface PlaceRow {
   mediaCount: number;
 }
 
+/**
+ * Une source citée par des faits : son genre, sa référence, sa fiabilité — et combien de lignes la
+ * réclament. Le compte est là pour la même raison que celui des lieux : on n'efface pas ce qui sert.
+ */
+export interface SourceRow {
+  id: string;
+  /** acte, photo, temoignage, web, livre — tel que la base le stocke. */
+  kind: string;
+  /** Le même genre, dit en français pour l'écran. */
+  label: string;
+  /** La cote, le titre, l'adresse : ce qui distingue cette source de ses voisines. */
+  reference: string | null;
+  /** certain / probable / douteux, porté par la source elle-même. */
+  reliability: string;
+  eventCount: number;
+  mediaCount: number;
+}
+
+/** Ce que l'on écrit d'une source : le genre et la référence, la fiabilité se devance « probable ». */
+export interface SourceInput {
+  kind?: string;
+  reference?: string | null;
+  reliability?: string;
+}
+
 export interface GraphData {
   persons: Person[];
   couples: Couple[];

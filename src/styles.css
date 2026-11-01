@@ -1100,6 +1100,21 @@ input::placeholder {
   overflow-y: auto;
 }
 
+/*
+ * Un refus d'ajout se lit là où le regard est déjà : cette liste défile, et un message écrit au bas
+ * du défilement ne se montre jamais — le geste semble n'avoir rien fait. Épinglé au bord visible, il
+ * dit ce qui bloque au moment même où il bloque.
+ */
+.dialog-settings > .dialog-error {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 12px 0 0;
+  padding: 9px 10px 4px;
+  background: var(--surface);
+  border-top: 1px solid var(--line-2);
+}
+
 .settings-value {
   margin: 2px 0 0;
   font-size: 13px;
@@ -1277,6 +1292,27 @@ input::placeholder {
 .branch-list button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* ---------- sources, à l'écran ---------- */
+
+/*
+ * Le genre et la fiabilité se choisissent parmi cinq et trois mots : ils n'ont rien à chercher de
+ * la largeur d'une liste de personnes. Sans ces plafonds, les deux `select` prendraient la place et
+ * la cote — ce qui distingue vraiment une source — resterait à quelques lettres.
+ */
+.branch-main .source-kind {
+  flex: 0 1 120px;
+  max-width: 145px;
+}
+
+.branch-main .source-reliability {
+  flex: 0 1 110px;
+  max-width: 130px;
+}
+
+.field.source-kind-pick {
+  flex: 0 1 130px;
 }
 
 /* ---------- photos et documents ---------- */

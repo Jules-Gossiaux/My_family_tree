@@ -15,6 +15,7 @@ import type {
   PersonDetail,
   PlaceRow,
   RelationInput,
+  SourceRow,
 } from '../shared/types';
 
 interface DialogState {
@@ -41,6 +42,7 @@ function backupLabel(backup: BackupInfo | null): string {
 export default function App() {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [places, setPlaces] = useState<PlaceRow[]>([]);
+  const [sources, setSources] = useState<SourceRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [attach, setAttach] = useState<string | null>(null);
@@ -63,13 +65,15 @@ export default function App() {
 
   const load = useCallback(async () => {
     try {
-      const [data, state, knownPlaces] = await Promise.all([
+      const [data, state, knownPlaces, knownSources] = await Promise.all([
         api.graph(),
         api.state(),
         api.places(),
+        api.sources(),
       ]);
       setGraph(data);
       setPlaces(knownPlaces.places);
+      setSources(knownSources.sources);
       setBackup(state.backup);
       setMeId(state.mePersonId);
       setWarnings(state.warnings ?? []);
@@ -420,6 +424,7 @@ export default function App() {
               refreshKey={refreshKey}
               branches={graph?.branches ?? []}
               places={places}
+              sources={sources}
               onSelect={selectPerson}
               onAdd={(relation, anchorName) => setDialog({ relation, anchorName })}
               onAttach={(personId) => setAttach(personId)}
@@ -585,6 +590,7 @@ export default function App() {
           persons={graph?.persons ?? []}
           branches={graph?.branches ?? []}
           places={places}
+          sources={sources}
           onClose={() => setSettings(false)}
           onRootChange={handleSetRoot}
           onMeChange={handleSetMe}

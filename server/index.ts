@@ -26,6 +26,13 @@ import {
 } from './life-events';
 import { PlaceError, deletePlace, listPlaces, renamePlace } from './places';
 import {
+  SourceError,
+  createSource,
+  deleteSource,
+  listSources,
+  updateSource,
+} from './sources';
+import {
   backupFile,
   forceBackup,
   lastBackup,
@@ -66,6 +73,7 @@ import type {
   Person,
   PersonDetail,
   RelationInput,
+  SourceInput,
 } from '../shared/types';
 
 const app = express();
@@ -546,6 +554,41 @@ app.delete('/api/places/:id', (req, res) => {
 });
 
 /**
+ * Les sources se déclarent ici, puis se choisissent sur un fait. Le genre et la référence suffisent à
+ * la reconnaître : c'est ce que l'on recopie d'un acte à l'autre quand on remplit un dossier.
+ */
+app.get('/api/sources', (_req, res) => {
+  res.json({ sources: listSources() });
+});
+
+app.post('/api/sources', (req, res) => {
+  const body = req.body as SourceInput;
+  try {
+    res.status(201).json({ source: createSource(body) });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+app.patch('/api/sources/:id', (req, res) => {
+  const body = req.body as SourceInput;
+  try {
+    res.json({ source: updateSource(req.params.id, body) });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+app.delete('/api/sources/:id', (req, res) => {
+  try {
+    deleteSource(req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+/**
  * Une branche est un nom et une couleur posés sur une ligne de l'arbre. Rien n'est deviné : créer
  * une branche sans dire de qui elle part ne range personne.
  */
@@ -618,7 +661,8 @@ function sendWriteError(res: Response, error: unknown): void {
     error instanceof BranchError ||
     error instanceof ConfigError ||
     error instanceof LifeEventError ||
-    error instanceof PlaceError
+    error instanceof PlaceError ||
+    error instanceof SourceError
   ) {
     res.status(error.status).json({ error: error.message });
     return;

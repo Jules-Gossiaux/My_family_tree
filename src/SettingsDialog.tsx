@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { saveFromServer } from './saveFile';
 import { fullName } from './dates';
-import type { BackupInfo, Branch, Person, PlaceRow } from '../shared/types';
+import type { BackupInfo, Branch, Person, PlaceRow, SourceInput, SourceRow } from '../shared/types';
 
 interface Props {
   dataDir: string;
@@ -12,10 +12,14 @@ interface Props {
   persons: Person[];
   branches: Branch[];
   places: PlaceRow[];
+  sources: SourceRow[];
   onClose: () => void;
   onRootChange: (personId: string) => void;
   onMeChange: (personId: string) => void;
-  /** Une branche ou un lieu a bougé : l'arbre, la fiche et les compteurs repartent de la même image. */
+  /**
+   * Une branche, un lieu ou une source a bougé : l'arbre, la fiche et les compteurs repartent de la
+   * même image.
+   */
   onChanged: () => void;
   onBackup: (info: BackupInfo) => void;
   onToast: (message: string) => void;
@@ -25,6 +29,21 @@ interface Props {
 function count(total: number, word: string): string {
   return `${total} ${word}${total > 1 ? 's' : ''}`;
 }
+
+/** Les cinq genres connus de la base, stockés sans accent et dits en français ici. */
+const KINDS: { value: string; label: string }[] = [
+  { value: 'acte', label: 'Acte' },
+  { value: 'photo', label: 'Photo' },
+  { value: 'temoignage', label: 'Témoignage' },
+  { value: 'web', label: 'Site web' },
+  { value: 'livre', label: 'Livre' },
+];
+
+const RELIABILITIES: { value: string; label: string }[] = [
+  { value: 'certain', label: 'certaine' },
+  { value: 'probable', label: 'probable' },
+  { value: 'douteux', label: 'douteuse' },
+];
 
 function size(bytes: number): string {
   const mo = bytes / 1024 / 1024;
@@ -332,8 +351,163 @@ function PlaceEntry({
 }
 
 /**
+ * Une ligne de source : ce qui la désigne — sa référence — son genre, sa fiabilité, et ce qui la
+ * cite. Elle ne s'efface pas tant qu'un fait la nomme : la retirer laisserait le fait sans source,
+ * sans que rien ne l'ait dit.
+ */
+function SourceEntry({
+  source,
+  onChanged,
+  onToast,
+}: {
+  source: SourceRow;
+  onChanged: () => void;
+  onToast: (message: string) => void;
+}) {
+  const [draft, setDraft] = useState<SourceInput>({
+    kind: source.kind,
+    reference: source.reference ?? '',
+    reliability: source.reliability,
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<'save' | 'delete' | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  // Une référence corrigée dans une autre fiche, ou un genre changé ici : la ligne suit la base,
+  // mais seulement quand ce n'est pas ce que l'on est en train d'écrire.
+  useEffect(() => {
+    setDraft({ kind: source.kind, reference: source.reference ?? '', reliability: source.reliability });
+  }, [source.kind, source.reference, source.reliability]);
+
+  const reference = (draft.reference ?? '').trim();
+  const dirty =
+    reference !== (source.reference ?? '') ||
+    draft.kind !== source.kind ||
+    (draft.reliability ?? '') !== source.reliability;
+
+  const save = async () => {
+    setBusy('save');
+    setError(null);
+    try {
+      await api.updateSource(source.id, { ...draft, reference });
+      onChanged();
+      onToast(`Source « ${reference} » enregistrée`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'La source n’a pas pu être enregistrée');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    setBusy('delete');
+    setError(null);
+    try {
+      await api.deleteSource(source.id);
+      onChanged();
+      setConfirming(false);
+      onToast(`Source « ${source.reference ?? ''} » effacée — plus aucun fait ne la cite`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Suppression impossible');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const cited = source.eventCount + source.mediaCount;
+
+  return (
+    <li className="branch-row">
+      <span className="branch-main">
+        <select
+          className="source-kind"
+          value={draft.kind}
+          onChange={(event) => setDraft({ ...draft, kind: event.target.value })}
+          aria-label={`Genre de la source ${source.reference ?? ''}`}
+          disabled={busy !== null}
+        >
+          {KINDS.map((kind) => (
+            <option key={kind.value} value={kind.value}>
+              {kind.label}
+            </option>
+          ))}
+        </select>
+        <input
+          className="branch-name"
+          value={draft.reference ?? ''}
+          onChange={(event) => setDraft({ ...draft, reference: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void save();
+          }}
+          placeholder="cote, titre, adresse…"
+          spellCheck={false}
+          aria-label="Référence de la source"
+        />
+        <select
+          className="source-reliability"
+          value={draft.reliability}
+          onChange={(event) => setDraft({ ...draft, reliability: event.target.value })}
+          aria-label="Fiabilité de la source"
+          title="Ce que vaut la source en elle-même : un acte original, un registre, une mémoire de famille"
+          disabled={busy !== null}
+        >
+          {RELIABILITIES.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <span className="branch-meta">
+          {count(source.eventCount, 'fait cité')}
+          {source.mediaCount > 0 && ` · ${count(source.mediaCount, 'fichier')}`}
+        </span>
+      </span>
+
+      <span className="branch-side">
+        <button
+          type="button"
+          className="ghost"
+          onClick={save}
+          disabled={busy !== null || !dirty || !reference}
+        >
+          {busy === 'save' ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
+        {confirming ? (
+          <>
+            <button type="button" className="danger-solid" onClick={remove} disabled={busy !== null}>
+              Confirmer
+            </button>
+            <button type="button" className="ghost" onClick={() => setConfirming(false)}>
+              Annuler
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => setConfirming(true)}
+            disabled={cited > 0}
+            title={
+              cited > 0
+                ? `Encore citée par ${count(source.eventCount, 'fait')}${
+                    source.mediaCount > 0 ? ` et ${count(source.mediaCount, 'fichier')}` : ''
+                  } : enlevez-la d'abord de chaque fait qui la cite`
+                : 'Effacer cette source : rien ne la cite, aucun fait ne bouge'
+            }
+          >
+            Supprimer
+          </button>
+        )}
+      </span>
+
+      {error && <p className="dialog-error">{error}</p>}
+    </li>
+  );
+}
+
+/**
  * L'écran de fin de saisie : où vivent les données, de qui l'arbre part, quelles branches le
- * colorent, quels lieux se corrigent, et comment une copie sort du disque.
+ * colorent, quels lieux et quelles sources se corrigent, et comment une copie sort du disque.
  */
 export default function SettingsDialog({
   dataDir,
@@ -343,6 +517,7 @@ export default function SettingsDialog({
   persons,
   branches,
   places,
+  sources,
   onClose,
   onRootChange,
   onMeChange,
@@ -353,9 +528,11 @@ export default function SettingsDialog({
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [draftDir, setDraftDir] = useState('');
   const [draftBranch, setDraftBranch] = useState('');
+  const [draftSource, setDraftSource] = useState('');
+  const [draftKind, setDraftKind] = useState('acte');
   const [dirNote, setDirNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'backup' | 'export' | 'copy' | 'dir' | 'branch' | null>(null);
+  const [busy, setBusy] = useState<'backup' | 'export' | 'copy' | 'dir' | 'branch' | 'source' | null>(null);
   const [copyingName, setCopyingName] = useState<string | null>(null);
 
   const reloadBackups = async () => {
@@ -407,6 +584,22 @@ export default function SettingsDialog({
       onToast(`Branche « ${branch.name} » ajoutée — sa couleur se règle sur sa ligne`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'La branche n’a pas pu être ajoutée');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const addSource = async () => {
+    if (!draftSource.trim() || busy) return;
+    setBusy('source');
+    setError(null);
+    try {
+      const { source } = await api.createSource({ kind: draftKind, reference: draftSource });
+      setDraftSource('');
+      onChanged();
+      onToast(`Source « ${source.reference ?? ''} » ajoutée — sa fiabilité se règle sur sa ligne`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'La source n’a pas pu être ajoutée');
     } finally {
       setBusy(null);
     }
@@ -604,6 +797,63 @@ export default function SettingsDialog({
               ))}
             </ul>
           )}
+        </div>
+
+        <div className="section">
+          <h3 className="section-title">Sources</h3>
+          <p className="settings-note">
+            Une source se déclare ici, puis se choisit sur un fait : c'est ce qui permet de dire, trois
+            générations plus tard, d'où vient tel acte. Elle se désigne par sa référence — une cote, un
+            titre, une adresse — et une même référence ne se déclare pas deux fois. Tant qu'un fait la
+            cite, elle ne s'efface pas : le bouton se refuse tant qu'il reste une citation à retirer.
+          </p>
+
+          {sources.length === 0 ? (
+            <p className="settings-note">
+              Aucune source pour l'instant : un fait s'écrit déjà sans elle, et la première se déclare
+              ci-dessous.
+            </p>
+          ) : (
+            <ul className="branch-list">
+              {sources.map((source) => (
+                <SourceEntry key={source.id} source={source} onChanged={onChanged} onToast={onToast} />
+              ))}
+            </ul>
+          )}
+
+          <div className="field-row align-end">
+            <label className="field">
+              <span>En déclarer une</span>
+              <input
+                value={draftSource}
+                onChange={(event) => setDraftSource(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void addSource();
+                }}
+                placeholder="AD du Nord, 3E 142/12 — acte de naissance de 1870"
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </label>
+            <label className="field source-kind-pick">
+              <span>Genre</span>
+              <select value={draftKind} onChange={(event) => setDraftKind(event.target.value)}>
+                {KINDS.map((kind) => (
+                  <option key={kind.value} value={kind.value}>
+                    {kind.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="ghost"
+              onClick={addSource}
+              disabled={busy !== null || !draftSource.trim()}
+            >
+              {busy === 'source' ? 'Ajout…' : 'Ajouter'}
+            </button>
+          </div>
         </div>
 
         <div className="section">

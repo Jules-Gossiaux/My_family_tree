@@ -12,6 +12,8 @@ import type {
   PlaceRow,
   PersonDetail,
   RelationInput,
+  SourceInput,
+  SourceRow,
 } from '../shared/types';
 
 /** Un refus du serveur se dit en français ; une page HTML rendue à la place n'est pas un refus. */
@@ -109,6 +111,19 @@ export const api = {
   /** Effacer un lieu rend ses faits et ses fichiers à un lieu inconnu, sans rien effacer d'eux. */
   deletePlace: (id: string) =>
     request<{ ok: true; events: number; media: number }>(`/api/places/${id}`, { method: 'DELETE' }),
+
+  /** Les sources connues, pour qu'un fait en choisisse une plutôt que de la réécrire. */
+  sources: () => request<{ sources: SourceRow[] }>('/api/sources'),
+  createSource: (input: SourceInput) =>
+    request<{ source: SourceRow }>('/api/sources', { method: 'POST', body: JSON.stringify(input) }),
+  /** Corriger une référence suit les faits qui la citent : la source reste la même ligne. */
+  updateSource: (id: string, input: SourceInput) =>
+    request<{ source: SourceRow }>(`/api/sources/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  /** Une source encore citée se refuse : le message compte les citations à retirer avant. */
+  deleteSource: (id: string) => request<{ ok: true }>(`/api/sources/${id}`, { method: 'DELETE' }),
 
   /** Ce qui attend encore un visage. */
   unattachedMedia: () => request<{ media: Media[] }>('/api/media?state=a-relier'),
