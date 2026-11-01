@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { saveFromServer } from './saveFile';
 import { fullName } from './dates';
-import type { BackupInfo, Branch, Person } from '../shared/types';
+import type { BackupInfo, Branch, Person, PlaceRow } from '../shared/types';
 
 interface Props {
   dataDir: string;
@@ -11,13 +11,19 @@ interface Props {
   mePersonId: string | null;
   persons: Person[];
   branches: Branch[];
+  places: PlaceRow[];
   onClose: () => void;
   onRootChange: (personId: string) => void;
   onMeChange: (personId: string) => void;
-  /** Une branche a bougé : l'arbre doit reprendre ses teintes et ses compteurs. */
-  onBranchesChanged: () => void;
+  /** Une branche ou un lieu a bougé : l'arbre, la fiche et les compteurs repartent de la même image. */
+  onChanged: () => void;
   onBackup: (info: BackupInfo) => void;
   onToast: (message: string) => void;
+}
+
+/** Un compte, au singulier s'il ne vaut qu'un. */
+function count(total: number, word: string): string {
+  return `${total} ${word}${total > 1 ? 's' : ''}`;
 }
 
 function size(bytes: number): string {
@@ -209,8 +215,125 @@ function BranchRow({
 }
 
 /**
+ * Une ligne de lieu : le nom tel qu'il est écrit sur les actes, ce qui s'y est déjà passé, et ce
+ * qu'on en fait. Un lieu ne s'ajoute pas ici — il entre par le fait qui l'a vu.
+ */
+function PlaceEntry({
+  place,
+  onChanged,
+  onToast,
+}: {
+  place: PlaceRow;
+  onChanged: () => void;
+  onToast: (message: string) => void;
+}) {
+  const [name, setName] = useState(place.name);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<'save' | 'delete' | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  // Le nom peut avoir bougé sous la main, par un fait écrit dans une autre fiche : on le suit,
+  // mais seulement quand ce n'est pas ce que l'on est en train d'écrire.
+  useEffect(() => {
+    setName(place.name);
+  }, [place.name]);
+
+  const clean = name.trim();
+  const dirty = clean !== place.name;
+
+  const save = async () => {
+    setBusy('save');
+    setError(null);
+    try {
+      await api.updatePlace(place.id, clean);
+      onChanged();
+      onToast(`Lieu « ${place.name} » renommé « ${clean} »`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Le lieu n’a pas pu être renommé');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    setBusy('delete');
+    setError(null);
+    try {
+      const { events, media } = await api.deletePlace(place.id);
+      onChanged();
+      setConfirming(false);
+      const still = events + media;
+      onToast(
+        still === 0
+          ? `Lieu « ${place.name} » effacé — rien ne pointait ici`
+          : `Lieu « ${place.name} » effacé — ${count(events, 'fait')}${
+              media > 0 ? ` et ${count(media, 'fichier')}` : ''
+            } ${still > 1 ? 'restent' : 'reste'} sans lieu`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Suppression impossible');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <li className="branch-row">
+      <span className="branch-main">
+        <input
+          className="branch-name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void save();
+          }}
+          spellCheck={false}
+          aria-label={`Nom du lieu ${place.name}`}
+        />
+        <span className="branch-meta">
+          {count(place.eventCount, 'fait')}
+          {place.mediaCount > 0 && ` · ${count(place.mediaCount, 'fichier')}`}
+        </span>
+      </span>
+
+      <span className="branch-side">
+        <button
+          type="button"
+          className="ghost"
+          onClick={save}
+          disabled={busy !== null || !dirty || !clean}
+        >
+          {busy === 'save' ? 'Enregistrement…' : 'Renommer'}
+        </button>
+        {confirming ? (
+          <>
+            <button type="button" className="danger-solid" onClick={remove} disabled={busy !== null}>
+              Confirmer
+            </button>
+            <button type="button" className="ghost" onClick={() => setConfirming(false)}>
+              Annuler
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => setConfirming(true)}
+            title="Effacer ce nom : les faits et les fichiers qui y pointaient restent, ils deviennent simplement sans lieu"
+          >
+            Supprimer
+          </button>
+        )}
+      </span>
+
+      {error && <p className="dialog-error">{error}</p>}
+    </li>
+  );
+}
+
+/**
  * L'écran de fin de saisie : où vivent les données, de qui l'arbre part, quelles branches le
- * colorent, et comment une copie sort du disque.
+ * colorent, quels lieux se corrigent, et comment une copie sort du disque.
  */
 export default function SettingsDialog({
   dataDir,
@@ -219,10 +342,11 @@ export default function SettingsDialog({
   mePersonId,
   persons,
   branches,
+  places,
   onClose,
   onRootChange,
   onMeChange,
-  onBranchesChanged,
+  onChanged,
   onBackup,
   onToast,
 }: Props) {
@@ -279,7 +403,7 @@ export default function SettingsDialog({
     try {
       const { branch } = await api.createBranch({ name: draftBranch });
       setDraftBranch('');
-      onBranchesChanged();
+      onChanged();
       onToast(`Branche « ${branch.name} » ajoutée — sa couleur se règle sur sa ligne`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'La branche n’a pas pu être ajoutée');
@@ -428,7 +552,7 @@ export default function SettingsDialog({
                   key={branch.id}
                   branch={branch}
                   persons={persons}
-                  onChanged={onBranchesChanged}
+                  onChanged={onChanged}
                   onToast={onToast}
                 />
               ))}
@@ -458,6 +582,28 @@ export default function SettingsDialog({
               {busy === 'branch' ? 'Ajout…' : 'Ajouter'}
             </button>
           </div>
+        </div>
+
+        <div className="section">
+          <h3 className="section-title">Lieux</h3>
+          <p className="settings-note">
+            Un lieu entre par le fait qui l'a vu, et un nom déjà écrit se propose pendant la frappe :
+            « Roubaix » tapé trois fois ne fait qu'une ligne. Cette liste répare les noms — renommer
+            suit les faits et les fichiers qui pointaient ici, effacer les rend à un lieu inconnu
+            sans rien effacer d'eux. Deux orthographes d'un même lieu ne se fusionnent pas encore.
+          </p>
+
+          {places.length === 0 ? (
+            <p className="settings-note">
+              Aucun lieu pour l'instant : écrivez-en un dans le champ « Lieu » d'un fait de vie.
+            </p>
+          ) : (
+            <ul className="branch-list">
+              {places.map((place) => (
+                <PlaceEntry key={place.id} place={place} onChanged={onChanged} onToast={onToast} />
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="section">

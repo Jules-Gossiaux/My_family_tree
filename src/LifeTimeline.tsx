@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { formatDate } from './dates';
-import type { EventInput, EventRow } from '../shared/types';
+import type { EventInput, EventRow, PlaceRow } from '../shared/types';
 
 /** Les mêmes types que le serveur connaît : la valeur s'écrit sans accent, le libellé en français. */
 const TYPES: { value: string; label: string }[] = [
@@ -20,9 +20,13 @@ const CONFIDENCES: { value: string; label: string }[] = [
   { value: 'douteux', label: 'douteux' },
 ];
 
+/** Les lieux déjà écrits, proposés pendant la frappe : un nom recopié trois fois fait trois lieux. */
+const PLACE_LIST_ID = 'lieux-deja-ecrits';
+
 interface Draft {
   type: string;
   dateText: string;
+  place: string;
   description: string;
   confidence: string;
 }
@@ -31,15 +35,21 @@ function draftOf(event: EventRow | null): Draft {
   return {
     type: event?.type ?? 'autre',
     dateText: event?.date?.text ?? '',
+    place: event?.place ?? '',
     description: event?.description ?? '',
     confidence: event?.confidence ?? 'probable',
   };
 }
 
+/**
+ * Le lieu part comme il est tapé : le serveur trouve la ligne qui porte déjà ce nom ou en pose une
+ * nouvelle. Un champ vidé est une demande explicite de rendre le fait à un lieu inconnu.
+ */
 function toInput(draft: Draft): EventInput {
   return {
     type: draft.type,
     dateText: draft.dateText.trim() || null,
+    placeName: draft.place.trim(),
     description: draft.description.trim() || null,
     confidence: draft.confidence,
   };
@@ -94,6 +104,16 @@ function EventForm({
         </label>
       </div>
       <label className="field">
+        <span>Lieu</span>
+        <input
+          value={draft.place}
+          onChange={(event) => onChange({ ...draft, place: event.target.value })}
+          placeholder="ville, hameau, pays…"
+          list={PLACE_LIST_ID}
+          disabled={busy}
+        />
+      </label>
+      <label className="field">
         <span>Ce qui s'est passé</span>
         <input
           value={draft.description}
@@ -126,7 +146,8 @@ function EventForm({
       </div>
       <p className="settings-note">
         Une date que l'ordinateur ne sait pas lire reste écrite telle quelle : aucune année n'est
-        inventée.
+        inventée. Un lieu déjà écrit se propose pendant la frappe ; un nom neuf devient une ligne de
+        la liste des lieux.
       </p>
     </form>
   );
@@ -135,6 +156,8 @@ function EventForm({
 interface Props {
   personId: string;
   events: EventRow[];
+  /** Les lieux de la base : seuls ceux qui portent déjà quelque chose se proposent à la frappe. */
+  places: PlaceRow[];
   /** Un fait écrit ou effacé : la fiche et l'arbre repartent de la même ligne. */
   onChanged: () => void;
 }
@@ -144,7 +167,7 @@ interface Props {
  * ici, pas ailleurs : la saisie rapide du dossier « Modifier » écrit la même ligne, sinon un fait
  * aurait deux dates selon l'endroit où on l'a tapé.
  */
-export default function LifeTimeline({ personId, events, onChanged }: Props) {
+export default function LifeTimeline({ personId, events, places, onChanged }: Props) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -321,6 +344,16 @@ export default function LifeTimeline({ personId, events, onChanged }: Props) {
         </div>
       )}
       {error && <p className="dialog-error">{error}</p>}
+
+      {/* Une seule liste pour toutes les saisies de lieu du dossier : elle porte ce que la base connaît déjà. */}
+      <datalist id={PLACE_LIST_ID}>
+        {places
+          // Un nom sans fait ni fichier derrière est une faute de frappe : le proposer la propagerait.
+          .filter((place) => place.eventCount + place.mediaCount > 0)
+          .map((place) => (
+            <option key={place.id} value={place.name} />
+          ))}
+      </datalist>
     </div>
   );
 }

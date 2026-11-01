@@ -89,9 +89,22 @@ export interface EventInput {
   type?: string;
   dateText?: string | null;
   placeId?: string | null;
+  /** Le lieu tapé tel quel : le serveur le trouve ou le crée, c'est le nom seul qui le désigne. */
+  placeName?: string | null;
   description?: string | null;
   confidence?: string;
   sourceId?: string | null;
+}
+
+/**
+ * Un lieu, tel que l'écran le montre : son nom et ce qui s'y est déjà passé. Les faits et les
+ * fichiers ne sont pas comptés pour décorer — effacer un lieu se refuse mieux quand on le sait.
+ */
+export interface PlaceRow {
+  id: string;
+  name: string;
+  eventCount: number;
+  mediaCount: number;
 }
 
 export interface GraphData {

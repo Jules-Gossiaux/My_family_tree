@@ -251,6 +251,21 @@ Quatre règles la tiennent debout :
 
 **place** — `id`, `name`, `lat`, `lon`, `parent_place_id`. Hiérarchie ville → département → pays.
 
+Trois règles, parce qu'un lieu se tape plus souvent qu'il ne se règle :
+
+- **le nom seul désigne le lieu** : un fait qui écrit « Roubaix » trouve la ligne qui porte déjà ce nom,
+  ou la pose si personne ne l'a encore écrit. Sans quoi trois orthographes d'un même village font trois
+  lieux à la frappe et trois moitiés d'arbre géographique. La comparaison ignore la casse et les espaces ;
+- **un lieu n'entre pas par une fiche à part** : il arrive avec le fait qui l'a vu. Une liste de lieux
+  sans fait derrière n'est qu'un réservoir de fautes de frappe ;
+- **effacer un lieu ne touche ni aux faits ni aux fichiers** : leurs `place_id` sont en
+  `ON DELETE SET NULL`, et le compte rendu dit combien restent sans lieu — c'est ce que l'on veut savoir
+  avant de cliquer. Un lieu mal orthographié se corrige (renommer suit tout ce qui y pointe), il ne
+  s'efface pas.
+
+`lat`, `lon` et `parent_place_id` restent vides : la géographie et la hiérarchie ne sont remplies par
+aucun écran aujourd'hui.
+
 **couple** — `id`, `partner_a`, `partner_b`, `type` (mariage / pacs / concubinage / inconnu),
 `start_date_*`, `end_date_*`, `status` (en cours / divorcé / veuf / séparé), `place_id`.
 C'est l'unité de dessin de l'arbre. Trois choix y comptent :
@@ -309,7 +324,8 @@ jour de doute sur les clés — mais toutes ne sont pas encore nourries. Ce qui 
 | `event` | **écrite et lue en entier depuis la passe 5** : la chronologie de la fiche montre tous les faits, les écrit, les corrige, les efface — et la date tapée sur la fiche reste le fait du même nom |
 | `media`, `media_person` | **remplies et lues depuis la passe 4** : le bac, la galerie d'une personne, le portrait |
 | `branch` | **remplie et lue depuis la passe 3** : nom, teinte, tête de ligne, personnes rangées |
-| `place`, `note`, `source` | posées, traversées par l'export JSON, **rien ne les remplit** : les notes et les sources viennent en passe 5 |
+| `place` | **remplie et lue depuis la passe 5** : le nom tapé sur un fait trouve la ligne ou la pose ; Réglages la renomme et l'efface. `lat`, `lon`, `parent_place_id` restent vides |
+| `note`, `source` | posées, traversées par l'export JSON, **rien ne les remplit** : les notes et les sources viennent avec la suite de la passe 5 |
 | `media_event` | posée, et absente de l'export : le rattachement d'un média à un événement se joue en passe 5 |
 
 L'export JSON porte donc des listes vides plutôt que de les inventer, et une table vide n'est pas une
@@ -370,9 +386,11 @@ sont écrites ; une section « Vie » qui est une chronologie — chaque fait de
 ancien au plus récent, une date non lisible se range à la fin avec son texte intact ; chaque ligne donne
 le nom du fait, la date telle qu'elle a été tapée, le lieu, la description, le degré de confiance, la
 source citée et le compte de fichiers qui s'y rattachent ; « Modifier » ouvre le fait en place (type,
-date libre, ce qui s'est passé, confiance), « + Un fait de plus » en ajoute un, « Retirer ce fait » le
+date libre, lieu, ce qui s'est passé, confiance), « + Un fait de plus » en ajoute un, « Retirer ce fait » le
 supprime après une seconde question ; une seconde naissance ou un second décès est refusé, et le refus
-dit lequel reprendre. La date de naissance et le décès affichés en haut de la fiche sont la même ligne
+dit lequel reprendre. Le champ « Lieu » propose les noms qui portent déjà quelque chose dans la base : un
+nom neuf devient une ligne de lieu, et un nom qui n'a plus rien derrière lui cesse d'être proposé plutôt
+que de propager sa faute de frappe. La date de naissance et le décès affichés en haut de la fiche sont la même ligne
 que le fait de la chronologie : la saisie rapide et l'éditeur de vie écrivent au même endroit. Quatre
 sections de relations — Parents, Unions, Fratrie, Enfants — où chaque nom est cliquable ; un bouton
 « Rattacher… » pour relier deux personnes déjà saisies ; la modification en place ; et la suppression
@@ -381,10 +399,13 @@ fichiers dessus les importe et les rattacher à cette personne, chaque vignette 
 visionneuse, la légende et la date lue se corrigent là, « Faire le portrait » donne à cette image le
 visage de la case et de l'en-tête, et « Retirer de ce dossier » rend le fichier au bac sans rien effacer.
 
-Y manquent encore, et c'est la suite de la passe 5 : le lieu et la source d'un fait se lisent mais ne se
-choisissent pas (ils arrivent avec les tables `place` et `source`), les notes de la fiche, les faits d'une
-union — le serveur les accepte et les rend déjà, la fiche ne les montre pas — et le rattachement d'un
-fichier à un fait.
+L'écran Réglages, lui, tient la liste des lieux : chaque ligne porte le compte de faits — et de fichiers —
+qui y pointent, se renomme sur place, et s'efface après une seconde question qui dit ce qui reste sans
+lieu. On n'y ajoute rien : un lieu entre par un fait.
+
+Y manquent encore, et c'est la suite de la passe 5 : la source d'un fait se lit mais ne se choisit pas
+(elle arrive avec la table `source`), les notes de la fiche, les faits d'une union — le serveur les
+accepte et les rend déjà, la fiche ne les montre pas — et le rattachement d'un fichier à un fait.
 
 ### 8.3 L'annuaire
 
@@ -435,8 +456,8 @@ dans l'arbre, rangées à part, depuis la passe 1.
 Trois échelles sur les mêmes données : frise par personne, frise familiale globale, albums par époque.
 Superposition du contexte historique (guerres, exode) depuis un fichier local. **Passe 5** — la première
 des trois échelles est en place : la section « Vie » de la fiche (§8.2) trie les faits de la personne et
-s'y saisit ; les deux autres demandent les médias de la passe 4 pour être autre chose qu'une liste de
-dates, et viennent avec les lieux et les sources.
+s'y saisit, avec leur lieu ; les deux autres demandent les médias de la passe 4 pour être autre chose
+qu'une liste de dates, et viennent avec les sources.
 
 ### 8.7 Export
 

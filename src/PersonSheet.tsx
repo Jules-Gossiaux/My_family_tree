@@ -5,12 +5,14 @@ import MediaEditor from './MediaEditor';
 import MediaLightbox from './MediaLightbox';
 import { kindOf, prepareUpload, takenOf } from './thumbnails';
 import { formatDate, fullName, initials, lifeSpan } from './dates';
-import type { Branch, Media, Person, PersonDetail, RelationInput } from '../shared/types';
+import type { Branch, Media, Person, PersonDetail, PlaceRow, RelationInput } from '../shared/types';
 
 interface Props {
   personId: string | null;
   refreshKey: number;
   branches: Branch[];
+  /** Les lieux connus de la base, proposés pendant la saisie d'un fait. */
+  places: PlaceRow[];
   onSelect: (personId: string) => void;
   onAdd: (relation: RelationInput, anchorName: string) => void;
   onAttach: (personId: string) => void;
@@ -51,6 +53,7 @@ export default function PersonSheet({
   personId,
   refreshKey,
   branches,
+  places,
   onSelect,
   onAdd,
   onAttach,
@@ -307,7 +310,12 @@ export default function PersonSheet({
       <Section
         title={person.events.length > 0 ? `Vie (${person.events.length})` : 'Vie'}
       >
-        <LifeTimeline personId={person.id} events={person.events} onChanged={onChanged} />
+        <LifeTimeline
+          personId={person.id}
+          events={person.events}
+          places={places}
+          onChanged={onChanged}
+        />
       </Section>
 
       <Section title={person.media.length > 0 ? `Photos et documents (${person.media.length})` : 'Photos et documents'}>

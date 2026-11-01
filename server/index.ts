@@ -24,6 +24,7 @@ import {
   setPersonDateEvent,
   updateEvent,
 } from './life-events';
+import { PlaceError, deletePlace, listPlaces, renamePlace } from './places';
 import {
   backupFile,
   forceBackup,
@@ -519,6 +520,32 @@ app.delete('/api/events/:id', (req, res) => {
 });
 
 /**
+ * Les lieux ne se créent pas à part : un fait qui dit « Roubaix » trouve la ligne ou la pose. On
+ * vient ici les chercher pour les corriger — renommer suit les faits qui pointaient déjà ici,
+ * effacer les rend à un lieu inconnu sans rien leur enlever d'autre.
+ */
+app.get('/api/places', (_req, res) => {
+  res.json({ places: listPlaces() });
+});
+
+app.patch('/api/places/:id', (req, res) => {
+  const body = req.body as { name?: string };
+  try {
+    res.json({ place: renamePlace(req.params.id, body.name ?? '') });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+app.delete('/api/places/:id', (req, res) => {
+  try {
+    res.json({ ok: true, ...deletePlace(req.params.id) });
+  } catch (error) {
+    sendWriteError(res, error);
+  }
+});
+
+/**
  * Une branche est un nom et une couleur posés sur une ligne de l'arbre. Rien n'est deviné : créer
  * une branche sans dire de qui elle part ne range personne.
  */
@@ -590,7 +617,8 @@ function sendWriteError(res: Response, error: unknown): void {
     error instanceof RelationError ||
     error instanceof BranchError ||
     error instanceof ConfigError ||
-    error instanceof LifeEventError
+    error instanceof LifeEventError ||
+    error instanceof PlaceError
   ) {
     res.status(error.status).json({ error: error.message });
     return;

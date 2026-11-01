@@ -1,5 +1,6 @@
 import { db, newId, now } from './db';
 import { parseGenealogyDate, readDateRow } from './dates';
+import { findOrCreatePlace } from './places';
 import type { EventInput, EventRow, GDate } from '../shared/types';
 
 /**
@@ -9,6 +10,9 @@ import type { EventInput, EventRow, GDate } from '../shared/types';
  * comprend pas est gardé comme texte en « unknown » plutôt qu'inventé en date — la chronologie le
  * range alors à la fin de la vie. La confiance et la source s'attachent au fait, jamais à la
  * personne : un même individu a un acte de naissance certain et une profession rapportée par un neveu.
+ * Le lieu, lui, s'écrit par son nom : « Roubaix » posé deux fois ne fait qu'une ligne, et un nom
+ * jamais vu en ouvre une nouvelle (`places.ts`) — demander à l'utilisateur de choisir d'abord son
+ * lieu dans une liste vide, c'est lui faire faire le travail de la base.
  */
 export class LifeEventError extends Error {
   constructor(
@@ -104,10 +108,33 @@ function checkedOwner(input: EventInput, current?: Row): { personId: string | nu
   return { personId, coupleId };
 }
 
-function checkedPlace(input: EventInput, current?: Row): string | null {
-  const placeId = input.placeId === undefined ? (current?.place_id ?? null) : input.placeId || null;
+/**
+ * Le lieu tel qu'un écrit l'a dit : soit une ligne que la base connaît déjà, soit le nom que l'on
+ * tape — et alors la base le trouve ou le crée. Les deux à la fois serait deux réponses pour une place.
+ */
+type PlaceChoice = { placeId: string | null; createFrom: string | null };
+
+function checkedPlace(input: EventInput, current?: Row): PlaceChoice {
+  const hasId = input.placeId !== undefined;
+  const hasName = input.placeName !== undefined;
+  if (hasId && hasName) {
+    throw new LifeEventError(400, 'Un lieu se dit par son nom ou par son identifiant, pas les deux.');
+  }
+  if (hasName) {
+    const name = (input.placeName ?? '').trim();
+    return { placeId: null, createFrom: name || null };
+  }
+  const placeId = hasId ? (input.placeId || null) : (current?.place_id ?? null);
   if (placeId && !knownPlace(placeId)) throw new LifeEventError(404, 'Ce lieu n’existe pas dans la base.');
-  return placeId;
+  return { placeId, createFrom: null };
+}
+
+/**
+ * Le nom ne devient une ligne qu'une fois tout le reste validé : un refus pour une seconde naissance
+ * ne doit pas laisser un lieu orphelin dans la liste.
+ */
+function resolvePlace(place: PlaceChoice): string | null {
+  return place.createFrom ? findOrCreatePlace(place.createFrom).place.id : place.placeId;
 }
 
 function checkedSource(input: EventInput, current?: Row): string | null {
@@ -191,31 +218,34 @@ export function createEvent(input: EventInput): EventRow {
   const owner = checkedOwner(input);
   uniqueGuard(owner.personId, type);
   const date = checkedDate(input.dateText);
-  const placeId = checkedPlace(input);
+  const place = checkedPlace(input);
   const sourceId = checkedSource(input);
   const confidence = checkedConfidence(input.confidence ?? 'probable');
   const description = (input.description ?? '').trim() || null;
 
   const id = newId();
-  db.prepare(
-    `INSERT INTO event (id, person_id, couple_id, type, date_min, date_max, date_qualifier, date_text,
-                        place_id, description, source_id, confidence, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    id,
-    owner.personId,
-    owner.coupleId,
-    type,
-    date?.min ?? null,
-    date?.max ?? null,
-    date?.qualifier ?? 'unknown',
-    date?.text ?? null,
-    placeId,
-    description,
-    sourceId,
-    confidence,
-    now(),
-  );
+  // Le lieu se crée dans la même écriture que le fait : un échec ici ne laisse aucune ligne orpheline.
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO event (id, person_id, couple_id, type, date_min, date_max, date_qualifier, date_text,
+                          place_id, description, source_id, confidence, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      owner.personId,
+      owner.coupleId,
+      type,
+      date?.min ?? null,
+      date?.max ?? null,
+      date?.qualifier ?? 'unknown',
+      date?.text ?? null,
+      resolvePlace(place),
+      description,
+      sourceId,
+      confidence,
+      now(),
+    );
+  })();
   return getEvent(id);
 }
 
@@ -228,31 +258,33 @@ export function updateEvent(id: string, input: EventInput): EventRow {
   uniqueGuard(owner.personId, type, id);
   const dateTouched = input.dateText !== undefined;
   const date = dateTouched ? checkedDate(input.dateText) : null;
-  const placeId = checkedPlace(input, current);
+  const place = checkedPlace(input, current);
   const sourceId = checkedSource(input, current);
   const confidence = input.confidence === undefined ? current.confidence : checkedConfidence(input.confidence);
   const description =
     input.description === undefined ? current.description : (input.description ?? '').trim() || null;
 
-  db.prepare(
-    `UPDATE event
-        SET person_id = ?, couple_id = ?, type = ?, date_min = ?, date_max = ?, date_qualifier = ?,
-            date_text = ?, place_id = ?, description = ?, source_id = ?, confidence = ?
-      WHERE id = ?`,
-  ).run(
-    owner.personId,
-    owner.coupleId,
-    type,
-    dateTouched ? (date?.min ?? null) : current.date_min,
-    dateTouched ? (date?.max ?? null) : current.date_max,
-    dateTouched ? (date?.qualifier ?? 'unknown') : current.date_qualifier,
-    dateTouched ? (date?.text ?? null) : current.date_text,
-    placeId,
-    description,
-    sourceId,
-    confidence,
-    id,
-  );
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE event
+          SET person_id = ?, couple_id = ?, type = ?, date_min = ?, date_max = ?, date_qualifier = ?,
+              date_text = ?, place_id = ?, description = ?, source_id = ?, confidence = ?
+        WHERE id = ?`,
+    ).run(
+      owner.personId,
+      owner.coupleId,
+      type,
+      dateTouched ? (date?.min ?? null) : current.date_min,
+      dateTouched ? (date?.max ?? null) : current.date_max,
+      dateTouched ? (date?.qualifier ?? 'unknown') : current.date_qualifier,
+      dateTouched ? (date?.text ?? null) : current.date_text,
+      resolvePlace(place),
+      description,
+      sourceId,
+      confidence,
+      id,
+    );
+  })();
   return getEvent(id);
 }
 

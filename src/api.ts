@@ -9,6 +9,7 @@ import type {
   GraphData,
   Media,
   MediaKind,
+  PlaceRow,
   PersonDetail,
   RelationInput,
 } from '../shared/types';
@@ -99,6 +100,15 @@ export const api = {
   updateEvent: (id: string, input: EventInput) =>
     request<{ event: EventRow }>(`/api/events/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
   deleteEvent: (id: string) => request<{ ok: true }>(`/api/events/${id}`, { method: 'DELETE' }),
+
+  /** Les lieux connus, pour proposer ce qui est déjà écrit plutôt que de le recopier. */
+  places: () => request<{ places: PlaceRow[] }>('/api/places'),
+  /** Renommer ne déplace aucun fait : les lignes qui pointaient déjà ici suivent le nouveau nom. */
+  updatePlace: (id: string, name: string) =>
+    request<{ place: PlaceRow }>(`/api/places/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  /** Effacer un lieu rend ses faits et ses fichiers à un lieu inconnu, sans rien effacer d'eux. */
+  deletePlace: (id: string) =>
+    request<{ ok: true; events: number; media: number }>(`/api/places/${id}`, { method: 'DELETE' }),
 
   /** Ce qui attend encore un visage. */
   unattachedMedia: () => request<{ media: Media[] }>('/api/media?state=a-relier'),

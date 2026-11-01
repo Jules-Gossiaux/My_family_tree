@@ -33,6 +33,7 @@ server/          API HTTP + accès SQLite
   relations.ts   rattachement d'une personne à une autre, avec ses refus
   branches.ts    lignes de famille : nom, teinte, tête de ligne et personnes rangées
   life-events.ts faits d'une vie : type, date libre, lieu, source, confiance
+  places.ts      lieux trouvés ou posés par le nom qu'écrit un fait, renommés et effacés
   backup.ts      archive ZIP datée, au démarrage et pendant la session
   export.ts      tout l'arbre en un JSON lisible sans l'application
   restore.ts     recharge une archive : contrôle, copie de sûreté, échange
@@ -44,17 +45,17 @@ src/             interface React
   treeLayout.ts  calcul de position des cases, et des liens que la descendance ne peut pas dessiner
   TreeCanvas.tsx rendu SVG, zoom, déplacement, teintes de branche et leurs pastilles
   PersonSheet.tsx fiche latérale, galerie de la personne, portrait et branche
-  LifeTimeline.tsx chronologie de la vie : ajouter, corriger et retirer un fait
+  LifeTimeline.tsx chronologie de la vie : ajouter, corriger et retirer un fait et son lieu
   AddPersonDialog.tsx saisie rapide
   AttachDialog.tsx choix d'une personne déjà existante à rattacher
-  SettingsDialog.tsx écran Réglages : dossier, souche, « moi », branches, copies, export
+  SettingsDialog.tsx écran Réglages : dossier, souche, « moi », branches, lieux, copies, export
   saveFile.ts    écrire un fichier produit par le serveur là où l'utilisateur le veut
   thumbnails.ts  vignette dessinée par le navigateur, type et date pris du fichier
   MediaInbox.tsx bac d'entrée : importer en lot puis rattacher à plusieurs personnes
   MediaLightbox.tsx visionneuse plein écran, avec ou sans éditeur à l'intérieur
   MediaEditor.tsx légende, date lue et type d'un média déjà en place
-tests/           dates, relations, branches, réglages, faits de la vie, intégrité, migration, export,
-                 archives, restauration, médias (`npm test`)
+tests/           dates, relations, branches, réglages, faits de la vie, lieux, intégrité, migration,
+                 export, archives, restauration, médias (`npm test`)
 start.bat        démarrer l'application
 restore.bat      recharger une archive de sauvegarde
 ```
@@ -221,9 +222,12 @@ deux colonnes passent en `ON DELETE SET NULL`, et `couple` n'est supprimée par
 | PATCH | `/api/branches/:id` | nom, teinte, tête de ligne — ne déplace aucune personne |
 | POST | `/api/branches/:id/descendants` | range la descendance de la tête (ou de `rootPersonId` donné) ; répond `assigned: 0` si tout le monde était déjà classé |
 | DELETE | `/api/branches/:id` | efface la branche et rend ses personnes au hors-classe |
-| POST | `/api/events` | un fait de la vie : `personId` **ou** `coupleId`, `type`, `dateText` en français libre, `description`, `confidence`, `placeId`, `sourceId` — 400 si la forme ne convient pas, 404 si le sujet est inconnu, 409 si c'est une seconde naissance ou un second décès |
-| PATCH | `/api/events/:id` | corrige un fait : un champ absent laisse ce qui est écrit, `dateText: ""` rend la date, `placeId` ou `sourceId` à `null` rendent le lieu ou la source |
+| POST | `/api/events` | un fait de la vie : `personId` **ou** `coupleId`, `type`, `dateText` en français libre, `placeName` (le nom tapé, qui trouve la ligne de lieu ou la pose), `description`, `confidence`, `placeId`, `sourceId` — 400 si la forme ne convient pas, 404 si le sujet est inconnu, 409 si c'est une seconde naissance ou un second décès. Tout se valide avant toute écriture : un refus ne laisse pas un lieu neuf orphelin dans la base |
+| PATCH | `/api/events/:id` | corrige un fait : un champ absent laisse ce qui est écrit, `dateText: ""` rend la date, `placeName: ""`, `placeId` ou `sourceId` à `null` rendent le lieu ou la source |
 | DELETE | `/api/events/:id` | efface un fait ; un fichier qui y était relié garde son image, il perd le lien |
+| GET | `/api/places` | tous les lieux, triés par nom, avec le compte de faits et de fichiers qui y pointent |
+| PATCH | `/api/places/:id` | renommer : les lignes qui pointaient déjà ici suivent le nouveau nom ; 409 si un autre lieu le porte déjà, et le refus nomme lequel |
+| DELETE | `/api/places/:id` | effacer un nom : ses faits et ses fichiers restent, ils deviennent sans lieu ; la réponse compte ce qui reste |
 | PUT | `/api/config` | `rootPersonId` (la souche) et `mePersonId` (« moi »), réglés séparément : un champ absent laisse ce qui est écrit, `null` le retire, une id inconnue est refusée en 400 sans rien déplacer |
 | PUT | `/api/config/data-dir` | dossier de données : écrit `config.local.json`, demande un redémarrage |
 | POST | `/api/backup` | archive ZIP immédiate |
@@ -405,11 +409,25 @@ Les faits d'une vie, d'abord, parce que tout le reste du dossier s'accroche à e
   avaient deux qui faisaient la même chose
 - [x] tests serveur des faits de la vie (`tests/life-events.test.ts`, 25 cas ; 121 tests au total)
 
+Les lieux d'un fait, ensuite, parce qu'une ville sans écran se recopie et se disperse :
+
+- [x] `server/places.ts` : le nom seul désigne un lieu — la ligne qui le porte déjà est retrouvée sans
+  distinction de casse ni espace de trop, sinon elle est posée. Rien ne se saisit à part
+- [x] un fait écrit son lieu par `placeName` : les validations passent d'abord, l'écriture des deux
+  tables se fait dans une transaction — un refus ne laisse pas un nom neuf orphelin dans la base
+- [x] routes `GET`, `PATCH` et `DELETE /api/places` : la liste avec ses comptes, un renommage qui suit
+  ce qui pointait déjà ici, un effacement qui rend les faits et les fichiers à un lieu inconnu en
+  comptant ce qui reste
+- [x] le champ « Lieu » de la chronologie propose les noms déjà écrits et passe sous silence ceux qui ne
+  portent plus rien : une faute de frappe ne se repique pas en suggestion
+- [x] une section « Lieux » dans Réglages, sur les lignes de branche : compte par ligne, renommage,
+  suppression à deux temps
+- [x] tests serveur des lieux (`tests/places.test.ts`, 13 cas ; 134 tests au total)
+
 Ce qui reste de la passe 5 :
 
 - [ ] un écran pour les faits d'une union : le serveur les accepte et les rend déjà dans l'ordre
   (`eventsOfCouple`), la fiche ne les montre pas encore
-- [ ] les lieux : `server/places.ts`, un nom trouvé ou créé, et le champ lieu dans l'éditeur d'un fait
 - [ ] les notes et les sources : `server/notes.ts`, `server/sources.ts`, une source encore citée ne
   s'efface pas ; les notes se lisent et s'écrivent sur la fiche
 - [ ] rattacher un fichier à un fait (`media_event`), le montrer sur la ligne de chronologie et porter
@@ -435,9 +453,13 @@ Ce qui manque encore, avec le fil qui le reprend :
   fichiers restent sur le disque, les médias retournent dans « à rattacher », mais recréer la personne
   ne repeuple pas sa galerie — il faut les rattacher à nouveau.
 - **Le bac ne voit que les personnes.** Une image rattachée à un événement (`media_event`) n'a encore
-  aucun écran, et le lieu comme la source d'un fait se lisent sur la chronologie mais ne se choisissent
-  pas encore : les tables `place` et `source` restent vides tant que la suite de la passe 5 ne les a pas
-  remplies.
+  aucun écran, et la source d'un fait se lit sur la chronologie mais ne se choisit pas encore : la table
+  `source` reste vide tant que la suite de la passe 5 ne l'a pas remplie.
+- **Un lieu n'a que son nom.** `lat`, `lon` et `parent_place_id` ne sont remplis par personne : ni
+  hiérarchie ville → pays, ni carte. `media.place_id` attend son écran aussi, donc une photo ne dit
+  toujours pas où elle a été prise. Et deux orthographes d'un même lieu ne se fusionnent pas encore :
+  renommer vers un nom déjà porté est refusé et nomme celui qui l'a, il faut réécrire le lieu sur chaque
+  fait — c'est précisément ce que la liste « Lieux » des Réglages rend visible.
 - **La recherche ne voit pas les surnoms.** Elle filtre sur les prénoms, le nom de famille et le nom de
   naissance, jamais sur `name_variant` : « Tata Michèle » ne se trouve pas, alors que c'est souvent le seul
   nom que la famille connaît. Ce n'est pas un `OR` à ajouter côté client — `/api/graph` ne renvoie pas les
