@@ -76,6 +76,31 @@ export async function mediaUrl(media: Media, part: 'original' | 'thumb'): Promis
   return data.signedUrl;
 }
 
+/** Ce que la fiche corrige d'une personne : seulement ce qui a été touché, le reste ne bouge pas. */
+type PersonPatch = Partial<CreatePersonInput> & {
+  nickname?: string | null;
+  portraitMediaId?: string | null;
+  branchId?: string | null;
+};
+
+/**
+ * La date n'est envoyée, déjà lue, que si son texte a été nommé : une date que l'on ne dit pas
+ * n'est pas une date que l'on efface.
+ */
+function avecDateLue(input: { dateText?: string | null }): Record<string, unknown> {
+  return input.dateText === undefined
+    ? { ...input }
+    : { ...input, date: parseGenealogyDate(input.dateText) };
+}
+
+/** Les deux dates de la fiche, selon la même règle que le fait de la vie. */
+function avecDatesLues(input: PersonPatch): Record<string, unknown> {
+  const p: Record<string, unknown> = { ...input };
+  if (input.birthText !== undefined) p.birthDate = parseGenealogyDate(input.birthText);
+  if (input.deathText !== undefined) p.deathDate = parseGenealogyDate(input.deathText);
+  return p;
+}
+
 export const api = {
   graph: () => vue<GraphData>('graph_json'),
 
@@ -108,19 +133,11 @@ export const api = {
    * garde pas.
    */
   createPerson: async (input: CreatePersonInput) => ({
-    id: await vue<string>('create_person', {
-      p: {
-        ...input,
-        birthDate: parseGenealogyDate(input.birthText),
-        deathDate: parseGenealogyDate(input.deathText),
-      },
-    }),
+    id: await vue<string>('create_person', { p: avecDatesLues(input) }),
   }),
-  updatePerson: (
-    id: string,
-    input: Partial<CreatePersonInput> & { nickname?: string; branchId?: string | null },
-  ) => pasEncoreEnLigne(),
-  deletePerson: (id: string) => pasEncoreEnLigne(),
+  updatePerson: (id: string, input: PersonPatch) =>
+    vue<void>('update_person', { p_id: id, p: avecDatesLues(input) }),
+  deletePerson: (id: string) => vue<void>('delete_person', { p_id: id }),
   /** Deux personnes que la base connaît déjà : un enfant, un parent, une union. */
   attachRelation: (id: string, relation: RelationInput) =>
     vue<void>('attach_relation', { p_subject_id: id, p: relation }),
@@ -142,7 +159,8 @@ export const api = {
   /** Un fait de la vie : il porte une personne ou une union, et se date en français libre. */
   createEvent: (input: EventInput) =>
     vue<EventRow>('create_event', { p: { ...input, date: parseGenealogyDate(input.dateText) } }),
-  updateEvent: (id: string, input: EventInput) => pasEncoreEnLigne() as Promise<{ event: EventRow }>,
+  updateEvent: (id: string, input: EventInput) =>
+    vue<EventRow>('update_event', { p_id: id, p: avecDateLue(input) }),
   deleteEvent: (id: string) => vue<void>('delete_event', { p_id: id }),
 
   /** Renommer ne déplace aucun fait : les lignes qui pointaient déjà ici suivent le nouveau nom. */
