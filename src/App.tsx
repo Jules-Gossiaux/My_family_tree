@@ -53,6 +53,7 @@ export default function App() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [dataDir, setDataDir] = useState('');
   const [dataDirFromEnv, setDataDirFromEnv] = useState(false);
+  const [onServer, setOnServer] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
   const [inbox, setInbox] = useState(false);
@@ -82,6 +83,7 @@ export default function App() {
       setUnattached(state.counts.mediaUnattached);
       setDataDir(state.dataDir);
       setDataDirFromEnv(state.dataDirFromEnv);
+      setOnServer(state.onServer);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de charger les données');
@@ -357,10 +359,16 @@ export default function App() {
           )}
         </div>
 
-        <span className="backup-note">{backupLabel(backup)}</span>
-        <button type="button" className="ghost" onClick={runBackup} disabled={backupBusy}>
-          {backupBusy ? 'Sauvegarde…' : 'Sauvegarder'}
-        </button>
+        {onServer ? (
+          <span className="backup-note">enregistré à chaque modification</span>
+        ) : (
+          <>
+            <span className="backup-note">{backupLabel(backup)}</span>
+            <button type="button" className="ghost" onClick={runBackup} disabled={backupBusy}>
+              {backupBusy ? 'Sauvegarde…' : 'Sauvegarder'}
+            </button>
+          </>
+        )}
 
         <button
           type="button"
@@ -376,7 +384,11 @@ export default function App() {
           type="button"
           className="ghost"
           onClick={() => setSettings(true)}
-          title="Dossier de données, souche de l’arbre, copies et export"
+          title={
+            onServer
+              ? 'Où vit l’arbre, sa souche, ses branches, lieux et sources'
+              : 'Dossier de données, souche de l’arbre, copies et export'
+          }
         >
           Réglages
         </button>
@@ -606,6 +618,7 @@ export default function App() {
         <SettingsDialog
           dataDir={dataDir}
           dataDirFromEnv={dataDirFromEnv}
+          onServer={onServer}
           rootPersonId={graph?.rootId ?? null}
           mePersonId={meId}
           persons={graph?.persons ?? []}

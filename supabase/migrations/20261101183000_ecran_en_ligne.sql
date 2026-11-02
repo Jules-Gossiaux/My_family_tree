@@ -295,12 +295,17 @@ $$;
 -- La barre du haut : combien de cases, quelle souche, qui je suis. Le « moi » ne peut plus
 -- etre global des que deux personnes regardent le meme arbre — il se lit sur la ligne du
 -- compte qui demande, pas dans un reglage partage.
+--
+-- `onServer` est dit par la base elle-meme : les ecrans qui offrent un choix de dossier ou
+-- d'archive sur le disque n'ont rien a proposer ici, et un bouton qui ne peut que echouer se
+-- prend pour une panne.
 create or replace function public.state_json() returns jsonb
 language sql stable security invoker set search_path = ''
 as $$
   select jsonb_build_object(
     'dataDir', 'En ligne',
     'dataDirFromEnv', false,
+    'onServer', true,
     'rootPersonId', (select t.root_person_id from public.tree_setting t where t.id = 1),
     'mePersonId', (select m.person_id from public.family_member m where m.auth_uid = (select auth.uid())),
     'counts', jsonb_build_object(

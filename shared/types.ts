@@ -240,6 +240,8 @@ export interface AppState {
   dataDir: string;
   /** Le dossier courant vient de la variable FAMILY_DATA_DIR : ce choix prime sur l'écran Réglages. */
   dataDirFromEnv: boolean;
+  /** L'arbre vit sur un serveur : les écrans n'offrent alors ni dossier à choisir ni archive à poser. */
+  onServer: boolean;
   rootPersonId: string | null;
   /** Qui vous êtes dans l'arbre — distinct de la souche, qui dit seulement d'où part la descendance. */
   mePersonId: string | null;

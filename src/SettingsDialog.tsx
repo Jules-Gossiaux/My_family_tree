@@ -7,6 +7,8 @@ import type { BackupInfo, Branch, Person, PlaceRow, SourceInput, SourceRow } fro
 interface Props {
   dataDir: string;
   dataDirFromEnv: boolean;
+  /** L'arbre est sur le serveur : le dossier de données et les archives n'ont plus rien à régler ici. */
+  onServer: boolean;
   rootPersonId: string | null;
   mePersonId: string | null;
   persons: Person[];
@@ -512,6 +514,7 @@ function SourceEntry({
 export default function SettingsDialog({
   dataDir,
   dataDirFromEnv,
+  onServer,
   rootPersonId,
   mePersonId,
   persons,
@@ -545,8 +548,8 @@ export default function SettingsDialog({
   };
 
   useEffect(() => {
-    void reloadBackups();
-  }, []);
+    if (!onServer) void reloadBackups();
+  }, [onServer]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -642,40 +645,52 @@ export default function SettingsDialog({
       <div className="dialog dialog-settings" onMouseDown={(event) => event.stopPropagation()}>
         <h2 className="dialog-title">Réglages</h2>
 
-        <div className="section">
-          <h3 className="section-title">Dossier de données</h3>
-          <p className="settings-value">{dataDir}</p>
-          {dataDirFromEnv && (
+        {onServer ? (
+          <div className="section">
+            <h3 className="section-title">Où vit l’arbre</h3>
+            <p className="settings-value">{dataDir}</p>
             <p className="settings-note">
-              Ce chemin vient de la variable <code>FAMILY_DATA_DIR</code> : elle prime sur le choix
-              fait ici.
+              Il n’y a pas de dossier à choisir : tout le monde écrit dans la même base, sur le
+              serveur, et chaque modification s’y pose aussitôt. La copie de secours de cette base se
+              conduit côté serveur, pas depuis cette fenêtre.
             </p>
-          )}
-          <div className="field-row align-end">
-            <label className="field">
-              <span>Changer pour</span>
-              <input
-                value={draftDir}
-                onChange={(event) => setDraftDir(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') void changeDir();
-                }}
-                placeholder="D:\Genealogie"
-                spellCheck={false}
-                autoComplete="off"
-              />
-            </label>
-            <button
-              type="button"
-              className="ghost"
-              onClick={changeDir}
-              disabled={busy !== null || !draftDir.trim()}
-            >
-              {busy === 'dir' ? 'Enregistrement…' : 'Enregistrer'}
-            </button>
           </div>
-          {dirNote && <p className="pick-summary">{dirNote}</p>}
-        </div>
+        ) : (
+          <div className="section">
+            <h3 className="section-title">Dossier de données</h3>
+            <p className="settings-value">{dataDir}</p>
+            {dataDirFromEnv && (
+              <p className="settings-note">
+                Ce chemin vient de la variable <code>FAMILY_DATA_DIR</code> : elle prime sur le choix
+                fait ici.
+              </p>
+            )}
+            <div className="field-row align-end">
+              <label className="field">
+                <span>Changer pour</span>
+                <input
+                  value={draftDir}
+                  onChange={(event) => setDraftDir(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') void changeDir();
+                  }}
+                  placeholder="D:\Genealogie"
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+              </label>
+              <button
+                type="button"
+                className="ghost"
+                onClick={changeDir}
+                disabled={busy !== null || !draftDir.trim()}
+              >
+                {busy === 'dir' ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
+            {dirNote && <p className="pick-summary">{dirNote}</p>}
+          </div>
+        )}
 
         <div className="section">
           <h3 className="section-title">Souche de l'arbre</h3>
@@ -697,7 +712,7 @@ export default function SettingsDialog({
                 ))}
               </select>
               <p className="settings-note">
-                L’arbre et l’export partent de cette personne. Le bouton « Faire la souche de l’arbre
+                L’arbre part de cette personne. Le bouton « Faire la souche de l’arbre
                 » du menu d’une personne fait la même chose. Sans personne de référence, l’écran
                 remonte de lui-même à qui n’a aucun parent dans la base.
               </p>
@@ -857,58 +872,69 @@ export default function SettingsDialog({
           </div>
         </div>
 
-        <div className="section">
-          <h3 className="section-title">Sauvegardes et export</h3>
-          <p className="settings-note">
-            L’application archive la base et les médias dans <code>sauvegardes\</code> et garde les
-            vingt dernières copies. Une copie sur le même disque ne protège de rien : « Copier
-            vers… » range l’archive sur un autre support, et l’export JSON se relit sans
-            l’application.
-          </p>
-          <div className="actions">
-            <button type="button" onClick={runBackup} disabled={busy !== null}>
-              {busy === 'backup' ? 'Sauvegarde…' : 'Sauvegarder maintenant'}
-            </button>
-            <button
-              type="button"
-              onClick={() => save(api.exportJsonUrl, 'arbre.json', 'export')}
-              disabled={busy !== null}
-            >
-              {busy === 'export' ? 'Export…' : 'Enregistrer l’arbre en JSON…'}
-            </button>
+        {onServer ? (
+          <div className="section">
+            <h3 className="section-title">Sauvegardes et export</h3>
+            <p className="settings-note">
+              Rien à archiver ni à recharger depuis cette fenêtre : l’arbre en ligne est déjà sur la
+              base du serveur, qui se sauvegarde elle-même, et chaque écriture s’y pose aussitôt. La
+              copie qui protège vraiment — celle qui sort de la machine — se conduit côté serveur.
+            </p>
           </div>
-          {backups.length === 0 ? (
-            <p className="settings-note">Aucune archive pour l’instant.</p>
-          ) : (
-            <ul className="file-list">
-              {backups.map((backup) => (
-                <li key={backup.name}>
-                  <span className="file-name">{archiveDate(backup)}</span>
-                  <span className="file-meta">
-                    {reason(backup.name)} · {size(backup.size)}
-                  </span>
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => save(api.backupFileUrl(backup.name), backup.name, 'copy')}
-                    disabled={busy !== null}
-                  >
-                    {busy === 'copy' && copyingName === backup.name
-                      ? 'Copie…'
-                      : 'Copier vers…'}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="settings-note">
-            Recharger une archive ne se commande pas ici : l’application ne peut pas remplacer la
-            base sur laquelle elle est assise. Fermez-la (la fenêtre ouverte par{' '}
-            <code>start.bat</code>), double-cliquez <code>restore.bat</code> dans ce dossier,
-            choisissez le numéro de l’archive et tapez OUI. Ce qui était en place est copié avant
-            d’être remplacé, donc le voyage a un retour.
-          </p>
-        </div>
+        ) : (
+          <div className="section">
+            <h3 className="section-title">Sauvegardes et export</h3>
+            <p className="settings-note">
+              L’application archive la base et les médias dans <code>sauvegardes\</code> et garde les
+              vingt dernières copies. Une copie sur le même disque ne protège de rien : « Copier
+              vers… » range l’archive sur un autre support, et l’export JSON se relit sans
+              l’application.
+            </p>
+            <div className="actions">
+              <button type="button" onClick={runBackup} disabled={busy !== null}>
+                {busy === 'backup' ? 'Sauvegarde…' : 'Sauvegarder maintenant'}
+              </button>
+              <button
+                type="button"
+                onClick={() => save(api.exportJsonUrl, 'arbre.json', 'export')}
+                disabled={busy !== null}
+              >
+                {busy === 'export' ? 'Export…' : 'Enregistrer l’arbre en JSON…'}
+              </button>
+            </div>
+            {backups.length === 0 ? (
+              <p className="settings-note">Aucune archive pour l’instant.</p>
+            ) : (
+              <ul className="file-list">
+                {backups.map((backup) => (
+                  <li key={backup.name}>
+                    <span className="file-name">{archiveDate(backup)}</span>
+                    <span className="file-meta">
+                      {reason(backup.name)} · {size(backup.size)}
+                    </span>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => save(api.backupFileUrl(backup.name), backup.name, 'copy')}
+                      disabled={busy !== null}
+                    >
+                      {busy === 'copy' && copyingName === backup.name
+                        ? 'Copie…'
+                        : 'Copier vers…'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="settings-note">
+              Recharger une archive ne se commande pas ici : l’application ne peut pas remplacer la
+              base sur laquelle elle est assise. Fermez-la (la fenêtre ouverte par{' '}
+              <code>start.bat</code>), double-cliquez <code>restore.bat</code> dans ce dossier,
+              choisissez le numéro de l’archive et tapez OUI. Ce qui était en place est copié avant
+              d’être remplacé, donc le voyage a un retour.
+            </p>
+          </div>
+        )}
 
         {error && <p className="dialog-error">{error}</p>}
 

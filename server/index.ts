@@ -217,6 +217,7 @@ app.get('/api/state', (_req, res) => {
   res.json({
     dataDir: DATA_DIR,
     dataDirFromEnv: Boolean(process.env.FAMILY_DATA_DIR?.trim()),
+    onServer: false,
     rootPersonId: config.rootPersonId,
     mePersonId: config.mePersonId,
     counts: { persons: persons.n, couples: couples.n, media: media.n, mediaUnattached: unattached.n },

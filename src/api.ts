@@ -38,15 +38,15 @@ async function vue<T>(nom: string, parametres?: Record<string, unknown>): Promis
 }
 
 /**
- * Ce qui n'est pas encore écrit. La base SQLite du disque n'est plus la source de vérité depuis
- * que l'arbre vit sur le serveur : l'enregistrer là produirait des changements que personne
- * d'autre ne verrait jamais, et un arbre à moitié écrit ne se rattrape pas. Un refus net vaut
- * mieux qu'une perte.
+ * Ce que le disque seul sait faire. Écrire une archive dans `sauvegardes/`, la relister et choisir le
+ * dossier des données n'ont pas de sens depuis une adresse en ligne : la base vit sur un serveur que
+ * son hébergeur sauvegarde, et l'application n'y pose rien. Le refus est dit net plutôt que de
+ * laisser croire à un bouton cassé.
  */
-function pasEncoreEnLigne(): Promise<never> {
+function seulementSurLeDisque(): Promise<never> {
   return Promise.reject(
     new Error(
-      "L'enregistrement en ligne n'est pas encore écrit : depuis cette adresse, l'arbre se consulte mais ne se modifie pas.",
+      'Ceci se passe sur le disque, pas en ligne : ici, chaque modification s’écrit tout de suite dans la base du serveur.',
     ),
   );
 }
@@ -150,8 +150,8 @@ export const api = {
   /** Ce qui attend encore un visage. */
   unattachedMedia: async () => ({ media: await vue<Media[]>('unattached_media_json') }),
 
-  backup: () => pasEncoreEnLigne(),
-  backups: () => pasEncoreEnLigne() as Promise<{ backups: BackupInfo[] }>,
+  backup: () => seulementSurLeDisque(),
+  backups: () => seulementSurLeDisque() as Promise<{ backups: BackupInfo[] }>,
   /** Adresses des fichiers que l'on enregistre ailleurs que dans le dossier de données. */
   backupFileUrl: (name: string) => `/api/backups/file?name=${encodeURIComponent(name)}`,
   exportJsonUrl: '/api/export/json',
@@ -172,9 +172,12 @@ export const api = {
     vue<void>('attach_relation', { p_subject_id: id, p: relation }),
   /** La souche se règle en ligne : la fonction SQL refuse un lecteur avant de toucher la ligne. */
   setRoot: (rootPersonId: string | null) => vue<void>('set_root', { p_person_id: rootPersonId }),
-  /** Qui vous êtes dans l'arbre — le réglage que « Me recentrer » retrouve. */
-  setMe: (mePersonId: string | null) => pasEncoreEnLigne(),
-  setDataDir: (dataDir: string) => pasEncoreEnLigne() as Promise<DataDirResult>,
+  /**
+   * Qui vous êtes dans l'arbre — le réglage que « Me recentrer » retrouve. Il se pose sur la ligne du
+   * compte, pas sur l'arbre : un cousin en lecture seule peut se désigner lui-même.
+   */
+  setMe: (mePersonId: string | null) => vue<void>('set_me', { p_person_id: mePersonId }),
+  setDataDir: (dataDir: string) => seulementSurLeDisque() as Promise<DataDirResult>,
 
   /** Une branche : un nom, une couleur, et la personne dont elle part. */
   createBranch: async (input: BranchInput & { includeDescendants?: boolean }) => ({
