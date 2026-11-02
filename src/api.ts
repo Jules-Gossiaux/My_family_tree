@@ -164,21 +164,30 @@ export const api = {
   deleteEvent: (id: string) => vue<void>('delete_event', { p_id: id }),
 
   /** Renommer ne déplace aucun fait : les lignes qui pointaient déjà ici suivent le nouveau nom. */
-  updatePlace: (id: string, name: string) => pasEncoreEnLigne() as Promise<{ place: PlaceRow }>,
+  updatePlace: async (id: string, name: string) => ({
+    place: await vue<PlaceRow>('update_place', { p_id: id, p: { name } }),
+  }),
   /** Effacer un lieu rend ses faits et ses fichiers à un lieu inconnu, sans rien effacer d'eux. */
-  deletePlace: (id: string) => pasEncoreEnLigne() as Promise<{ ok: true; events: number; media: number }>,
+  deletePlace: (id: string) =>
+    vue<{ ok: true; events: number; media: number }>('delete_place', { p_id: id }),
 
-  createSource: (input: SourceInput) => pasEncoreEnLigne() as Promise<{ source: SourceRow }>,
+  createSource: async (input: SourceInput) => ({
+    source: await vue<SourceRow>('create_source', { p: input }),
+  }),
   /** Corriger une référence suit les faits qui la citent : la source reste la même ligne. */
-  updateSource: (id: string, input: SourceInput) => pasEncoreEnLigne() as Promise<{ source: SourceRow }>,
+  updateSource: async (id: string, input: SourceInput) => ({
+    source: await vue<SourceRow>('update_source', { p_id: id, p: input }),
+  }),
   /** Une source encore citée se refuse : le message compte les citations à retirer avant. */
-  deleteSource: (id: string) => pasEncoreEnLigne(),
+  deleteSource: (id: string) => vue<void>('delete_source', { p_id: id }),
 
   /** Une note se pose sur ce qu'elle commente : son texte part avec la cible qu'on lui donne. */
-  createNote: (input: NoteInput) => pasEncoreEnLigne() as Promise<{ note: NoteRow }>,
+  createNote: async (input: NoteInput) => ({ note: await vue<NoteRow>('create_note', { p: input }) }),
   /** Corriger une note n'en change pas la date : l'écran dit « écrite le », pas « modifiée le ». */
-  updateNote: (id: string, body: string) => pasEncoreEnLigne() as Promise<{ note: NoteRow }>,
-  deleteNote: (id: string) => pasEncoreEnLigne(),
+  updateNote: async (id: string, body: string) => ({
+    note: await vue<NoteRow>('update_note', { p_id: id, p: { body } }),
+  }),
+  deleteNote: (id: string) => vue<void>('delete_note', { p_id: id }),
 
   uploadMedia: (
     file: File,
