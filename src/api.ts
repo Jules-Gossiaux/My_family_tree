@@ -101,6 +101,35 @@ function avecDatesLues(input: PersonPatch): Record<string, unknown> {
   return p;
 }
 
+/** Ce que la base répond avant un envoi : soit le fichier existe déjà, soit où le poser. */
+type PlanEnvoi =
+  | { deduped: true; media: Media }
+  | { deduped: false; id: string; key: string; thumbKey: string };
+
+/**
+ * L'empreinte du fichier, calculée dans le navigateur : c'est elle qui dit qu'une même photo
+ * scannée deux fois ne remplira pas la boîte une seconde fois.
+ */
+async function empreinte(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return [...new Uint8Array(digest)].map((octet) => octet.toString(16).padStart(2, '0')).join('');
+}
+
+/** Déposer un objet dans le coffre privé. L'adresse en est décidée par la base, jamais ici. */
+async function deposer(cle: string, corps: File | Blob, mime: string): Promise<void> {
+  if (!supabase) throw new Error(SANS_ADRESSE);
+  const { error } = await supabase.storage
+    .from('medias')
+    .upload(cle, corps, { contentType: mime, upsert: true });
+  if (error) throw new Error(`Le fichier n’a pas pu être déposé dans le coffre : ${error.message}`);
+}
+
+/** Retirer du coffre ce que la base vient d'oublier : une adresse sans ligne ne se relira jamais. */
+async function retirer(cles: string[]): Promise<void> {
+  if (!cles.length || !supabase) return;
+  await supabase.storage.from('medias').remove(cles);
+}
+
 export const api = {
   graph: () => vue<GraphData>('graph_json'),
 
@@ -193,12 +222,44 @@ export const api = {
   }),
   deleteNote: (id: string) => vue<void>('delete_note', { p_id: id }),
 
-  uploadMedia: (
+  /**
+   * Un fichier entre par ses octets, posés directement dans le coffre privé par le navigateur.
+   * La base ne voit que l'empreinte et l'adresse : elle décide l'une et l'autre avant l'envoi, puis
+   * vérifie que les octets sont bien arrivés avant d'écrire la moindre ligne.
+   */
+  uploadMedia: async (
     file: File,
     meta: { kind: MediaKind; taken?: string | null; width?: number | null; height?: number | null },
-  ) => pasEncoreEnLigne() as Promise<{ media: Media; deduped: boolean }>,
-  uploadThumbnail: (mediaId: string, blob: Blob) => pasEncoreEnLigne() as Promise<{ media: Media }>,
-  patchMedia: (
+  ) => {
+    const sha256 = await empreinte(file);
+    const annonce = {
+      kind: meta.kind,
+      mime: file.type,
+      size: file.size,
+      sha256,
+      taken: meta.taken ?? null,
+      width: meta.width ?? null,
+      height: meta.height ?? null,
+    };
+
+    const plan = await vue<PlanEnvoi>('plan_media_upload', { p: annonce });
+    if (plan.deduped) return { media: plan.media, deduped: true };
+
+    await deposer(plan.key, file, file.type);
+    const rendu = await vue<{ deduped: boolean; media: Media }>('create_media', {
+      p: { ...annonce, id: plan.id, date: parseGenealogyDate(meta.taken ?? null) },
+    });
+    // La course était perdue entre l'annonce et l'écriture : on rend ce que l'on a posé.
+    if (rendu.deduped) await retirer([plan.key]);
+    return { media: rendu.media, deduped: rendu.deduped };
+  },
+  /** La vignette se fabrique dans le navigateur ; le serveur en ligne ne décode aucune image. */
+  uploadThumbnail: async (mediaId: string, blob: Blob) => {
+    const cle = await vue<string>('media_thumb_key', { p_id: mediaId });
+    await deposer(cle, blob, 'image/jpeg');
+    return { media: await vue<Media>('set_media_thumbnail', { p_id: mediaId }) };
+  },
+  patchMedia: async (
     id: string,
     patch: {
       caption?: string | null;
@@ -206,12 +267,20 @@ export const api = {
       documentType?: string | null;
       dateText?: string | null;
     },
-  ) => pasEncoreEnLigne() as Promise<{ media: Media }>,
-  deleteMedia: (id: string) => pasEncoreEnLigne(),
-  attachMedia: (id: string, personIds: string[], role = 'sujet') =>
-    pasEncoreEnLigne() as Promise<{ media: Media }>,
-  detachMedia: (mediaId: string, personId: string) => pasEncoreEnLigne() as Promise<{ media: Media }>,
-  setPortrait: (personId: string, portraitMediaId: string | null) => pasEncoreEnLigne(),
+  ) => ({ media: await vue<Media>('patch_media', { p_id: id, p: avecDateLue(patch) }) }),
+  /** Effacer un fichier retire ses octets du coffre : c'est le seul geste qui détruit autre chose qu'une ligne. */
+  deleteMedia: async (id: string) => {
+    const { keys } = await vue<{ ok: true; keys: string[] }>('delete_media', { p_id: id });
+    await retirer(keys);
+  },
+  attachMedia: async (id: string, personIds: string[], role = 'sujet') => ({
+    media: await vue<Media>('attach_media', { p_id: id, p: { personIds, role } }),
+  }),
+  detachMedia: async (mediaId: string, personId: string) => ({
+    media: await vue<Media>('detach_media', { p_media_id: mediaId, p_person_id: personId }),
+  }),
+  setPortrait: (personId: string, portraitMediaId: string | null) =>
+    vue<void>('set_portrait', { p_person_id: personId, p_media_id: portraitMediaId }),
 };
 
 /** Le dossier choisi est écrit sur le disque ; l'ouverture réelle attend un redémarrage. */
