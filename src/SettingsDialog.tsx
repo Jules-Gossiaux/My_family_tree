@@ -712,9 +712,11 @@ export default function SettingsDialog({
                 ))}
               </select>
               <p className="settings-note">
-                L’arbre part de cette personne. Le bouton « Faire la souche de l’arbre
-                » du menu d’une personne fait la même chose. Sans personne de référence, l’écran
-                remonte de lui-même à qui n’a aucun parent dans la base.
+                L’arbre se range tout seul par générations, des aïeux sans père ni mère jusqu’aux
+                derniers nés : cette personne ne change plus sa forme, elle dit seulement où poser le
+                regard quand l’écran s’ouvre. Le bouton « Faire la souche de l’arbre » du menu d’une
+                personne fait la même chose. Laissez ce choix vide pour voir toute la famille d’un
+                coup.
               </p>
             </>
           )}
@@ -736,7 +738,7 @@ export default function SettingsDialog({
               </select>
               <p className="settings-note">
                 La pastille « Me recentrer », en haut de l’arbre, saute sur cette personne. Ce n’est pas la
-                souche : la souche dit d’où l’on part, « moi » dit qui l’on cherche. Le menu d’une personne
+                souche : la souche dit où l’écran s’ouvre, « moi » dit qui l’on cherche. Le menu d’une personne
                 — « C’est moi » — règle la même chose, et revenir au premier choix de cette liste le retire.
               </p>
             </>

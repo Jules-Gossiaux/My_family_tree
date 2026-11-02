@@ -27,6 +27,9 @@ interface Props {
   branches: Branch[];
   /** La personne que l'on est dans l'arbre, si elle a été réglée. */
   mePersonId: string | null;
+  /** La personne de référence : elle ne décide plus de la forme, seulement de l'endroit où poser
+   * le regard en ouvrant l'arbre. */
+  rootPersonId: string | null;
   onSelect: (personId: string) => void;
   onContextMenu: (personId: string, x: number, y: number) => void;
 }
@@ -48,9 +51,8 @@ const MAX_ZOOM = 2.4;
 
 /** Ce que dit un trait qui n'a rien d'une descendance. */
 const CROSS_LABELS: Record<CrossLink['kind'], string> = {
-  parent: 'un parent que l’arbre ne peut pas placer au-dessus de son enfant',
   cycle: 'une boucle dans la famille',
-  union: 'une union dont les deux cases sont ailleurs',
+  union: 'une union que le placement ne peut pas dessiner côte à côte',
 };
 
 function kindsOf(links: CrossLink[]): CrossLink['kind'][] {
@@ -59,7 +61,8 @@ function kindsOf(links: CrossLink[]): CrossLink['kind'][] {
 
 /** Un trait qui ne descend pas : une courbe douce, jamais l'angle droit d'une descendance. */
 function crossPath(link: CrossLink): string {
-  if (link.kind === 'union') {
+  if (Math.abs(link.y1 - link.y2) < 1) {
+    // Deux cases de la même rangée : la courbe les relie à hauteur de carte.
     const bend = 38 * (link.x2 >= link.x1 ? 1 : -1);
     return `M ${link.x1} ${link.y1} C ${link.x1 + bend} ${link.y1}, ${link.x2 - bend} ${link.y2}, ${
       link.x2
@@ -123,7 +126,7 @@ function Card({
 }
 
 const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
-  { layout, selectedId, branches, mePersonId, onSelect, onContextMenu },
+  { layout, selectedId, branches, mePersonId, rootPersonId, onSelect, onContextMenu },
   ref,
 ) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -165,13 +168,15 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
       if (!unitKey || !el) return;
       const unit = layout.byKey.get(unitKey);
       if (!unit) return;
+      const index = Math.max(0, unit.slots.indexOf(personId));
+      const x = unit.x - unit.w / 2 + index * (CARD_W + CARD_GAP) + CARD_W / 2;
       const w = el.clientWidth;
       const h = el.clientHeight;
       setView((current) => {
         const k = Math.max(current.k, 0.75);
         return {
           k,
-          x: w / 2 - unit.x * k,
+          x: w / 2 - x * k,
           y: h / 2 - (unit.y + CARD_H / 2) * k,
         };
       });
@@ -193,13 +198,15 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
 
   useImperativeHandle(ref, () => ({ focusPerson, fit, zoomBy }), [focusPerson, fit, zoomBy]);
 
-  const signature = `${layout.rootKeys.join('|')}:${layout.units.length}`;
+  const signature = `${layout.units.length}:${Math.round(layout.width)}:${Math.round(layout.height)}`;
   useEffect(() => {
     if (layout.units.length === 0) return;
     if (fitted.current === signature) return;
     fitted.current = signature;
     fit();
-  }, [signature, fit, layout.units.length]);
+    // La souche ne façonne plus l'arbre : elle dit seulement où poser le regard en l'ouvrant.
+    if (rootPersonId) focusPerson(rootPersonId);
+  }, [signature, fit, focusPerson, layout.units.length, rootPersonId]);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -315,16 +322,13 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
       <svg className={`canvas${dragging ? ' is-dragging' : ''}`} onPointerDown={onPointerDown}>
         <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
           <g className="edges">
-            {layout.edges.map((edge) => {
-              const from = layout.byKey.get(edge.from);
-              const to = layout.byKey.get(edge.to);
-              if (!from || !to) return null;
-              const y1 = from.y + CARD_H;
-              const y2 = to.y;
-              const mid = Math.min(y1 + (y2 - y1) / 2 + edge.bus, y2 - 16);
-              const d = `M ${from.x + edge.offset} ${y1} V ${mid} H ${to.x} V ${y2}`;
-              return <path key={`${edge.from}-${edge.to}`} d={d} className="edge" />;
-            })}
+            {layout.edges.map((edge) => (
+              <path
+                key={`${edge.from}-${edge.to}`}
+                d={`M ${edge.x1} ${edge.y1} V ${edge.mid} H ${edge.x2} V ${edge.y2}`}
+                className="edge"
+              />
+            ))}
           </g>
           <g className="cross-links">
             {layout.crossLinks.map((link) => {

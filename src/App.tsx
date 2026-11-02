@@ -226,13 +226,15 @@ export default function App() {
     async (id: string | null) => {
       await api.setRoot(id);
       await load();
-      setToast(id ? 'Souche de l’arbre modifiée' : 'Plus de souche : l’arbre part de ses aïeux');
+      setToast(
+        id ? 'Souche de l’arbre modifiée' : 'Plus de souche : l’arbre affiche toutes ses générations',
+      );
     },
     [load],
   );
 
   /**
-   * « Moi » n'est pas la souche : la souche dit d'où l'on part, « moi » dit qui l'on est. Les deux
+   * « Moi » n'est pas la souche : la souche dit où l'arbre s'ouvre, « moi » dit qui l'on est. Les deux
    * se règlent séparément, et le recentrage ne demande jamais de refaire le tour de l'arbre.
    */
   const handleSetMe = useCallback(
@@ -448,6 +450,7 @@ export default function App() {
                 selectedId={selectedId}
                 branches={graph?.branches ?? []}
                 mePersonId={meId}
+                rootPersonId={graph?.rootId ?? null}
                 onSelect={selectPerson}
                 onContextMenu={openMenu}
               />
@@ -510,7 +513,11 @@ export default function App() {
             >
               Ajouter un conjoint
             </button>
-            <button type="button" onClick={() => { void handleSetRoot(menu.personId); setMenu(null); }}>
+            <button
+              type="button"
+              onClick={() => { void handleSetRoot(menu.personId); setMenu(null); }}
+              title="L’arbre s’ouvre sur cette personne : sa forme, elle, ne dépend pas d’elle"
+            >
               Faire la souche de l'arbre
             </button>
             <button
