@@ -148,13 +148,17 @@ export const api = {
   setDataDir: (dataDir: string) => pasEncoreEnLigne() as Promise<DataDirResult>,
 
   /** Une branche : un nom, une couleur, et la personne dont elle part. */
-  createBranch: (input: BranchInput & { includeDescendants?: boolean }) =>
-    pasEncoreEnLigne() as Promise<{ branch: Branch }>,
-  updateBranch: (id: string, input: BranchInput) => pasEncoreEnLigne() as Promise<{ branch: Branch }>,
+  createBranch: async (input: BranchInput & { includeDescendants?: boolean }) => ({
+    branch: await vue<Branch>('create_branch', { p: input }),
+  }),
+  updateBranch: async (id: string, input: BranchInput) => ({
+    branch: await vue<Branch>('update_branch', { p_id: id, p: input }),
+  }),
   /** Range la descendance d'une personne sous une branche ; dit combien de cases ont suivi. */
-  branchDescendants: (id: string, rootPersonId?: string) =>
-    pasEncoreEnLigne() as Promise<{ assigned: number }>,
-  deleteBranch: (id: string) => pasEncoreEnLigne(),
+  branchDescendants: async (id: string, rootPersonId?: string) => ({
+    assigned: await vue<number>('branch_descendants', { p_id: id, p_root_person_id: rootPersonId ?? null }),
+  }),
+  deleteBranch: (id: string) => vue<void>('delete_branch', { p_id: id }),
 
   /** Un fait de la vie : il porte une personne ou une union, et se date en français libre. */
   createEvent: (input: EventInput) =>
