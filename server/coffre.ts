@@ -20,11 +20,6 @@ import { DATA_DIR } from './config';
 const ADRESSE = process.env.VITE_SUPABASE_URL || lireEnv('VITE_SUPABASE_URL');
 const SECRETE = process.env.SUPABASE_SECRET_KEY || lireEnv('SUPABASE_SECRET_KEY');
 
-if (!ADRESSE || !SECRETE) {
-  console.error('  Manque VITE_SUPABASE_URL ou SUPABASE_SECRET_KEY dans .env.local.');
-  process.exit(1);
-}
-
 const BUCKET = 'medias';
 const PAGE = 100;
 const PAR_PAGE_DE_REPERTOIRE = 1000;
@@ -53,10 +48,50 @@ function stamp(): string {
 }
 
 const CLES = { apikey: SECRETE, authorization: `Bearer ${SECRETE}` };
-const REF = new URL(ADRESSE).hostname.split('.')[0];
 
 // « --sortie » sert au premier essai : on écrit dans un tiroir avant de ranger chez soi.
 const DOSSIER = option('--sortie') ? path.resolve(option('--sortie')) : path.join(DATA_DIR, 'sauvegardes');
+
+/*
+ * Le coffre se remplit sans personne devant l'écran, le dimanche : ce qu'il a vu doit rester écrit
+ * à côté des archives. Une sauvegarde que personne ne regarde et qui a échoué en silence n'est pas
+ * une sauvegarde, c'est une habitude.
+ */
+let consigne = '(aucune archive écrite)';
+
+function journal(ligne: string): void {
+  consigne = ligne;
+}
+
+process.on('exit', (code) => {
+  try {
+    fs.appendFileSync(
+      path.join(DOSSIER, 'coffre.log'),
+      `[${new Date().toISOString()}] ${consigne}${code === 0 ? '' : ` — code ${code}`}\n`,
+      'utf8',
+    );
+  } catch {
+    /* pas de journal sans dossier : le message reste sur la console */
+  }
+});
+
+function planter(erreur: unknown): void {
+  const texte = erreur instanceof Error ? erreur.message : String(erreur);
+  console.error(erreur instanceof Error ? erreur.stack : texte);
+  journal(`ÉCHEC — ${texte.slice(0, 300)}`);
+  process.exit(1);
+}
+
+process.on('uncaughtException', planter);
+process.on('unhandledRejection', planter);
+
+if (!ADRESSE || !SECRETE) {
+  console.error('  Manque VITE_SUPABASE_URL ou SUPABASE_SECRET_KEY dans .env.local.');
+  journal('ECHEC — manque VITE_SUPABASE_URL ou SUPABASE_SECRET_KEY dans .env.local');
+  process.exit(1);
+}
+
+const REF = new URL(ADRESSE).hostname.split('.')[0];
 
 async function appeler(
   methode: string,
@@ -280,6 +315,8 @@ console.log(`  Taille  : ${(taille / 1048576).toFixed(1)} Mo   (${(poids / 10485
 console.log(`  Coffres deja gardes dans ce dossier : ${voisins}. Rien n'a ete supprime.`);
 console.log('  ' + '-'.repeat(58));
 
+const resume = `${nom}  ${(taille / 1048576).toFixed(1)} Mo  ${Object.values(etatDesTables).reduce((a, t) => a + t.lignes, 0)} ligne(s)  ${etatDesMedias.length} objet(s)`;
+
 if (orphelins.length) {
   console.log('');
   console.log(`  ${orphelins.length} objet(s) dans le bucket que plus aucune ligne ne nomme :`);
@@ -287,12 +324,14 @@ if (orphelins.length) {
 }
 
 if (ecarts.length) {
+  journal(`${resume}  ${ecarts.length} ECART(S) — ${ecarts[0]}`);
   console.error('');
   for (const ecart of ecarts) console.error('  ÉCART —', ecart);
   console.error('');
   process.exit(1);
 }
 
+journal(resume);
 console.log('');
 console.log('  Tout correspond.');
 console.log('');
