@@ -16,6 +16,7 @@
     "restore": "tsx server/restore.ts",
     "snapshot": "tsx server/snapshot.ts",
     "import-cloud": "tsx server/import-cloud.ts",
+    "coffre": "tsx server/coffre.ts",
     "membre": "tsx server/add-member.ts",
     "test": "node --import tsx --test \"tests/*.test.ts\"",
     "typecheck": "tsc --noEmit"
