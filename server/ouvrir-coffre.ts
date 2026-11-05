@@ -254,7 +254,7 @@ function deposerFichier(cle: string, corps: Buffer, mime: string): Promise<Respo
 function filetDeSecurite(): string {
   console.log('  Un coffre de la base telle qu’elle est avant de la toucher…');
   console.log('');
-  const fils = spawnSync('npm', ['run', 'coffre'], { stdio: 'inherit', shell: true });
+  const fils = spawnSync('npm run coffre', { stdio: 'inherit', shell: true });
   if (fils.status !== 0) throw new Error('le coffre de sécurité a échoué : rien n’est écrit. (« --sans-filet » pour passer outre)');
   const dernier = archives(path.join(DATA_DIR, 'sauvegardes'))[0];
   if (!dernier) throw new Error('le coffre de sécurité n’a rien laissé dans le dossier : rien n’est écrit.');
