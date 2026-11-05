@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 import { DATA_DIR } from './config';
+import { ADRESSE, BUCKET, SECRETE, appeler, compter, json, reference } from './cloud';
 
 /**
  * Descend l'arbre du cloud sur le disque : chaque table en JSON, chaque objet du bucket privé, le
@@ -17,23 +18,8 @@ import { DATA_DIR } from './config';
  * pire des coffres.
  */
 
-const ADRESSE = process.env.VITE_SUPABASE_URL || lireEnv('VITE_SUPABASE_URL');
-const SECRETE = process.env.SUPABASE_SECRET_KEY || lireEnv('SUPABASE_SECRET_KEY');
-
-const BUCKET = 'medias';
 const PAGE = 100;
 const PAR_PAGE_DE_REPERTOIRE = 1000;
-
-function lireEnv(nom: string): string {
-  const fichier = path.resolve(process.cwd(), '.env.local');
-  if (!fs.existsSync(fichier)) return '';
-  for (const ligne of fs.readFileSync(fichier, 'utf8').split(/\r?\n/)) {
-    const i = ligne.indexOf('=');
-    if (i < 0 || ligne.slice(0, i).trim() !== nom) continue;
-    return ligne.slice(i + 1).trim();
-  }
-  return '';
-}
 
 function option(nom: string): string {
   const i = process.argv.indexOf(nom);
@@ -46,8 +32,6 @@ function stamp(): string {
   return [now.getFullYear(), pad(now.getMonth() + 1), pad(now.getDate())].join('-')
     + '-' + [pad(now.getHours()), pad(now.getMinutes())].join('');
 }
-
-const CLES = { apikey: SECRETE, authorization: `Bearer ${SECRETE}` };
 
 // « --sortie » sert au premier essai : on écrit dans un tiroir avant de ranger chez soi.
 const DOSSIER = option('--sortie') ? path.resolve(option('--sortie')) : path.join(DATA_DIR, 'sauvegardes');
@@ -91,30 +75,7 @@ if (!ADRESSE || !SECRETE) {
   process.exit(1);
 }
 
-const REF = new URL(ADRESSE).hostname.split('.')[0];
-
-async function appeler(
-  methode: string,
-  chemin: string,
-  corps?: BodyInit,
-  entetes?: Record<string, string>,
-): Promise<Response> {
-  const reponse = await fetch(ADRESSE + chemin, {
-    method: methode,
-    headers: { ...CLES, ...entetes },
-    body: corps,
-  });
-  if (!reponse.ok) {
-    const texte = await reponse.text();
-    throw new Error(`${methode} ${chemin} -> ${reponse.status} ${texte.slice(0, 400)}`);
-  }
-  return reponse;
-}
-
-async function json<T>(chemin: string): Promise<T> {
-  const reponse = await appeler('GET', chemin, undefined, { accept: 'application/json' });
-  return (await reponse.json()) as T;
-}
+const REF = reference();
 
 /**
  * Les tables telles que PostgREST les expose : c'est la liste de ce que l'application lit, pas une
@@ -126,16 +87,6 @@ async function tables(): Promise<string[]> {
     .filter(([chemin, item]) => /^\/[a-z][a-z0-9_]*$/.test(chemin) && item.get)
     .map(([chemin]) => chemin.slice(1))
     .sort();
-}
-
-async function compter(nom: string): Promise<number> {
-  const reponse = await appeler('GET', `/rest/v1/${nom}?select=*&limit=0`, undefined, {
-    prefer: 'count=exact',
-  });
-  const enTete = reponse.headers.get('content-range') ?? '';
-  const total = Number(enTete.split('/')[1]);
-  if (!Number.isFinite(total)) throw new Error(`${nom} : comptage illisible (${enTete || 'en-tete absent'})`);
-  return total;
 }
 
 type Rang = Record<string, unknown>;
@@ -292,7 +243,11 @@ archive.addFile(
       ...Object.entries(etatDesTables).map(([nom, e]) => `  ${nom} : ${e.lignes}`),
       '',
       'Ce coffre ne remplace rien et n’efface rien : il constate. Les tables JSON et les fichiers',
-      'suffisent à tout comprendre ; les rendre à une base, videe ou perdue, reste a ecrire.',
+      'suffisent à tout comprendre ; pour les rendre à une base vidée ou perdue :',
+      '',
+      '      npm run ouvrir-coffre -- --list',
+      '      npm run ouvrir-coffre -- --verifier <cette-archive>',
+      '      npm run ouvrir-coffre -- --retablir <cette-archive> --remplacer',
       '',
     ].join('\n'),
     'utf8',
