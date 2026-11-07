@@ -336,9 +336,12 @@ compris.
 Un compte qui n'est pas de la famille reçoit des tableaux vides, pas une erreur à afficher — c'est RLS qui
 décide, la fonction n'ayant rien à savoir.
 
-**Écrire** — un geste, une fonction. Quasi toutes posent d'abord, en français, le refus à qui n'a pas le
-droit d'écrire ; deux d'entre elles (`create_event`, `delete_event`) laissent encore RLS répondre en anglais,
-et c'est le dernier reste de la passe 9 :
+**Écrire** — un geste, une fonction. Toutes celles que l'écran appelle posent d'abord, en français, le
+refus à qui n'a pas le droit d'écrire (`Vous consultez cet arbre sans droit de modification.`, en code
+Postgres `42501`). Quatre aides internes — `upsert_couple`, `link_parent_child`, `set_person_date`,
+`prune_empty_couples` — ne portent pas la phrase : l'écran ne les appelle jamais directement, elles ne
+courent qu'à l'intérieur d'un geste déjà gardé. `set_me` s'en passe, puisqu'il ne touche que la ligne du
+compte qui le demande. Ce que chaque domaine garantit en plus de cela :
 
 | Domaine | Fonctions | Ce qu'elles garantissent, outre ce que garantissait la route d'avant |
 |---|---|---|
@@ -655,9 +658,10 @@ Ce qui reste de la passe 5 :
   et la personne de référence à `null` comme état normal
 - [ ] la preuve vécue : la mère entrée par son lien et écrivant, le cousin en lecture seule refusé avec un
   message qu'il comprend — invitation vers le 2026-11-11
-- [ ] le refus dit en français **partout** : `create_event` et `delete_event` laissent encore parler RLS en
-  anglais quand un compte sans droit d'écrire tente un fait de la vie, alors que les autres fonctions
-  posent leur phrase avant
+- [x] le refus dit en français **partout** : `create_event` et `delete_event` laissaient encore parler
+  RLS en anglais quand un compte sans droit d'écrire tente un fait de la vie ; la migration
+  `20261107232621 dire_le_refus_en_francais` leur pose la phrase comme aux autres (`delete_event` est
+  passée à `plpgsql` pour pouvoir la lever), éprouvée sur la base en ligne dans les deux sens
 
 ## Passe 10 — le coffre sur le disque
 
