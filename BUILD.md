@@ -176,7 +176,7 @@ Ce qui protège l'arbre d'aujourd'hui est **le coffre**, et il ne dépend plus d
 | Avant un `--retablir --remplacer` | un coffre de la base telle qu'elle est à cet instant | le voyage retour se décide avant le départ, pas après |
 | `npm run coffre` à la main | idem | avant une manipulation risquée, ou pour vérifier que la porte fonctionne encore |
 
-Un coffre s'appelle `coffre-AAAA-MM-JJ-HHMM.zip` — environ 21,5 Mo pour l'arbre d'aujourd'hui, 47 lignes et
+Un coffre s'appelle `coffre-AAAA-MM-JJ-HHMM.zip` — environ 21,5 Mo pour l'arbre d'aujourd'hui, 74 lignes et
 24 fichiers —, il s'écrit en `.part` puis se renomme, et **rien n'est jamais purgé** : le script compte ses
 voisins dans le dossier et écrit qu'il n'a rien supprimé.
 
@@ -654,8 +654,8 @@ Ce qui reste de la passe 5 :
 - [x] `server/add-member.ts` (`npm run membre`) : le compte invité, sa ligne, son droit d'écrire, et
   `--liste` pour relire qui est dedans
 - [x] le déploiement : Vercel sur `main`, l'artefact `dist/` que plus personne n'a à héberger soi-même
-- [x] la base en ligne relue sans écran : `--verifier` et `rpc/graph_json` rendent 47 lignes, 24 objets,
-  et la personne de référence à `null` comme état normal
+- [x] la base en ligne relue sans écran : `--verifier` et `rpc/graph_json` rendent les mêmes lignes et les
+  mêmes objets que le coffre posé sur le disque, et la personne de référence à `null` comme état normal
 - [ ] la preuve vécue : la mère entrée par son lien et écrivant, le cousin en lecture seule refusé avec un
   message qu'il comprend — invitation vers le 2026-11-11
 - [x] le refus dit en français **partout** : `create_event` et `delete_event` laissaient encore parler

@@ -446,8 +446,8 @@ jour de doute sur les clés — mais toutes ne sont pas encore nourries. Ce qui 
 L'export JSON porte donc des listes vides plutôt que de les inventer, et une table vide n'est pas une
 fonction abandonnée : c'est une fonction qui n'a pas encore sa passe.
 
-Ce que la base en ligne contient **réellement** ce 2026-11-07, pour que le chiffre ne se confonde pas avec
-le schéma : 47 lignes — 7 personnes, 3 couples, 6 liens parent-enfant, 5 faits, 12 fichiers et 12
+Ce que la base en ligne contient **réellement** ce 2026-11-08, pour que le chiffre ne se confonde pas avec
+le schéma : 74 lignes — 17 personnes, 5 couples, 21 liens parent-enfant, 5 faits, 12 fichiers et 12
 rattachements de fichiers à des personnes, une ligne de réglage vide et une ligne de membre. Branches,
 lieux, sources, notes, variantes de nom et faits de média sont à zéro : l'écriture en est faite, la saisie
 non. Vingt-quatre objets du bucket vont avec, soit environ 21,5 Mo.
