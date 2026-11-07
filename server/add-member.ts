@@ -10,27 +10,9 @@
  *   npm run membre -- --email anne@exemple.be --ecriture --person 965dd415-…
  *   npm run membre -- --liste
  */
-import fs from 'node:fs';
-import path from 'node:path';
+import { ADRESSE, SECRETE, appeler, annoncerAbsenceDeClef } from './cloud';
 
-const ADRESSE = process.env.VITE_SUPABASE_URL || lireEnv('VITE_SUPABASE_URL');
-const SECRETE = process.env.SUPABASE_SECRET_KEY || lireEnv('SUPABASE_SECRET_KEY');
-
-if (!ADRESSE || !SECRETE) {
-  console.error('  Manque VITE_SUPABASE_URL ou SUPABASE_SECRET_KEY dans .env.local.');
-  process.exit(1);
-}
-
-function lireEnv(nom: string): string {
-  const fichier = path.resolve(process.cwd(), '.env.local');
-  if (!fs.existsSync(fichier)) return '';
-  for (const ligne of fs.readFileSync(fichier, 'utf8').split(/\r?\n/)) {
-    const i = ligne.indexOf('=');
-    if (i < 0 || ligne.slice(0, i).trim() !== nom) continue;
-    return ligne.slice(i + 1).trim();
-  }
-  return '';
-}
+if (!ADRESSE || !SECRETE) annoncerAbsenceDeClef();
 
 function argument(nom: string): string | null {
   const i = process.argv.indexOf(`--${nom}`);
@@ -39,30 +21,21 @@ function argument(nom: string): string | null {
   return suivant && !suivant.startsWith('--') ? suivant.trim() : 'vrai';
 }
 
+const JSON_ENTETE = { 'content-type': 'application/json' };
+
+/** Un appel à l'API de connexion : corps en JSON, réponse en JSON, et {} quand elle ne dit rien. */
 async function auth<T>(methode: string, chemin: string, corps?: unknown): Promise<T> {
-  const reponse = await fetch(`${ADRESSE}/auth/v1${chemin}`, {
-    method: methode,
-    headers: { apikey: SECRETE, authorization: `Bearer ${SECRETE}`, 'content-type': 'application/json' },
-    body: corps === undefined ? undefined : JSON.stringify(corps),
-  });
+  const reponse = await appeler(methode, `/auth/v1${chemin}`,
+    corps === undefined ? undefined : JSON.stringify(corps), JSON_ENTETE);
   const texte = await reponse.text();
-  if (!reponse.ok) throw new Error(`${methode} ${chemin} → ${reponse.status} ${texte.slice(0, 300)}`);
   return (texte ? JSON.parse(texte) : {}) as T;
 }
 
+/** Un appel aux tables : la représentation demande les lignes ecrites, et [] quand il n'y en a pas. */
 async function donnees<T>(methode: string, chemin: string, corps?: unknown): Promise<T> {
-  const reponse = await fetch(`${ADRESSE}/rest/v1${chemin}`, {
-    method: methode,
-    headers: {
-      apikey: SECRETE,
-      authorization: `Bearer ${SECRETE}`,
-      'content-type': 'application/json',
-      prefer: 'return=representation',
-    },
-    body: corps === undefined ? undefined : JSON.stringify(corps),
-  });
+  const reponse = await appeler(methode, `/rest/v1${chemin}`,
+    corps === undefined ? undefined : JSON.stringify(corps), { ...JSON_ENTETE, prefer: 'return=representation' });
   const texte = await reponse.text();
-  if (!reponse.ok) throw new Error(`${methode} ${chemin} → ${reponse.status} ${texte.slice(0, 300)}`);
   return (texte ? JSON.parse(texte) : []) as T;
 }
 

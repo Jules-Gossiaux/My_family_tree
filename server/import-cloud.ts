@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { DATA_DIR, DB_PATH } from './config';
+import { ADRESSE, SECRETE, appeler, annoncerAbsenceDeClef } from './cloud';
 
 /**
  * Monte l'arbre local sur Postgres, puis ses fichiers dans le bucket privé.
@@ -11,38 +12,12 @@ import { DATA_DIR, DB_PATH } from './config';
  * primaire : relancer le script remet les mêmes lignes à jour au lieu d'en créer des secondes.
  */
 
-const ADRESSE = process.env.VITE_SUPABASE_URL || lireEnv('VITE_SUPABASE_URL');
-const SECRETE = process.env.SUPABASE_SECRET_KEY || lireEnv('SUPABASE_SECRET_KEY');
-
-if (!ADRESSE || !SECRETE) {
-  console.error("  Manque VITE_SUPABASE_URL ou SUPABASE_SECRET_KEY dans .env.local.");
-  process.exit(1);
-}
-
-function lireEnv(nom: string): string {
-  const fichier = path.resolve(process.cwd(), '.env.local');
-  if (!fs.existsSync(fichier)) return '';
-  for (const ligne of fs.readFileSync(fichier, 'utf8').split(/\r?\n/)) {
-    const i = ligne.indexOf('=');
-    if (i < 0 || ligne.slice(0, i).trim() !== nom) continue;
-    return ligne.slice(i + 1).trim();
-  }
-  return '';
-}
-
-const CLES = { apikey: SECRETE, authorization: `Bearer ${SECRETE}` };
+if (!ADRESSE || !SECRETE) annoncerAbsenceDeClef();
 
 const sqlite = new Database(DB_PATH, { readonly: true });
 
 async function requete(methode: string, chemin: string, corps?: BodyInit, entetes?: Record<string, string>): Promise<string> {
-  const reponse = await fetch(ADRESSE + chemin, {
-    method: methode,
-    headers: { ...CLES, ...entetes },
-    body: corps,
-  });
-  const texte = await reponse.text();
-  if (!reponse.ok) throw new Error(`${methode} ${chemin} → ${reponse.status} ${texte.slice(0, 400)}`);
-  return texte;
+  return (await appeler(methode, chemin, corps, entetes)).text();
 }
 
 function lignes<T = Record<string, unknown>>(table: string): T[] {
@@ -50,14 +25,10 @@ function lignes<T = Record<string, unknown>>(table: string): T[] {
 }
 
 async function lireJson<T>(chemin: string, demande?: { methode?: string; corps?: string }): Promise<T> {
-  const reponse = await fetch(ADRESSE + chemin, {
-    method: demande?.methode ?? 'GET',
-    headers: { ...CLES, 'content-type': 'application/json' },
-    body: demande?.corps,
+  const reponse = await appeler(demande?.methode ?? 'GET', chemin, demande?.corps, {
+    'content-type': 'application/json',
   });
-  const texte = await reponse.text();
-  if (!reponse.ok) throw new Error(`${chemin} → ${reponse.status} ${texte.slice(0, 400)}`);
-  return JSON.parse(texte) as T;
+  return (await reponse.json()) as T;
 }
 
 /**

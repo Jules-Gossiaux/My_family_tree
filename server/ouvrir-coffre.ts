@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import AdmZip from 'adm-zip';
 import { DATA_DIR } from './config';
-import { ADRESSE, BUCKET, SECRETE, appeler, compter, json, reference } from './cloud';
+import { ADRESSE, BUCKET, SECRETE, annoncerAbsenceDeClef, appeler, compter, json, reference } from './cloud';
 
 /**
  * Rouvre un coffre : la base en ligne et le bucket redeviennent ce que l'archive avait trouvé.
@@ -268,7 +268,7 @@ function filetDeSecurite(): string {
 
 async function main(): Promise<number> {
   if (!ADRESSE || !SECRETE) {
-    console.error('  Manque VITE_SUPABASE_URL ou SUPABASE_SECRET_KEY dans .env.local.');
+    annoncerAbsenceDeClef();
     return 1;
   }
 

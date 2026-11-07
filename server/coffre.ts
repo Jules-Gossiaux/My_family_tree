@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 import { DATA_DIR } from './config';
-import { ADRESSE, BUCKET, SECRETE, appeler, compter, json, reference } from './cloud';
+import { ADRESSE, BUCKET, SECRETE, annoncerAbsenceDeClef, appeler, compter, json, reference } from './cloud';
 
 /**
  * Descend l'arbre du cloud sur le disque : chaque table en JSON, chaque objet du bucket privé, le
@@ -70,9 +70,8 @@ process.on('uncaughtException', planter);
 process.on('unhandledRejection', planter);
 
 if (!ADRESSE || !SECRETE) {
-  console.error('  Manque VITE_SUPABASE_URL ou SUPABASE_SECRET_KEY dans .env.local.');
   journal('ECHEC — manque VITE_SUPABASE_URL ou SUPABASE_SECRET_KEY dans .env.local');
-  process.exit(1);
+  annoncerAbsenceDeClef();
 }
 
 const REF = reference();

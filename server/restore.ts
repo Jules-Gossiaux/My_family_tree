@@ -404,7 +404,11 @@ function printArchives(archives: ArchiveInfo[], dataDir: string): void {
   console.log(`  ${archives.length} archive(s), de la plus récente à la plus ancienne :\n`);
   archives.forEach((archive, index) => {
     const date = new Date(archive.createdAt).toLocaleString('fr-BE');
-    console.log(`    ${String(index + 1).padStart(2)}. ${archive.name}   ${date}   ${(archive.size / 1024).toFixed(0)} ko`);
+    // Le dossier garde deux mondes : un coffre se rejoue par « npm run ouvrir-coffre », pas ici.
+    const coffre = archive.name.startsWith('coffre-') ? '   ← coffre : npm run ouvrir-coffre' : '';
+    console.log(
+      `    ${String(index + 1).padStart(2)}. ${archive.name}   ${date}   ${(archive.size / 1024).toFixed(0)} ko${coffre}`,
+    );
   });
   console.log('');
 }
