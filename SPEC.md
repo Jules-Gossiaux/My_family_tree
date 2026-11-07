@@ -5,50 +5,58 @@
 
 ## 1. Objectif
 
-Une application **locale, personnelle et gratuite** pour conserver et explorer l'histoire d'une **famille entière** :
-visualiser toutes les branches et tous les cousins, rassembler photos, documents et notes autour de chaque
-personne, et produire des objets durables (poster imprimable, livre PDF).
+Une application **personnelle et gratuite** pour conserver et explorer l'histoire d'une **famille entière** :
+la voir depuis n'importe quel ordinateur, la saisir à plusieurs, rassembler photos, documents et notes
+autour de chaque personne, et produire des objets durables (poster imprimable, livre PDF).
 
-Ce n'est pas l'arbre d'une personne : c'est celui d'une famille. L'utilisateur en est le gardien, pas le centre.
+Ce n'est pas l'arbre d'une personne : c'est celui d'une famille. Chacun y est un point de vue, jamais la
+racine, et il reste un seul gardien de la saisie : celui qui connaît les noms.
 
 ## 2. Non-objectifs
 
-- Pas de cloud, pas de synchronisation, pas de collaboration temps réel.
 - Pas de génération automatique de récits par IA : une biographie inventée est pire qu'une case vide.
-- Pas de réseau social familial, pas de partage public.
-- Pas de dépendance à un service tiers qui pourrait disparaître.
+- Pas de réseau social familial : pas de profil public, pas de fil, pas de notification. « Partager » veut
+  dire ici *donner à la famille l'accès à l'arbre*, pas l'ouvrir au monde.
+- Pas de mode hors ligne : l'arbre en ligne a une seule écriture. Le dossier du disque est un point d'import
+  et un coffre, pas une seconde base que l'on ressynchroniserait.
+- Pas d'édition simultanée : deux cousins qui écrivent la même fiche en même temps ne se voient pas, et le
+  dernier écrit gagne. Rien n'annonce encore le conflit (§11).
+- Pas de dépendance à un hébergeur : le cloud est un lieu de stockage, pas une prison. La base se recharge
+  depuis un coffre écrit sur le disque (§6.4), et ce qu'il contient reste du SQL, des JPEG et des noms de
+  fichiers lisibles sans l'application.
 
 ## 3. Contraintes
 
 | Contrainte | Conséquence |
 |---|---|
-| 100 % gratuit | Uniquement des bibliothèques open source, aucun service payant, aucune clé API |
-| Local | Tout dans un dossier choisi par l'utilisateur ; fonctionne hors ligne |
-| Durable (20 ans) | Format ouvert (SQLite + JPEG/PNG), export JSON, sauvegardes datées |
+| 100 % gratuit | Le palier gratuit de l'hébergeur suffit, aujourd'hui comme demain : aucun abonnement, aucune carte bancaire au bout d'un refus de facture |
+| Durable (20 ans) | Format ouvert : du Postgres, des JPEG, des ZIP. Une copie ne vit **pas** chez l'hébergeur — c'est le coffre du dimanche (§6.3), et il se recharge (§6.4) |
+| Une famille, plusieurs personnes | Chacun entre par son compte et son mot de passe oublié à lui ; les droits sont écrits dans la base, pas dans les boutons (§7.2) |
 | Volume | 300 à 800 personnes, quelques milliers de médias → SVG suffit, pas de WebGL |
-| Débutant acceptable | Un `start.bat` pour ouvrir l'arbre, un `restore.bat` pour recharger une archive, une fenêtre de navigateur, zéro terminal |
+| Débutant acceptable | Un lien et une adresse e-mail : rien à installer pour voir l'arbre. Le terminal ne sert qu'au coffre, à l'import et aux invitations, et ces gestes sont écrits dans des `.bat` |
 
 ## 4. Ce que « l'arbre de la famille » change
 
 C'est la décision structurante du projet, et elle contrarie l'intuition habituelle.
 
-### 4.1 Pas de racine unique, mais une souche
+### 4.1 L'arbre se range tout seul, par générations
 
 Un arbre ascendant part d'une personne et ne remonte qu'une ligne : il ne peut pas montrer les cousins.
-Pour voir la famille, il faut partir du **couple souche** (le plus ancien ancêtre commun connu) et
-**descendre** : chaque enfant, puis ses enfants, etc. Les cousins apparaissent alors naturellement.
+La question était donc « de qui descendre ? ». La réponse tient en un mot : **de personne**.
 
-- La **souche** est configurable : le menu d'une personne et l'écran Réglages disent qui est « la personne
-  de référence », et l'arbre descend de là. **Un seul couple souche à la fois** aujourd'hui — la base ne
-  connaît qu'un `rootPersonId`. Que la famille ait plusieurs origines est réel, et le modèle le permettra
-  (plusieurs souches = plusieurs arbres de descendance sur les mêmes données), mais ce n'est pas encore
-  écrit.
-- L'utilisateur est un **point de vue**, pas la structure. Ce point de vue a un nom dans les réglages :
-  **« moi »**, et il est **distinct de la souche**. L'arbre descend de la souche ; les phrases du type
-  « cousin issu de germain, par les Gossiaux » partent de la personne que chacun se choisit. Confondre
-  les deux, c'est dessiner la famille autour d'un seul individu et perdre le principe du §1.
-  Le réglage est écrit : `mePersonId` dans `config.json`, posé par le menu d’une personne (« C’est moi »)
-  ou par les Réglages, et retiré de là. Centrer la vue reste possible sur n'importe qui.
+- Chaque personne reçoit un **rang** : une génération sous ses parents. Les aïeux qui n'ont ni père ni mère
+  tiennent le haut, les derniers nés le bas. Rien n'est choisi comme origine, donc rien n'est favorisé, et
+  une famille aux origines réellement distinctes tient dans la même image sans qu'on ait eu à décider
+  laquelle deux.
+- La **personne de référence** (`tree_setting.root_person_id`) ne façonne plus rien : elle dit seulement où
+  poser le regard quand l'écran s'ouvre. Elle peut rester vide — c'est l'état normal, et celui de la base
+  aujourd'hui — et l'arbre montre alors toute la famille. Ce réglage a longtemps porté le mot « souche »,
+  et ce mot a fait croire qu'il fallait en désigner une pour que l'arbre soit normal. Le mot est parti ;
+  le comportement n'avait déjà plus besoin de lui.
+- « **moi** » est une autre personne, et elle est **par compte** : elle se lit sur la ligne de connexion
+  (`family_member.person_id`), pas dans un réglage global. Deux cousins, chacun chez soi, n'ont pas le même
+  centre — et l'un ne peut pas déplacer le centre de l'autre. Les phrases du type « cousin issu de germain,
+  par les Gossiaux » partiront de là (§4.5) ; « Me recentrer » y saute.
 - Un chemin est toujours calculable entre deux personnes reliées : c'est une propriété des données, pas
   encore un écran. Le calculateur de parenté du §4.5 est ce qui le dira en mots.
 
@@ -107,21 +115,25 @@ passe 7 : la fiche montre aujourd'hui les liens directs — parents, conjoints, 
 
 ## 5. Stack
 
-- **Node.js + TypeScript**, serveur HTTP unique servant l'API et le front déjà compilé
-- **SQLite** via `better-sqlite3` — un seul fichier, sauvegarde triviale
-- **React + Vite**, rendu des arbres en **SVG** (pas de canvas pour l'arbre)
+- **React + Vite**, front statique servi par Vercel. Le navigateur parle **directement** à la base :
+  connexion par lien envoyé par e-mail, appels `rpc` pour tout ce qui écrit, dépôt et retrait des fichiers
+  par Storage. Il n'y a plus de serveur d'application dans le chemin d'une requête.
+- Les arbres se dessinent en **SVG** (pas de canvas pour l'arbre).
+- **Postgres** chez l'hébergeur est la source de vérité, avec **RLS** : la base refuse le verbe avant que
+  l'écran n'ait eu l'idée de le cacher (§7.2).
+- **Node.js + TypeScript** ne sert plus de HTTP : les scripts de `server/` font l'import depuis l'ancien
+  dossier, le coffre du dimanche et son rejeu, et l'invitation d'un membre.
 - **Vignettes générées côté navigateur**, dans un `<canvas>`, à l'import d'un média. `sharp` est écarté :
   c'est un binaire compilé pour la version de Node installée, donc une mise à jour de Node le rend
-  chargeable — le `start.bat` teste et rebâtit déjà SQLite, il n'a pas à porter un second module natif.
-  Le canvas suffit à quelques milliers d'images et lit l'orientation EXIF sans rien réécrire
+  chargeable. Le canvas suffit à quelques milliers d'images et lit l'orientation EXIF sans rien réécrire
   (`createImageBitmap(file, { imageOrientation: 'from-image' })`).
 - **Leaflet + OpenStreetMap** pour la carte (v2)
 - Export PDF du poster : **pdf-lib** ou impression navigateur haute résolution. La passe 6 tranche ;
   aucune des deux pistes n'est encore une dépendance du projet
 
-Toutes ces dépendances sont sous licence libre (MIT / Apache-2.0 / domaine public). Le projet n'en compte
-aujourd'hui que cinq (`better-sqlite3`, `express`, `react`, `react-dom`, `adm-zip`) : chaque ajout doit
-payer sa place.
+Le paquet envoyé au navigateur ne contient que trois bibliothèques (`react`, `react-dom`,
+`@supabase/supabase-js`) : tout le reste — `express`, `better-sqlite3`, `adm-zip` — reste du côté Node et
+ne pèse pas sur une connexion de cousin. Chaque ajout doit payer sa place.
 
 ## 6. Stockage des données — décision
 
@@ -131,21 +143,29 @@ payer sa place.
 Aucune donnée familiale, aucun nom, aucune photo ne doit jamais y entrer : c'est une règle absolue,
 et le `.gitignore` est écrit en conséquence.
 
-Les données vivent donc **hors du dépôt**, dans un dossier unique, choisi par l'utilisateur.
+Les données vivent donc **hors du dépôt**, en deux endroits qui ne font pas la même chose : chez
+l'hébergeur, où l'arbre se lit et s'écrit, et sur un disque, où il s'importe et se copie.
 
-### 6.2 Emplacement retenu
+### 6.2 Où elles vivent
+
+**Chez l'hébergeur — ce que la famille voit.** Une base Postgres (quatorze tables), un bucket de fichiers
+**privé** nommé `medias`, et les comptes. Les adresses des photos ne sont
+jamais publiques : le navigateur demande une URL signée qui meurt en quelques minutes, et le dossier
+`medias/2026/<id>.jpg` reste introuvable sans compte.
+
+**Sur le disque — ce qui ne dépend de personne.** Un dossier unique, choisi par l'utilisateur :
 
 ```
 D:\Genealogie\
-├── data\famille.db            base SQLite (plus ses -wal et -shm tant qu'elle est ouverte)
+├── data\famille.db            base SQLite de l'ère d'avant le cloud (voir plus bas)
 ├── medias\
 │   ├── photos\1923\...        originaux, jamais retouchés, rangés à l'année lue sur le fichier
 │   ├── documents\1923\...     scans d'actes, lettres, livrets — même rangement que les photos
 │   └── vignettes\1923\...     générées par le navigateur, supprimables
 ├── scans_bruts\               les scans tels quels, jamais modifiés
-├── sauvegardes\               ZIP datés automatiques
+├── sauvegardes\               les coffres du dimanche (coffre-*.zip), le journal, et les ZIP de l'ère SQLite
 ├── exports\                   posters, livres
-└── config.json                paramètres locaux (souche, « moi », préférences)
+└── config.json                réglages de l'application locale (personne de référence, « moi »)
 ```
 
 **Pourquoi ici :**
@@ -155,52 +175,82 @@ D:\Genealogie\
 | Hors du dépôt | Le repo est sur GitHub ; les données ne doivent jamais y être |
 | Chemin court | Windows limite à 260 caractères ; `D:\Genealogie\medias\photos\1923\` laisse de la marge |
 | Disque adapté | `D:` a 591 Go libres, et le projet y est déjà |
-| Un seul dossier à sauvegarder | Copier `D:\Genealogie\` suffit à tout préserver |
+| Un seul dossier à copier | Le coffre y écrit sa copie de l'arbre en ligne, et l'import y prend ses sources |
 | Survit au code | Supprimer le dépôt ne détruit pas vingt ans de photos |
 | Trouvable | Un dossier à la racine du disque se retrouve dans l'explorateur sans chercher |
 
-Le chemin est enregistré dans `config.local.json` (ignoré par git), modifiable depuis l'écran Réglages.
-Le serveur crée les huit dossiers ci-dessus au démarrage, avec `D:\Genealogie` pour repli sous Windows ;
-sur un système où rien ne peut être deviné, il s'arrête en écrivant les deux façons d'indiquer le dossier.
-`exports\` reste vide tant que la passe 6 n'y écrit pas son poster. `scans_bruts\` n'appartient qu'à
-l'utilisateur : l'application n'y écrit jamais, et un import qui part de là **copie**, ne déplace rien —
-la boîte à chaussures reste la source.
+Le dossier se désigne par la variable `FAMILY_DATA_DIR` ; à défaut, `D:\Genealogie` sert de repli sous
+Windows, et sur un système où rien ne peut être deviné l'application s'arrête en écrivant les deux façons
+de l'indiquer. Les scripts — import, coffre, rejeu, restauration — lisent cette même variable : c'est le
+seul endroit où le disque et le ciel se mettent d'accord. `exports\` reste vide tant que la passe 6 n'y
+écrit pas son poster. `scans_bruts\` n'appartient qu'à l'utilisateur : l'application n'y écrit jamais, et
+un import qui part de là **copie**, ne déplace rien — la boîte à chaussures reste la source.
+
+`data\famille.db` est ce qui reste de l'ère où la base vivait ici. Elle ne s'écrit plus depuis que la
+famille saisit en ligne : la dernière de ses archives s'appelle `famille-2026-11-01-1435-avant-cloud.zip`,
+et le nom dit pourquoi elle n'a pas de suite.
 
 Deux chemins sont refusés à l'écran, parce qu'ils coûteraient plus tard : un dossier rangé **dans le dépôt**
 — une famille versionnée par accident — et **la racine d'un disque** (`D:\` plutôt que `D:\Genealogie`).
 
 ### 6.3 Sauvegarde
 
-Une copie sur le même disque ne protège de rien. Trois niveaux, et les trois existent :
+Du moment que l'arbre vit chez un hébergeur, la question change de forme : il ne s'agit plus de protéger
+un dossier des accidents du disque, mais de ne jamais dépendre d'un seul endroit. Trois niveaux, et deux
+existent vraiment.
 
-1. **ZIP automatique** dans `sauvegardes\` : base, médias et réglages, nommés
-   `famille-AAAA-MM-JJ-HHMM-motif.zip`. À l'ouverture quand la dernière archive a plus de six heures, puis
-   toutes les trente minutes dès que la base a vraiment été écrite, et sur le bouton « Sauvegarder ».
-   Vingt archives gardées ; chacune s'écrit dans un `.part` puis se renomme, pour qu'une coupure laisse
-   l'archive précédente entière et jamais une archive à moitié écrite. Un échec s'affiche en bandeau :
-   une sauvegarde que l'on croit avoir est pire qu'une sauvegarde refusée.
-2. **Copie sur un support externe** — la seule vraie sauvegarde. L'écran Réglages liste les archives et
-   chacune se livre octet pour octet au navigateur par **« Copier vers… »** : la fenêtre d'enregistrement
-   s'ouvre, la copie quitte le disque. Le nom demandé est validé serveur avant d'être ouvert, un `..`
-   glissé dans la requête ressort en 404.
-3. **Export JSON** lisible sans l'application, en cas de catastrophe logicielle. Il porte les personnes,
-   les couples, les liens, les événements, les notes, les sources et les chemins des médias — pas les
-   pixels, qui vivent dans le ZIP. Une date y garde ses quatre colonnes : une date floue exportée en
-   `1920-01-01` serait une date inventée.
+1. **Le coffre du dimanche** (`npm run coffre`, `coffre.bat`, tâche Windows `Coffre arbre genealogique`
+   chaque dimanche à 09:00) : il descend **depuis le cloud** chaque table en JSON, chaque fichier du bucket,
+   et écrit le tout dans `sauvegardes\coffre-AAAA-MM-JJ-HHMM.zip`, avec un `manifeste.json` qui porte le
+   compte, la taille et l'empreinte `sha256` de chaque morceau, et un `LISEZMOI.txt` qui dit comment le
+   rouvrir. Environ 21,5 Mo pour l'arbre d'aujourd'hui. Chaque archive s'écrit en `.part` puis se renomme,
+   pour qu'une coupure laisse la précédente entière et jamais un coffre à moitié écrit. Le dossier garde un
+   `coffre.log` d'une ligne par dimanche, **réussi comme raté** : une sauvegarde que l'on croit avoir est
+   pire qu'une sauvegarde refusée. Rien n'est jamais effacé de lui-même — une archive de trop coûte de la
+   place, une archive de moins coûte des ancêtres.
+2. **Un second support** : à faire. Le coffre écrit sur le disque de la maison, donc il ne protège ni du
+   vol ni de l'incendie, et rien ne le copie aujourd'hui ailleurs (§11).
+3. **L'export JSON** reste possible, mais le coffre le contient déjà : ses `tables\*.json` sont la même
+   chose, avec les empreintes et les pixels à côté. Une date y garde ses quatre colonnes — une date floue
+   exportée en `1920-01-01` serait une date inventée.
 
-### 6.4 Recharger une archive
+Les ZIP `famille-*.zip` de l'ère SQLite (base locale, médias et réglages, vingt gardés, « Copier vers… »
+depuis Réglages) dorment dans le même dossier. Ils ne s'enrichissent plus depuis que l'écriture passe par
+le front en ligne, et rien ne les efface non plus.
+
+### 6.4 Recharger un coffre
 
 Cela se commande **hors de l'application**, parce qu'aucun programme ne remplace proprement la base sur
-laquelle il est assis. `restore.bat` — ou `npm run restore -- --list` — dresse la liste des archives,
-lit celle qu'on choisit dans un fichier temporaire, contrôle son intégrité et ses tables, compare « elle
-contient » à « la base actuelle », et demande de taper `OUI`. Ce n'est qu'après : copie de sûreté de
-ce qui est en place, l'échange par renommage (jamais une écriture par-dessus), les journaux `-wal` et
-`-shm` périmés effacés, et les médias de l'archive **ajoutés** à ceux du dossier — une restauration ne
-supprime aucune photo. Ce qui est installé est relu sur le disque et les chiffres affichés viennent de là.
+laquelle il est assis — et, depuis le cloud, parce qu'aucun écran ne doit pouvoir vider l'arbre par un
+mauvais clic. `npm run ouvrir-coffre -- --list` montre les coffres du plus récent au plus ancien ;
+`--verifier <archive>` lit le manifeste, contrôle les empreintes et dit ce que la base en ligne a de
+différent **sans rien toucher** ; `--retablir <archive>` remet les lignes et les fichiers à leur place.
 
-Trois règles à garder : une archive qui échoue au contrôle n'est pas installée ; une archive contrôlée
-n'est pas une archive juste — elle dit ce qu'elle contient, pas si ce contenu était vrai ; et la copie de
-sûreté rend le voyage retour possible même après un choix regrettable.
+Ce que le script tient pour acquis :
+
+- une archive d'**un autre projet** se refuse : un coffre porte la référence de l'hébergeur qui l'a vu
+  naître, et se tromper de base en croyant se restaurer n'est pas une panne que l'on veut rencontrer ;
+- l'ordre des tables n'est pas un choix : il est commandé par les clés étrangères. `person` avant
+  `couple`, `couple` avant les faits qui le citent. Les deux colonnes qui pointent en rond —
+  `person.branch_id` et `place.parent_place_id` — sont posées **après coup**, par une correction ligne à
+  ligne, sinon rien ne s'insère ;
+- une base **déjà peuplée** se refuse sans un `--remplacer` explicite ;
+- `--remplacer` prend d'abord son propre coffre de ce qui est en ligne, et le nomme avant d'écrire :
+  le voyage retour est décidé avant le départ, pas après ;
+- à la fin, le script compte à nouveau les lignes, vérifie que chaque fichier est dans le bucket et
+  relit l'arbre par la fonction que l'écran utilise. Un écart fait sortir en erreur, filet annoncé.
+
+Cette porte a été **franchie une fois pour de vrai**, le 2026-11-05 : 47 lignes vidées puis reposées,
+24 fichiers redéposés, et la base revenue ligne pour ligne à ce qu'elle était. Un coffre est donc une
+sauvegarde essayée, pas seulement une habitude.
+
+`restore.bat` (`npm run restore`) reste la porte de l'ère SQLite : il recharge un `famille-*.zip` dans le
+dossier local, contrôle l'intégrité, compare, demande de taper `OUI`, et ne supprime aucune photo — une
+restauration **ajoute** les médias de l'archive à ceux du dossier.
+
+Trois règles à garder, d'un siècle à l'autre : une archive qui échoue au contrôle n'est pas installée ;
+une archive contrôlée n'est pas une archive juste — elle dit ce qu'elle contient, pas si ce contenu était
+vrai ; et la copie de sûreté rend le voyage retour possible même après un choix regrettable.
 
 ## 7. Modèle de données
 
@@ -286,7 +336,8 @@ deux membres n'est jamais rangé dans le couple.
 **event** — `id`, `person_id`, `couple_id`, `type` (naissance, baptême, décès, inhumation, profession,
 résidence, autre), `date_*`, `place_id`, `description`, `source_id`, `confidence`
 
-Trois règles la tiennent debout, et le serveur les écrit telles qu'il les refuse :
+Trois règles la tiennent debout, et la base les écrit telles qu'elle les refuse (fonctions SQL
+`create_event`, `update_event`) :
 
 - **un fait porte une personne ou une union, jamais les deux ni aucune** : sans sujet, il ne s'affiche
   sur aucun écran et devient une ligne perdue dans la base ;
@@ -315,7 +366,7 @@ Trois choses la distinguent d'un fait et d'une source :
 - **elle se pose sur une ligne qui existe** : `target_type` est l'un des cinq noms que la base connaît
   (`person`, `couple`, `event`, `media`, `place`) et `target_id` un identifiant de cette table. `note`
   ne porte pas de clé étrangère — une colonne ne peut pas désigner cinq tables à la fois — donc c'est
-  le serveur qui refuse une cible inventée ;
+  la fonction SQL qui écrit la note refuse une cible inventée ;
 - **elle ne se date pas et ne se prouve pas** : pas de `date_*`, pas de `confidence`, pas de `source_id`.
   Elle garde la phrase d'un cousin, une présomption, une piste à reprendre — ce qui ne remplira jamais
   une ligne de la chronologie ;
@@ -340,6 +391,40 @@ Trois règles la tiennent debout :
 
 **confidence** — `certain` / `probable` / `douteux`. Porté par tout fait, pas par la personne.
 
+**tree_setting** — une seule ligne : `id`, `root_person_id`, `updated_at`. Le réglage de l'écran, pas de la
+structure (§4.1) : il dit où poser le regard à l'ouverture. **Vide est son état normal**, et rien ne doit
+le remplir par défaut — ni un import, ni une migration, ni un rejeu.
+
+**family_member** — `auth_uid`, `email`, `person_id`, `can_write`. C'est la table qui décide de ce qu'un
+compte voit et écrit, et la seule que le RLS tient fermée : sa politique, « chacun se voit », ne laisse
+lire **que sa propre ligne**. Elle ne se remplit ni d'un écran ni d'un clic : `npm run membre -- --email …`
+avec la clé secrète, ou le tableau de bord de l'hébergeur. Sans ligne dans cette table, un compte créé par
+ailleurs ne voit rien du tout — et une inscription spontanée est refusée à la porte, le projet n'ouvre pas
+la création de compte au public.
+
+#### Les droits, écrits dans la base
+
+Treize tables portent quatre politiques, toutes pour le rôle `authenticated` ; la quatorzième,
+`family_member`, n'en porte qu'une.
+
+| Politique | Condition |
+|---|---|
+| `lecture` | `is_member()` — une ligne dans `family_member` suffit |
+| `ajout`, `modification`, `effacement` | `can_write()` — la même ligne, avec `can_write` vrai |
+| `chacun se voit` (sur `family_member`) | `auth_uid = auth.uid()` — pas de liste des membres depuis le navigateur |
+
+Le bucket `medias` a les quatre mêmes verbes, privés, et les fichiers ne se lisent que par une URL signée
+d'un compte invité. Deux détails tiennent l'ensemble :
+
+- `is_member()` et `can_write()` sont **`security invoker`**, jamais `definer` : elles lisent
+  `family_member`, dont la politique propre ne montre que la ligne de celui qui demande. Un `definer` en
+  ferait un point de contournement public des droits.
+- Tout ce qui écrit passe par une fonction SQL (`create_person`, `attach_relation`, `set_portrait`,
+  `delete_media`…), et ces fonctions exécutent sous les droits de celui qui les appelle. Un compte en
+  lecture seule qui fabriquerait la requête à la main — dans l'onglet réseau, avec la clé publique —
+  reçoit un refus de la base. **C'est la seule raison pour laquelle on peut envoyer un cousin dans
+  l'arbre sans lui faire peur.**
+
 ### 7.3 Ce que la base remplit vraiment aujourd'hui
 
 Le schéma est écrit en entier depuis la passe 0 — créer les tables à la fin coûte une migration et un
@@ -355,9 +440,17 @@ jour de doute sur les clés — mais toutes ne sont pas encore nourries. Ce qui 
 | `source` | **remplie et lue depuis la passe 5** : déclarée dans Réglages, choisie par le fait qui la cite ; genre, référence et fiabilité se corrigent, l'effacement se refuse tant qu'un fait la nomme |
 | `note` | **remplie et lue depuis la passe 5** : la fiche les écrit, les corrige et les efface ; un fait, un fichier, un lieu ou une union se notent par la même route. `target_type` ne sort pas de ces cinq-là |
 | `media_event` | posée, et absente de l'export : le rattachement d'un média à un événement se joue en passe 5 |
+| `tree_setting` | lue et écrite par l'écran Réglages et par le menu d'une personne ; sa colonne `root_person_id` est **vide** dans la base en ligne, et c'est voulu (§4.1) |
+| `family_member` | lue par les fonctions de droit, écrite seulement par `npm run membre` et le tableau de bord. Une ligne aujourd'hui : le compte du gardien |
 
 L'export JSON porte donc des listes vides plutôt que de les inventer, et une table vide n'est pas une
 fonction abandonnée : c'est une fonction qui n'a pas encore sa passe.
+
+Ce que la base en ligne contient **réellement** ce 2026-11-07, pour que le chiffre ne se confonde pas avec
+le schéma : 47 lignes — 7 personnes, 3 couples, 6 liens parent-enfant, 5 faits, 12 fichiers et 12
+rattachements de fichiers à des personnes, une ligne de réglage vide et une ligne de membre. Branches,
+lieux, sources, notes, variantes de nom et faits de média sont à zéro : l'écriture en est faite, la saisie
+non. Vingt-quatre objets du bucket vont avec, soit environ 21,5 Mo.
 
 ## 8. Écrans
 
@@ -367,7 +460,7 @@ Canevas zoomable, plusieurs mises en page calculées sur les mêmes données :
 
 | Vue | Usage | État |
 |---|---|---|
-| **Descendance depuis la souche** | La vue de la famille : toutes les branches, tous les cousins | **en place** — une case par personne, conjoints dessinés de part et d'autre, blocs d'union, enfants sous la jonction |
+| **Arbre par générations** | La vue de la famille : toutes les branches, tous les cousins | **en place** — chacune reçoit son rang une génération sous ses parents, aucune case n'est choisie comme origine, une case par personne, conjoints dessinés de part et d'autre, blocs d'union, enfants sous la jonction |
 | Ascendant | Remonter depuis une personne (toi, ou n'importe qui) | à construire |
 | Sablier | Une personne, ses ancêtres et ses descendants | à construire |
 | Éventail | Lecture d'ensemble, modèle du poster | à construire (passe 6) |
@@ -378,7 +471,8 @@ seule fois**, ses conjoints étant alignés autour d'elle dans le même bloc.
 
 Ce que la barre de l'arbre sait faire aujourd'hui : rechercher un nom et zoomer dessus, agrandir, réduire,
 ajuster la vue, déplacer le canevas à la souris, ouvrir la fiche d'une personne par un clic, et passer par
-un menu contextuel pour la modifier, la rattacher, la supprimer, la définir comme souche ou comme « moi »,
+un menu contextuel pour la modifier, la rattacher, la supprimer, la définir comme personne de référence
+ou comme « moi »,
 ou créer une branche qui part d'elle. Les liens que la descendance ne dessine pas — second parent, boucle,
 union dont les deux cases sont ailleurs — paraissent en pointillés, avec une légende qui les compte (§4.3).
 
@@ -438,7 +532,7 @@ elles, ne se déclarent qu'ici — genre, référence, fiabilité — et leur li
 citent ; le bouton d'effacement se refuse tant qu'il en reste un, avec le compte dans son explication.
 
 Y manquent encore, et c'est la suite de la passe 5 : les faits d'une union — le
-serveur les accepte et les rend déjà, la fiche ne les montre pas — et le rattachement d'un fichier à un
+la base les accepte et les rend déjà, la fiche ne les montre pas — et le rattachement d'un fichier à un
 fait. Les notes, elles, s'écrivent sur tous ces objets-là par la même route, mais seule la fiche d'une
 personne les affiche : la marge d'un acte ou d'un fichier attend l'écran qui saura la montrer.
 
@@ -496,8 +590,9 @@ pour être autre chose qu'une liste de dates.
 
 ### 8.7 Export
 
-- **Poster** : PDF vectoriel haute résolution, A2/A1, **deux modèles** — descendance depuis la souche
-  et éventail — **avec les portraits**. Le portrait imprimé est un carré issu d'un recadrage manuel
+- **Poster** : PDF vectoriel haute résolution, A2/A1, **deux modèles** — l'arbre par générations entier,
+  ou l'éventail d'une personne — **avec les portraits**. Le portrait imprimé est un carré issu d'un
+  recadrage manuel
   (voir 8.8), pas la photo entière : une photo de groupe de 1952 recadrée automatiquement donne
   un poster illisible. **Passe 6.**
 - **Livre** : PDF, une page par personne (v2)
@@ -522,6 +617,34 @@ le portrait d'une personne — le cadrage centré est alors celui du navigateur 
 mémorisé par personne ; le cadre déplaçable et zoomable arrive en **passe 6**, avec le poster qui en a
 vraiment besoin. Le construire avant, ce serait dessiner une poignée pour une porte qui n'existe pas encore.
 
+### 8.9 Entrer dans l'arbre
+
+L'écran d'accueil n'est pas une liste de familles : c'est une adresse e-mail. L'hébergeur envoie un lien
+de connexion, un clic ouvre l'arbre — pas de mot de passe à retenir, donc pas de mot de passe à écrire sur
+un post-it collé sur l'ordinateur de mamie.
+
+Trois portes, et une seule s'ouvre toute seule :
+
+| Porte | Ce que la base laisse faire |
+|---|---|
+| **Le gardien** — une ligne `family_member` avec `can_write` vrai | tout : personnes, faits, fichiers, branches, lieux, sources, notes, réglages de l'arbre |
+| **Un membre en lecture** — une ligne sans `can_write` | lire l'arbre, les photos et les documents, et **se désigner lui-même** (« C'est moi », « Me recentrer ») ; la base refuse les verbes d'écriture |
+| **Le passant** — un compte sans ligne, ou personne connecté | rien. Les tables répondent vides, le bucket privé ne se lit pas, et l'invitation reste à envoyer |
+
+Inviter se commande à la main, avec la clé secrète : `npm run membre -- --email …` crée le compte et sa
+ligne, `--ecriture` lui donne le droit d'écrire, `--person <identifiant>` range son « moi » tout prêt. La
+création de compte spontanée est **éteinte** sur le projet : une adresse glanée ne doit pas ouvrir l'arbre.
+
+Deux choses tiennent le milieu de ce tableau, et elles ne sont pas évidentes :
+
+- « moi » se pose sur la ligne du compte, pas sur l'arbre : sinon le cousin du fond du Canada déplacerait
+  le centre de la mère à chaque clic. La fonction `set_me` est pour cela `security definer` — la table
+  `family_member` est fermée à `update` par les politiques, parce que le droit d'écrire s'y lit et que
+  se le modifier soi-même serait se donner l'écriture. Elle ne touche donc **que** la ligne du demandeur
+  et **jamais** la colonne `can_write`.
+- Sous les politiques de lignes, il reste un troisième étage : les privilèges de rôle. Une fonction que
+  personne ne peut appeler n'existe pas, `revoke … from public, anon` le dit au serveur lui-même.
+
 ## 9. Ordre de construction
 
 On ne construit pas écran par écran en finition : on traverse d'abord toutes les couches avec une
@@ -535,10 +658,16 @@ d'utilisable.
 | **2** | Sauvegarde automatique en ZIP daté, réglages, export JSON, restauration | Les données ne peuvent plus être perdues | faite |
 | **3** | Arbre de descendance, blocs couples, zoom, recentrer, branches colorées | Le projet devient réel et beau | faite |
 | **4** | Médias : import, vignettes, bac d'entrée, rattachement par lot, choix du portrait | Les visages arrivent | faite |
-| **5** | Fiche complète : dossier de vie, chronologie, notes, documents | Cliquer sur quelqu'un raconte sa vie | à faire |
+| **5** | Fiche complète : dossier de vie, chronologie, notes, documents | Cliquer sur quelqu'un raconte sa vie | faite, avec trois restes listés dans [`BUILD.md`](BUILD.md) |
 | **6** | Poster : deux modèles, avec portraits ; cadre de recadrage interactif | Un objet à offrir | à faire |
 | **7** | Calculateur de parenté, questions ouvertes, recherche approfondie, filtres, annuaire | L'outil devient confortable | à faire |
 | **8** | Export GEDCOM | La famille peut quitter le logiciel sans perdre son arbre | à faire |
+| **9** | Le cloud : Postgres et fichiers chez l'hébergeur, droits dans la base, le front qui parle directement à la base, comptes invités | La famille entre par un lien, sans rien installer | faite (2026-11-02) |
+| **10** | Le coffre sur le disque chaque dimanche, et le script qui le rejoue | Une copie qui ne vit pas chez l'hébergeur, et **essayée** | faite (2026-11-05) |
+
+La passe 9 n'était pas dans ce découpage : elle contredisait le §2 d'alors (« pas de cloud ») et a été
+décidée parce que l'arbre doit se **partager**, pas seulement se garder. Elle réécrit donc tout le §6, et
+le dossier local — qui était la source — est devenu point d'import et coffre.
 
 L'avancement détaillé, ligne par ligne, est dans [`BUILD.md`](BUILD.md) — c'est là qu'il faut regarder,
 pas ici.
@@ -556,24 +685,46 @@ viennent ensuite, sur un v1 qui marche — elles rendent l'outil confortable et 
 | Documents | Rattachés **à une personne et à un événement** (les deux tables existent) |
 | Branches colorées | Oui |
 | Ordre de construction | Balle traçante, puis épaississement (voir §9) |
-| Stockage | `D:\Genealogie\` |
+| Source de vérité | **Postgres chez l'hébergeur.** Le dossier du disque n'est plus une base que l'on ressynchronise : il est point d'import et coffre (§6.2) |
+| Stockage | `D:\Genealogie\` pour l'import, le coffre et les archives ; le cloud pour ce qui se lit et s'écrit |
+| Front | Statique, servi par Vercel, **sans serveur d'application** dans le chemin d'une requête : le navigateur parle à la base (§5) |
+| Droits | Écrits dans la base par le RLS, pas dans l'interface : `is_member()` pour lire, `can_write()` pour écrire, et le bucket privé pour les fichiers (§7.2) |
+| Invitation | Compte et ligne `family_member` se posent à la main avec la clé secrète ; la création de compte spontanée reste éteinte (§8.9) |
 | Reconnaissance faciale | v3, locale, gratuite |
-| « moi » | **Un réglage distinct de la souche** (§4.1) : l'arbre descend de la souche, les phrases de parenté partent de « moi ». Posé avec la passe 3, qui apporte « me recentrer » — pas avant, pour ne pas écrire un réglage que rien ne consomme. |
+| « moi » | **Un réglage par compte**, écrit sur la ligne `family_member` de celui qui regarde (§4.1) : il ne peut pas déplacer le centre d'un autre. `set_me` est `security definer` pour cette seule raison et ne touche jamais `can_write` |
+| Personne de référence | Elle **ne façonne plus l'arbre** : elle pose le regard, et son réglage peut rester vide (§4.1). Le mot « souche » a quitté l'écran, parce qu'il faisait croire à une obligation |
+| Coffre | Une archive descendue du cloud chaque dimanche sur le disque, sans jamais rien effacer, journal comprise (§6.3) |
+| Recharger un coffre | `npm run ouvrir-coffre -- --retablir` : filet pris **avant** d'écrire, `--remplacer` explicite, contrôle des comptes, des fichiers et de l'arbre relu après (§6.4) |
+| Mode hors ligne | Non-objectif (§2) : une seule écriture, celle du cloud. Le dossier local ne se resynchronise pas |
 | Calculateur de parenté | **Passe 7**, plus la ligne « comment elle est liée à toi » de la fiche (§4.5, §8.2) |
 | GEDCOM | Export en **passe 8**, import en v2 (§8.7) |
 | Vignettes | Générées **côté navigateur** dans un canvas, à l'import. Pas de `sharp` : un second binaire à rebuilder à chaque version de Node (§5) |
 | Import d'un média | **Octets bruts**, original jamais retouché, écrit en `.part` puis renommé sous `medias/<type>/<année>/` ; doublons reconnus à l'empreinte `sha256` ; les fichiers ne sont relus que par leur identifiant, revalidé contre le dossier de données |
 | Sortie d'un média | **Détacher n'est pas supprimer** : détacher rend au bac, supprimer efface les deux fichiers et se confirme deux fois (§8.4) |
 | Tables des unions | Nommées `couple`, avec `couple_id` partout et les membres en `ON DELETE SET NULL` (§7.2) |
-| Recharger une archive | Par `restore.bat`, **application fermée** : contrôle, comparaison, `OUI`, copie de sûreté, échange par renommage (§6.4) |
+| Recharger l'arbre local | Par `restore.bat`, **application fermée** : contrôle, comparaison, `OUI`, copie de sûreté, échange par renommage (§6.4). Ne s'applique plus qu'aux archives `famille-*.zip` de l'ère SQLite |
 
 ## 11. Reste à décider
 
 1. `[À VALIDER]` Format du poster : A2, A1, les deux au choix à l'export ?
-2. `[À VALIDER]` La souche : quel couple ? (à définir au moment de la saisie, pas maintenant)
-3. `[À VALIDER]` Une fois le réglage « moi » posé : la fiche affiche-t-elle d'office la parenté depuis
+2. `[À VALIDER]` Une fois le réglage « moi » posé : la fiche affiche-t-elle d'office la parenté depuis
    « moi », ou seulement sur demande ? La première option est plus chaleureuse, la seconde
    plus lisible quand personne ne se reconnaît dans le centrage choisi.
-4. `[À VALIDER]` Plusieurs souches : la famille a-t-elle des origines réellement distinctes et non reliées,
-   ou un seul couple souche suffit-il ? La réponse pèse sur la passe 3 — une vue de descendance unique, ou
-   une vue par souche que l'on choisit. Un `rootPersonId` unique est ce qui est écrit aujourd'hui (§4.1).
+3. **Qui écrit ?** La colonne `can_write` ne dit que oui ou non, pas « à partir d'ici ». La mère aura le
+   droit d'écrire ; reste à décider si les cousins l'ont, tous ou par branche — une droite par branche
+   serait une règle de plus dans le RLS, donc une migration, donc un soir où l'on y touche.
+4. **La copie de la copie.** Le coffre écrit sur le disque de la maison, donc le disque et le coffre meurent
+   ensemble. Une seconde machine, une clé qui tourne, un seau ailleurs : à choisir avant d'en avoir besoin (§6.3).
+5. **Le palier gratuit.** L'arbre d'aujourd'hui y tient largement. Ce qui se décide à l'avance, c'est qui
+   s'en aperçoit avant la coupure, et ce que l'on déménage si l'hébergeur demande une carte bancaire.
+6. **Écrire à deux.** Deux personnes sur la même fiche et la dernière écriture gagne, sans que personne ne
+   soit prévenu. Une colonne de version et un refus suffiraient ; est-ce avant ou après que la mère saisit ?
+7. **La région.** Dublin aujourd'hui. L'importance est la latence, le coût est un nouveau projet et une
+   réécriture des fichiers — donc on ne bouge pas pour un clic de moins.
+8. **Ce que devient l'application locale.** `npm run start` sur `data\famille.db` tourne encore et peut être
+   cru vivant. La garder pour l'import et le coffre, ou la retirer du chemin ?
+9. **Le lien de connexion.** Son expiration se règle dans le tableau de bord de l'hébergeur : vérifier la
+   valeur, et prévoir le mot de passe fort en repli pour quelqu'un qui ouvre sa boîte une fois par semaine.
+
+Les deux questions de souche que cette liste posait sont tranchées : l'arbre se range tout seul par
+générations et personne n'est une origine (§4.1).
