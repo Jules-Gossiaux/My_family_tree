@@ -243,7 +243,7 @@ export interface AppState {
   /** L'arbre vit sur un serveur : les écrans n'offrent alors ni dossier à choisir ni archive à poser. */
   onServer: boolean;
   rootPersonId: string | null;
-  /** Qui vous êtes dans l'arbre — distinct de la souche, qui dit seulement d'où part la descendance. */
+  /** Qui vous êtes dans l'arbre — distinct de la personne de référence, qui dit seulement où l'écran s'ouvre. */
   mePersonId: string | null;
   counts: { persons: number; couples: number; media: number; mediaUnattached: number };
   backup: BackupInfo | null;

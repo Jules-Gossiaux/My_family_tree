@@ -147,7 +147,7 @@ for (const { table, clef, differe } of ORDRE) {
   if (rangs.length) console.log(`  ${table.padEnd(13)} ${rangs.length} ligne(s)${enAttente.length ? ` (${enAttente.length} ref. différée(s))` : ''}`);
 }
 
-// La souche de l'arbre est un réglage global : il vivait dans config.json, il rejoint tree_setting.
+// La personne de référence de l'arbre est un réglage global : elle vivait dans config.json, elle rejoint tree_setting.
 const reglages = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'config.json'), 'utf8')) as { rootPersonId?: string };
 if (reglages.rootPersonId) {
   await inserer('tree_setting', [

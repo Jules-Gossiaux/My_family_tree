@@ -212,10 +212,10 @@ test('une famille ordinaire se range par générations, sans un seul pointillé'
   );
 });
 
-test('la souche ne change plus la forme de l’arbre', () => {
+test('la personne de référence ne change plus la forme de l’arbre', () => {
   const reference = positions(buildLayout(family()));
   for (const root of ['ju', 'wi', 'mi', 'fr', 'ac']) {
-    assert.deepEqual(positions(buildLayout(family(root))), reference, `souche en ${root}`);
+    assert.deepEqual(positions(buildLayout(family(root))), reference, `personne de référence en ${root}`);
   }
 });
 

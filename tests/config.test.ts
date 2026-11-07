@@ -47,7 +47,7 @@ describe('les deux personnes de référence', () => {
     assert.deepEqual(readConfig(), { rootPersonId: null, mePersonId: null });
   });
 
-  it('règle la souche et « moi » séparément', () => {
+  it('règle la personne de référence et « moi » séparément', () => {
     anna = addPerson('Anna');
     bob = addPerson('Bob');
 
@@ -63,7 +63,7 @@ describe('les deux personnes de référence', () => {
     assert.deepEqual(readConfig(), { rootPersonId: anna, mePersonId: bob });
   });
 
-  it('retire « moi » sans toucher à la souche', () => {
+  it('retire « moi » sans toucher à la personne de référence', () => {
     patchConfig({ mePersonId: null });
     assert.deepEqual(readConfig(), { rootPersonId: anna, mePersonId: null });
     patchConfig({ mePersonId: bob });
@@ -76,12 +76,12 @@ describe('les deux personnes de référence', () => {
 
     const refusSouche = expectRefusal(() => patchConfig({ rootPersonId: 'personne-effacee' }));
     assert.equal(refusSouche.status, 400);
-    assert.match(refusSouche.message, /souche/);
+    assert.match(refusSouche.message, /personne de référence/);
 
     assert.deepEqual(readConfig(), { rootPersonId: anna, mePersonId: bob }, 'un refus ne change rien');
   });
 
-  it('ne pose pas la souche quand « moi » est refusé', () => {
+  it('ne pose pas la personne de référence quand « moi » est refusé', () => {
     const refus = expectRefusal(() => patchConfig({ rootPersonId: bob, mePersonId: 'personne-effacee' }));
     assert.equal(refus.status, 400);
     assert.deepEqual(readConfig(), { rootPersonId: anna, mePersonId: bob });
@@ -93,7 +93,7 @@ describe('effacer une personne de référence', () => {
   let dieter: string;
   let elsa: string;
 
-  it('éteint « moi » et laisse la souche où elle est', () => {
+  it('éteint « moi » et laisse la personne de référence où elle est', () => {
     carla = addPerson('Carla');
     dieter = addPerson('Dieter');
     elsa = addPerson('Elsa');
@@ -105,13 +105,13 @@ describe('effacer une personne de référence', () => {
     assert.deepEqual(readConfig(), { rootPersonId: carla, mePersonId: null });
   });
 
-  it('fait repartir la souche d’une personne qui existe encore', () => {
+  it('fait repartir la personne de référence d’une personne qui existe encore', () => {
     db.prepare('DELETE FROM person WHERE id = ?').run(carla);
     repairConfigAfterDelete(carla);
 
     const config = readConfig();
-    assert.notEqual(config.rootPersonId, carla, 'la souche ne peut rester pendue sur une id sans visage');
-    assert.ok(db.prepare('SELECT id FROM person WHERE id = ?').get(config.rootPersonId), 'la nouvelle souche existe');
+    assert.notEqual(config.rootPersonId, carla, 'la personne de référence ne peut rester pendue sur une id sans visage');
+    assert.ok(db.prepare('SELECT id FROM person WHERE id = ?').get(config.rootPersonId), 'la nouvelle personne de référence existe');
     assert.equal(config.mePersonId, null, '« moi » était déjà vide : cet effacement n’y change rien');
   });
 

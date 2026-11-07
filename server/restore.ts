@@ -362,7 +362,7 @@ export async function restore(options: RestoreOptions): Promise<RestoreSummary> 
   let rootPersonId = readRootPerson(configPath);
   let rootWasRestored = Boolean(configEntry);
   if (rootPersonId && !personExists(dbPath, rootPersonId)) {
-    log("  attention : la personne de référence de l’archive n’est pas dans cette base, la souche est à choisir dans Réglages.");
+    log("  attention : la personne de référence de l’archive n’est pas dans cette base, elle est à choisir dans Réglages.");
     rootPersonId = null;
     rootWasRestored = false;
   }
@@ -549,7 +549,7 @@ async function main(): Promise<number> {
     console.log(`\n  Base restaurée dans ${summary.dataDir}`);
     console.log(`  ${describe(summary.restored)}`);
     if (summary.mediasRestored > 0) console.log(`  ${summary.mediasRestored} média(s) repris de l’archive`);
-    if (summary.rootWasRestored && summary.rootPersonId) console.log(`  souche de l’arbre : ${summary.rootPersonId}`);
+    if (summary.rootWasRestored && summary.rootPersonId) console.log(`  personne de référence : ${summary.rootPersonId}`);
     if (summary.safetyArchive) {
       console.log(`  ce qui était là avant est dans : ${path.basename(summary.safetyArchive)}`);
     }

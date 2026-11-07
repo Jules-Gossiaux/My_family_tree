@@ -447,7 +447,7 @@ export default function PersonSheet({
 
       <footer className="sheet-footer">
         <button type="button" className="link" onClick={() => onSetRoot(person.id)}>
-          Faire de cette personne la souche de l'arbre
+          Faire de cette personne la personne de référence
         </button>
         <button
           type="button"

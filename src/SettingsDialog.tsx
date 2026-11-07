@@ -693,7 +693,7 @@ export default function SettingsDialog({
         )}
 
         <div className="section">
-          <h3 className="section-title">Souche de l'arbre</h3>
+          <h3 className="section-title">Personne de référence</h3>
           {persons.length === 0 ? (
             <p className="settings-note">Ajoutez d’abord une personne.</p>
           ) : (
@@ -714,7 +714,7 @@ export default function SettingsDialog({
               <p className="settings-note">
                 L’arbre se range tout seul par générations, des aïeux sans père ni mère jusqu’aux
                 derniers nés : cette personne ne change plus sa forme, elle dit seulement où poser le
-                regard quand l’écran s’ouvre. Le bouton « Faire la souche de l’arbre » du menu d’une
+                regard quand l’écran s’ouvre. Le bouton « Personne de référence » du menu d’une
                 personne fait la même chose. Laissez ce choix vide pour voir toute la famille d’un
                 coup.
               </p>
@@ -737,8 +737,8 @@ export default function SettingsDialog({
                 ))}
               </select>
               <p className="settings-note">
-                La pastille « Me recentrer », en haut de l’arbre, saute sur cette personne. Ce n’est pas la
-                souche : la souche dit où l’écran s’ouvre, « moi » dit qui l’on cherche. Le menu d’une personne
+                La pastille « Me recentrer », en haut de l’arbre, saute sur cette personne. Ce n’est pas
+                la personne de référence : elle dit où l’écran s’ouvre, « moi » dit qui l’on cherche. Le menu d’une personne
                 — « C’est moi » — règle la même chose, et revenir au premier choix de cette liste le retire.
               </p>
             </>

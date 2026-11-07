@@ -204,7 +204,7 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
     if (fitted.current === signature) return;
     fitted.current = signature;
     fit();
-    // La souche ne façonne plus l'arbre : elle dit seulement où poser le regard en l'ouvrant.
+    // La personne de référence ne façonne plus l'arbre : elle dit seulement où poser le regard en l'ouvrant.
     if (rootPersonId) focusPerson(rootPersonId);
   }, [signature, fit, focusPerson, layout.units.length, rootPersonId]);
 

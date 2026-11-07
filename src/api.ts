@@ -158,8 +158,8 @@ export const api = {
 
   /**
    * Une personne nouvelle, ses deux dates de vie et le premier lien que l'on en dit. La fonction
-   * SQL refuse un lecteur avant d'écrire, et ne touche jamais la souche : l'arbre en ligne n'en
-   * garde pas.
+   * SQL refuse un lecteur avant d'écrire, et ne touche jamais la personne de référence : l'arbre en
+   * ligne n'en garde pas.
    */
   createPerson: async (input: CreatePersonInput) => ({
     id: await vue<string>('create_person', { p: avecDatesLues(input) }),
@@ -170,7 +170,7 @@ export const api = {
   /** Deux personnes que la base connaît déjà : un enfant, un parent, une union. */
   attachRelation: (id: string, relation: RelationInput) =>
     vue<void>('attach_relation', { p_subject_id: id, p: relation }),
-  /** La souche se règle en ligne : la fonction SQL refuse un lecteur avant de toucher la ligne. */
+  /** La personne de référence se règle en ligne : la fonction SQL refuse un lecteur avant de toucher la ligne. */
   setRoot: (rootPersonId: string | null) => vue<void>('set_root', { p_person_id: rootPersonId }),
   /**
    * Qui vous êtes dans l'arbre — le réglage que « Me recentrer » retrouve. Il se pose sur la ligne du

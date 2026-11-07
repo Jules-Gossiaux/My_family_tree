@@ -227,15 +227,15 @@ export default function App() {
       await api.setRoot(id);
       await load();
       setToast(
-        id ? 'Souche de l’arbre modifiée' : 'Plus de souche : l’arbre affiche toutes ses générations',
+        id ? 'Personne de référence modifiée' : 'Plus de personne de référence : l’arbre affiche toutes ses générations',
       );
     },
     [load],
   );
 
   /**
-   * « Moi » n'est pas la souche : la souche dit où l'arbre s'ouvre, « moi » dit qui l'on est. Les deux
-   * se règlent séparément, et le recentrage ne demande jamais de refaire le tour de l'arbre.
+   * « Moi » n'est pas la personne de référence : elle dit où l'arbre s'ouvre, « moi » dit qui l'on est.
+   * Les deux se règlent séparément, et le recentrage ne demande jamais de refaire le tour de l'arbre.
    */
   const handleSetMe = useCallback(
     async (id: string) => {
@@ -388,8 +388,8 @@ export default function App() {
           onClick={() => setSettings(true)}
           title={
             onServer
-              ? 'Où vit l’arbre, sa souche, ses branches, lieux et sources'
-              : 'Dossier de données, souche de l’arbre, copies et export'
+              ? 'Où vit l’arbre, sa personne de référence, ses branches, lieux et sources'
+              : 'Dossier de données, personne de référence, copies et export'
           }
         >
           Réglages
@@ -516,9 +516,9 @@ export default function App() {
             <button
               type="button"
               onClick={() => { void handleSetRoot(menu.personId); setMenu(null); }}
-              title="L’arbre s’ouvre sur cette personne : sa forme, elle, ne dépend pas d’elle"
+              title="L’écran s’ouvre sur cette personne : la forme de l’arbre, elle, ne dépend pas d’elle"
             >
-              Faire la souche de l'arbre
+              Personne de référence
             </button>
             <button
               type="button"

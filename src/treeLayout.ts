@@ -98,7 +98,7 @@ const junctionCenter = (w: number, after: number) =>
  * dont ils sont issus — deux couples de parents donnent donc deux traits pleins qui se rejoignent
  * sur la même case.
  *
- * Le rang ne dépend pas de la personne de référence : la souche ne décide plus de la forme, elle sert
+ * Le rang ne dépend pas d'elle : la personne de référence ne décide plus de la forme, elle sert
  * à poser le regard. Ce que la base contient et que ce modèle ne peut pas suspendre — une boucle, un
  * couple que ses parents séparent de deux rangées — reste dit, en pointillés.
  */

@@ -7,8 +7,8 @@ import { notify } from './notices';
 /**
  * Les deux personnes de référence, rangées dans `config.json` à côté de la base.
  *
- * `rootPersonId` dit de qui part l'arbre, `mePersonId` dit qui l'on est dedans : deux questions
- * différentes, réglées séparément — la souche est le point de départ des recherches, « moi » est
+ * `rootPersonId` dit où l'écran s'ouvre, `mePersonId` dit qui l'on est dedans : deux questions
+ * différentes, réglées séparément — la personne de référence pose le regard, « moi » est
  * la personne que l'on veut retrouver d'un clic.
  *
  * Un identifiant qui pend — personne effacée entre-temps, archive restaurée venue d'un autre
@@ -44,7 +44,7 @@ export function readConfig(): AppConfig {
     console.error(`[réglages] ${CONFIG_PATH} est illisible, les personnes de référence sont perdues.`);
     console.error(String(error));
     notify(
-      'Le fichier de réglages est abîmé : la souche de l’arbre et la personne « moi » sont à choisir à nouveau.',
+      'Le fichier de réglages est abîmé : la personne de référence et la personne « moi » sont à choisir à nouveau.',
     );
   }
   return { rootPersonId: null, mePersonId: null };
@@ -67,7 +67,7 @@ export function patchConfig(patch: Partial<AppConfig>): AppConfig {
   };
 
   const references = [
-    ['la souche de l’arbre', next.rootPersonId],
+    ['la personne de référence', next.rootPersonId],
     ['la personne « moi »', next.mePersonId],
   ] as const;
   for (const [label, id] of references) {
@@ -81,8 +81,8 @@ export function patchConfig(patch: Partial<AppConfig>): AppConfig {
 }
 
 /**
- * Une personne effacée ne laisse aucun des deux réglages pendus : la souche repart d'une personne
- * qui existe encore, « moi » s'éteint jusqu'à un nouveau choix. Rien n'est écrit quand l'effacée
+ * Une personne effacée ne laisse aucun des deux réglages pendus : la personne de référence repart
+ * d'une personne qui existe encore, « moi » s'éteint jusqu'à un nouveau choix. Rien n'est écrit quand l'effacée
  * n'était personne.
  */
 export function repairConfigAfterDelete(personId: string): void {

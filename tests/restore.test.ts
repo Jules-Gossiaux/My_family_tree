@@ -172,7 +172,7 @@ describe('recharger une archive à la place de la base en place', () => {
     assert.equal(base.has(chloe), true, 'les personnes de l’archive doivent être revenues');
     assert.ok(
       fs.readFileSync(path.join(DATA_DIR, 'config.json'), 'utf8').includes(chloe),
-      'la souche de l’archive reprend la place',
+      'la personne de référence de l’archive reprend la place',
     );
     assert.equal(fs.existsSync(path.join(DATA_DIR, 'medias', 'photos', '2026', 'loin.jpg')), true);
     assert.equal(
@@ -201,9 +201,9 @@ describe('recharger une archive à la place de la base en place', () => {
     assert.notEqual(safetyCopies()[0], safetyCopies()[1]);
   });
 
-  it('dit que la souche est à choisir quand l’archive pointe une personne absente', async () => {
+  it('dit que la personne de référence est à choisir quand l’archive pointe une personne absente', async () => {
     const ghost = craft(
-      'souche-inconnue.zip',
+      'reference-inconnue.zip',
       (zip) => zip.addFile('config.json', Buffer.from(JSON.stringify({ rootPersonId: 'personne-effacee' }), 'utf8')),
       path.join(BACKUP_DIR, archive),
     );
@@ -218,8 +218,8 @@ describe('recharger une archive à la place de la base en place', () => {
 
     assert.equal(summary.rootPersonId, null);
     assert.equal(summary.rootWasRestored, false);
-    assert.match(logs.join('\n'), /souche est à choisir/);
-    assert.equal(readBase(DB_PATH).persons, 3, 'la base est restaurée même si sa souche est introuvable');
+    assert.match(logs.join('\n'), /elle est à choisir dans Réglages/);
+    assert.equal(readBase(DB_PATH).persons, 3, 'la base est restaurée même si sa personne de référence est introuvable');
   });
 
   it('donne les archives du dossier, la plus récente en tête', () => {
