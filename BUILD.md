@@ -64,13 +64,15 @@ import-cloud.ts  la base SQLite et ses médias montés chez l'hébergeur — une
 coffre.ts        descendre l'arbre du cloud sur le disque                  (npm run coffre)
 ouvrir-coffre.ts le remonter : --list, --verifier, --retablir               (npm run ouvrir-coffre)
 add-member.ts    un compte, sa ligne family_member, son droit d'écrire      (npm run membre)
-snapshot.ts      l'état de la base lu depuis le terminal, pour vérifier sans écran
+snapshot.ts      une archive de la base SQLite, à la main et sans serveur  (npm run snapshot)
 dates.ts relations.ts branches.ts life-events.ts places.ts sources.ts notes.ts media.ts
 backup.ts export.ts restore.ts config.ts db.ts migrations.ts index.ts …  l'ère locale
 ```
 
-Les dépendances du navigateur se résument à `react`, `react-dom` et `@supabase/supabase-js`. Le reste est
-du côté Node et ne pèse pas sur une connexion de cousin.
+Les dépendances du navigateur se résument à `react`, `react-dom` et `@supabase/supabase-js`, et ce sont
+les trois seules que `package.json` tient en production. `express`, `better-sqlite3` et `adm-zip` sont
+descendus en `devDependencies` : ils ne servent qu'aux scripts du disque et à l'application d'avant, et un
+cousin qui ouvre l'arbre ne les télécharge pas.
 
 Une exception, et elle est voulue : `src/api.ts` importe `server/dates.ts`. La grammaire des dates
 françaises n'existe qu'à cet endroit ; le navigateur lit ce qui a été tapé et la base range ce qu'il en a
@@ -118,14 +120,17 @@ elle ne s'use pas quand Node change de version.
   `server/db.ts` affiche la commande à taper au lieu d'une pile d'appels. Le navigateur est ouvert **par
   le serveur**, une fois l'écoute réellement établie (`OPEN_BROWSER=1`) : ouvrir trop tôt afficherait une
   erreur de connexion. Un port déjà pris donne un message en français et une fenêtre qui reste lisible.
-  `package.json` déclare `engines: node >= 20`.
+  `package.json` déclare `engines: node « 22.x »`, la version que l'hébergeur de site prend pour
+  construire ; ce poste roule sous Node 24, et c'est exactement ce décalage que le double-clic répare.
 - `coffre.bat` descend l'arbre du cloud sur le disque. C'est lui que la tâche Windows
   `Coffre arbre genealogique` appelle chaque dimanche à 09:00. Il vérifie que `node` est là **avant**
   d'appeler `npm run coffre` et, si le geste échoue, écrit une ligne `ÉCHEC — …` dans
   `sauvegardes\coffre.log` : un dimanche silencieux n'est pas un dimanche réussi.
 - `restore.bat` recharge une archive de l'ère SQLite : liste numérotée, numéro tapé, comparaison
   « elle contient / la base actuelle », puis le mot **OUI** à taper. Tout autre texte n'arrive pas
-  jusqu'à la base.
+  jusqu'à la base. La liste énumère aussi les coffres, chacun marqué de la commande qui le recharge :
+  le dossier tient deux mondes, et choisir un coffre ici n'a rien d'absurde — ça se refuse, en disant
+  que la base SQLite attendue n'y est pas.
 
 **Et pour l'arbre en ligne**, deux commandes qui s'assument en terminal, parce qu'elles écrivent chez
 l'hébergeur : `npm run ouvrir-coffre` (`--list`, `--verifier`, `--retablir`) pour relire ou rétablir un
@@ -288,7 +293,7 @@ changement et jamais réécrit une fois appliqué**. Chacun porte un nom de gest
 `regler_la_souche.sql` (le nom porte le mot d'avant, et le fichier appliqué ne se rebaptise pas),
 `ecrire_les_fichiers.sql`, `corriger_les_personnes.sql` — parce qu'un fichier que
 l'on retrouve trois mois plus tard doit dire ce qu'il réglait, pas seulement à quelle heure. Le schéma
-résultant se relit par `npm run snapshot`, et `--verifier` d'un coffre compare les comptes à ce schéma-là.
+résultant se relit par `--verifier` d'un coffre, qui compare les comptes table par table à ce schéma-là.
 
 Deux conséquences valent d'être écrites :
 
@@ -646,8 +651,8 @@ Ce qui reste de la passe 5 :
 - [x] `server/add-member.ts` (`npm run membre`) : le compte invité, sa ligne, son droit d'écrire, et
   `--liste` pour relire qui est dedans
 - [x] le déploiement : Vercel sur `main`, l'artefact `dist/` que plus personne n'a à héberger soi-même
-- [x] la base en ligne relue sans écran par `npm run snapshot` : 47 lignes, 24 objets, et la personne de
-  référence à `null` comme état normal
+- [x] la base en ligne relue sans écran : `--verifier` et `rpc/graph_json` rendent 47 lignes, 24 objets,
+  et la personne de référence à `null` comme état normal
 - [ ] la preuve vécue : la mère entrée par son lien et écrivant, le cousin en lecture seule refusé avec un
   message qu'il comprend — invitation vers le 2026-11-11
 - [ ] le refus dit en français **partout** : `create_event` et `delete_event` laissent encore parler RLS en
@@ -773,7 +778,8 @@ gardent l'autre parent et l'union dont ils sont issus, mais le parent effacé ne
 - Les tests (`npm test`) écrivent chacun dans leur propre dossier temporaire et sur SQLite : ils ne
   peuvent pas atteindre une vraie base, et **aucun ne joint l'hébergeur** — `coffre-rejeu.test.ts`
   fabriquerait une fausse adresse plutôt que d'appeler la bonne. Ce qui vérifie la base en ligne est
-  ailleurs : `npm run snapshot` la compte, `npm run ouvrir-coffre -- --verifier` la compare à un coffre.
+  ailleurs : `npm run ouvrir-coffre -- --list` énumère les coffres, `--verifier` compare ses comptes à
+  ceux d'un coffre table par table.
 - Pour tester l'application **locale** sans toucher aux vraies données, on démarre sur un dossier
   temporaire : `FAMILY_DATA_DIR=<dossier vide hors du projet> PORT=4599 npm start`. Sans ces deux
   variables, `npm start` ouvre `D:\Genealogie`, c'est-à-dire l'arbre de la maison.
@@ -781,8 +787,8 @@ gardent l'autre parent et l'union dont ils sont issus, mais le parent effacé ne
   dossier à part : `npm run restore -- --data-dir <dossier> --list`. Sans `--data-dir`, ce sont les
   archives de la maison qui sont listées — et choisies, ensuite.
 - **Un script qui écrit chez l'hébergeur ne se lance pas « pour voir »** : la base visée est celle où la
-  famille saisit. Chacun offre d'abord une porte qui ne touche à rien — `npm run snapshot`,
-  `ouvrir-coffre -- --list`, `--verifier`, `membre --liste` — et la porte qui remet tout en place refuse
-  une base déjà peuplée tant que `--remplacer` n'y est pas ajouté. Ce qui efface se nomme dans la
+  famille saisit. Chacun offre d'abord une porte qui ne touche à rien — `ouvrir-coffre -- --list`,
+  `--verifier`, `membre --liste` — et la porte qui remet tout en place refuse une base déjà peuplée tant
+  que `--remplacer` n'y est pas ajouté. Ce qui efface se nomme dans la
   commande même, donc dans l'historique du terminal : c'est ce qui remplace le mot `OUI` du `restore.bat`
   local, et le fichier de migration déjà appliqué ne se retouche pas pour la même raison.
