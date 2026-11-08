@@ -128,7 +128,7 @@ describe('une suppression ne détruit pas plus qu’elle-même', () => {
 
 describe('le schéma porte la version des migrations', () => {
   it('est à jour et ne casse plus les couples à la suppression', () => {
-    assert.equal(db.pragma('user_version', { simple: true }), 2);
+    assert.equal(db.pragma('user_version', { simple: true }), 3);
 
     const keys = db.prepare('PRAGMA foreign_key_list(couple)').all() as Row[];
     for (const column of ['partner_a', 'partner_b']) {

@@ -52,26 +52,11 @@ const MAX_ZOOM = 2.4;
 /** Ce que dit un trait qui n'a rien d'une descendance. */
 const CROSS_LABELS: Record<CrossLink['kind'], string> = {
   cycle: 'une boucle dans la famille',
-  union: 'une union que le placement ne peut pas dessiner côte à côte',
+  union: 'une union que l’arbre ne peut pas tenir côte à côte',
 };
 
 function kindsOf(links: CrossLink[]): CrossLink['kind'][] {
   return [...new Set(links.map((link) => link.kind))];
-}
-
-/** Un trait qui ne descend pas : une courbe douce, jamais l'angle droit d'une descendance. */
-function crossPath(link: CrossLink): string {
-  if (Math.abs(link.y1 - link.y2) < 1) {
-    // Deux cases de la même rangée : la courbe les relie à hauteur de carte.
-    const bend = 38 * (link.x2 >= link.x1 ? 1 : -1);
-    return `M ${link.x1} ${link.y1} C ${link.x1 + bend} ${link.y1}, ${link.x2 - bend} ${link.y2}, ${
-      link.x2
-    } ${link.y2}`;
-  }
-  const bend = 44 * (link.y2 >= link.y1 ? 1 : -1);
-  return `M ${link.x1} ${link.y1} C ${link.x1} ${link.y1 + bend}, ${link.x2} ${link.y2 - bend}, ${
-    link.x2
-  } ${link.y2}`;
 }
 
 function Card({
@@ -280,16 +265,18 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
 
     return (
       <g key={unit.key}>
-        {unit.junctions.map((junction) => (
-          <line
-            key={junction.coupleId}
-            className="couple-link"
-            x1={slotX(junction.after) + CARD_W}
-            y1={unit.y + CARD_H / 2}
-            x2={slotX(junction.after + 1)}
-            y2={unit.y + CARD_H / 2}
-          />
-        ))}
+        {unit.junctions.map((junction) =>
+          junction.coupleId ? (
+            <line
+              key={junction.coupleId}
+              className="couple-link"
+              x1={slotX(junction.after) + CARD_W}
+              y1={unit.y + CARD_H / 2}
+              x2={slotX(junction.after + 1)}
+              y2={unit.y + CARD_H / 2}
+            />
+          ) : null,
+        )}
         {unit.slots.map((personId, index) => {
           const person = layout.personById.get(personId);
           if (!person) return null;
@@ -338,7 +325,7 @@ const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas(
               return (
                 <path
                   key={`${link.kind}-${link.fromId}-${link.toId}`}
-                  d={crossPath(link)}
+                  d={link.d}
                   className={`edge-cross is-${link.kind}`}
                   onClick={() => handleSelect(link.toId)}
                 >

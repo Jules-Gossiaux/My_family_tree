@@ -20,8 +20,16 @@ export interface Person {
   branchId: string | null;
   /** Le média choisi comme portrait. Le cadrage du visage arrive en passe 6, l'identifiant suffit déjà. */
   portraitMediaId: string | null;
+  /** Où joindre la personne, et où elle repose : quatre textes libres, vides tant qu'on ne les dit pas. */
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  /** Le cimetière ne se montre que pour une personne décédée. */
+  cemetery: string | null;
   birth: GDate | null;
   death: GDate | null;
+  /** L'entrée dans la base, telle qu'elle l'a rangée : l'arbre s'en sert pour ne jamais rebattre les familles. */
+  createdAt: string;
 }
 
 export interface Couple {
@@ -227,6 +235,10 @@ export interface CreatePersonInput {
   living?: boolean;
   birthText?: string | null;
   deathText?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  cemetery?: string | null;
   relation?: RelationInput | null;
 }
 

@@ -604,6 +604,10 @@ export default function App() {
                   birthText: dialog.editing.birth?.text ?? '',
                   deathText: dialog.editing.death?.text ?? '',
                   nickname: dialog.editing.nicknames[0] ?? '',
+                  address: dialog.editing.address,
+                  phone: dialog.editing.phone,
+                  email: dialog.editing.email,
+                  cemetery: dialog.editing.cemetery,
                 }
               : null
           }

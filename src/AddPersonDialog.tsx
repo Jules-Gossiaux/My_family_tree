@@ -18,6 +18,10 @@ interface Props {
     birthText: string;
     deathText: string;
     nickname: string;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    cemetery: string | null;
   } | null;
   onClose: () => void;
   onSaved: (id: string) => void;
@@ -45,6 +49,10 @@ export default function AddPersonDialog({
   const [living, setLiving] = useState(true);
   const [birthText, setBirthText] = useState('');
   const [deathText, setDeathText] = useState('');
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [cemetery, setCemetery] = useState('');
   const [otherParentId, setOtherParentId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +68,10 @@ export default function AddPersonDialog({
       setLiving(editing.living);
       setBirthText(editing.birthText);
       setDeathText(editing.deathText);
+      setAddress(editing.address ?? '');
+      setPhone(editing.phone ?? '');
+      setEmail(editing.email ?? '');
+      setCemetery(editing.cemetery ?? '');
     } else {
       setGivenNames('');
       setFamilyName(anchorName ? anchorName.split(' ').slice(-1)[0] ?? '' : '');
@@ -69,6 +81,10 @@ export default function AddPersonDialog({
       setLiving(true);
       setBirthText('');
       setDeathText('');
+      setAddress('');
+      setPhone('');
+      setEmail('');
+      setCemetery('');
       // Une seule union connue : on la pré-sélectionne, mais elle reste visible et modifiable.
       setOtherParentId(otherParentCandidates.length === 1 ? otherParentCandidates[0].id : '');
     }
@@ -100,6 +116,10 @@ export default function AddPersonDialog({
           birthText,
           deathText,
           nickname,
+          address: address || null,
+          phone: phone || null,
+          email: email || null,
+          cemetery: cemetery || null,
         });
         onSaved(editing.id);
       } else {
@@ -111,6 +131,10 @@ export default function AddPersonDialog({
           living,
           birthText,
           deathText,
+          address: address || null,
+          phone: phone || null,
+          email: email || null,
+          cemetery: cemetery || null,
           relation: relation ? { ...relation, otherParentId: otherParentId || null } : null,
         };
         const created = await api.createPerson(input);
@@ -247,6 +271,55 @@ export default function AddPersonDialog({
             <span>En vie</span>
           </label>
         </div>
+
+        <div className="field-row">
+          <label className="field">
+            <span>Adresse</span>
+            <input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="12 rue des Lilas, 59000 Lille"
+              autoComplete="off"
+            />
+          </label>
+        </div>
+
+        <div className="field-row">
+          <label className="field">
+            <span>Téléphone</span>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="06 12 34 56 78"
+              autoComplete="off"
+            />
+          </label>
+          <label className="field">
+            <span>E-mail</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="marie@exemple.fr"
+              autoComplete="off"
+            />
+          </label>
+        </div>
+
+        {(!living || deathText.trim() !== '') && (
+          <div className="field-row">
+            <label className="field">
+              <span>Cimetière</span>
+              <input
+                value={cemetery}
+                onChange={(e) => setCemetery(e.target.value)}
+                placeholder="Cimetière de l'Est, Lille"
+                autoComplete="off"
+              />
+            </label>
+          </div>
+        )}
 
         {error && <p className="dialog-error">{error}</p>}
 

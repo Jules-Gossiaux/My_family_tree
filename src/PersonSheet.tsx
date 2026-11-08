@@ -284,6 +284,41 @@ export default function PersonSheet({
         </button>
       </div>
 
+      {(person.address || person.phone || person.email || (!person.living && person.cemetery)) && (
+        <Section title="Contact">
+          <dl className="contact-list">
+            {person.address && (
+              <div className="contact-row">
+                <dt>Adresse</dt>
+                <dd className="contact-address">{person.address}</dd>
+              </div>
+            )}
+            {person.phone && (
+              <div className="contact-row">
+                <dt>Téléphone</dt>
+                <dd>
+                  <a href={`tel:${person.phone.replace(/[\s.()-]/g, '')}`}>{person.phone}</a>
+                </dd>
+              </div>
+            )}
+            {person.email && (
+              <div className="contact-row">
+                <dt>E-mail</dt>
+                <dd>
+                  <a href={`mailto:${person.email}`}>{person.email}</a>
+                </dd>
+              </div>
+            )}
+            {!person.living && person.cemetery && (
+              <div className="contact-row">
+                <dt>Cimetière</dt>
+                <dd>{person.cemetery}</dd>
+              </div>
+            )}
+          </dl>
+        </Section>
+      )}
+
       <Section title="Branche">
         <div className="branch-row">
           <span

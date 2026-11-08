@@ -144,7 +144,7 @@ function coupleColumns(): string {
 
 describe('reprise d’une base créée avec l’ancien schéma', () => {
   it('traverse la migration sans rien perdre', () => {
-    assert.equal(db.pragma('user_version', { simple: true }), 2);
+    assert.equal(db.pragma('user_version', { simple: true }), 3);
 
     const couple = row('SELECT * FROM couple WHERE id = ?', ids.couple);
     assert.ok(couple, 'le couple doit survivre à la mise à jour du schéma');
@@ -161,6 +161,35 @@ describe('reprise d’une base créée avec l’ancien schéma', () => {
     assert.ok(row('SELECT id FROM event WHERE id = ?', ids.act), 'l’acte de mariage est conservé');
     assert.ok(coupleColumns().includes('start_date_text'));
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+  });
+
+  it('ajoute les quatre champs de contact, vides sur une base ancienne', () => {
+    const columns = (
+      db.prepare("SELECT group_concat(name, ',') AS n FROM pragma_table_info('person')").get() as Row
+    ).n as string;
+    for (const name of ['address', 'phone', 'email', 'cemetery']) {
+      assert.ok(columns.split(',').includes(name), `la colonne ${name} doit exister`);
+    }
+
+    const paul = row('SELECT address, phone, email, cemetery FROM person WHERE id = ?', ids.paul);
+    assert.ok(paul, 'Paul est toujours là');
+    assert.equal(paul.address, null);
+    assert.equal(paul.phone, null);
+    assert.equal(paul.email, null);
+    assert.equal(paul.cemetery, null);
+
+    db.prepare('UPDATE person SET address = ?, phone = ?, email = ?, cemetery = ? WHERE id = ?').run(
+      '12 rue des Lilas, 59000 Lille',
+      '06 12 34 56 78',
+      'paul@exemple.fr',
+      'Cimetière de l’Est, Lille',
+      ids.paul,
+    );
+    const filled = row('SELECT address, phone, email, cemetery FROM person WHERE id = ?', ids.paul);
+    assert.equal(filled?.address, '12 rue des Lilas, 59000 Lille');
+    assert.equal(filled?.phone, '06 12 34 56 78');
+    assert.equal(filled?.email, 'paul@exemple.fr');
+    assert.equal(filled?.cemetery, 'Cimetière de l’Est, Lille');
   });
 
   it('remet la tête de ligne en règle', () => {
@@ -218,7 +247,7 @@ describe('reprise d’une base créée avec l’ancien schéma', () => {
     runMigrations();
     runMigrations();
 
-    assert.equal(db.pragma('user_version', { simple: true }), 2);
+    assert.equal(db.pragma('user_version', { simple: true }), 3);
     assert.equal((db.prepare('SELECT COUNT(*) AS n FROM couple').get() as Row).n, before);
     assert.equal((db.prepare('SELECT COUNT(*) AS n FROM parent_child').get() as Row).n, links);
     assert.equal(

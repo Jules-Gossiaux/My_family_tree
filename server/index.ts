@@ -141,8 +141,13 @@ function mapPerson(row: Row): Person {
     summary: row.summary,
     branchId: row.branch_id,
     portraitMediaId: row.portrait_media_id ?? null,
+    address: row.address ?? null,
+    phone: row.phone ?? null,
+    email: row.email ?? null,
+    cemetery: row.cemetery ?? null,
     birth: null,
     death: null,
+    createdAt: row.created_at,
   };
 }
 
@@ -370,8 +375,8 @@ app.post('/api/persons', (req, res) => {
 
   const create = db.transaction(() => {
     db.prepare(
-      `INSERT INTO person (id, given_names, family_name, birth_name, sex, living, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO person (id, given_names, family_name, birth_name, sex, living, address, phone, email, cemetery, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       givenNames,
@@ -379,6 +384,10 @@ app.post('/api/persons', (req, res) => {
       body.birthName ?? null,
       body.sex ?? '?',
       isLiving,
+      (body.address ?? '').trim() || null,
+      (body.phone ?? '').trim() || null,
+      (body.email ?? '').trim() || null,
+      (body.cemetery ?? '').trim() || null,
       timestamp,
       timestamp,
     );
@@ -449,6 +458,12 @@ app.patch('/api/persons/:id', (req, res) => {
     if (body.living !== undefined) {
       fields.push('living = ?');
       values.push(body.living ? 1 : 0);
+    }
+    for (const key of ['address', 'phone', 'email', 'cemetery'] as const) {
+      if (body[key] !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push((body[key] ?? '').trim() || null);
+      }
     }
 
     if (fields.length > 0) {

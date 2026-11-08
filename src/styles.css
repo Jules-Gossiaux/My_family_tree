@@ -700,6 +700,46 @@ textarea::placeholder {
   color: var(--dim);
 }
 
+.contact-list {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.contact-row {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.contact-row dt {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.contact-row dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.contact-row dd a {
+  color: var(--gold);
+  text-decoration: none;
+  border-bottom: 1px solid var(--gold-soft);
+  cursor: pointer;
+}
+
+.contact-row dd a:hover {
+  border-bottom-color: var(--gold);
+}
+
+.contact-address {
+  white-space: pre-line;
+}
+
 .life {
   display: grid;
   gap: 12px;
@@ -1078,6 +1118,8 @@ textarea::placeholder {
 .dialog {
   width: 100%;
   max-width: 560px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -1814,6 +1856,20 @@ textarea::placeholder {
   background: var(--line);
   border-radius: 6px;
   border: 3px solid var(--surface);
+}
+
+.dialog::-webkit-scrollbar {
+  width: 10px;
+}
+
+.dialog::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 6px;
+  border: 3px solid var(--surface);
+}
+
+.dialog::-webkit-scrollbar-thumb:hover {
+  background: var(--dim);
 }
 
 @media (max-width: 900px) {

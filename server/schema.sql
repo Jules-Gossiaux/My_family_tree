@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS person (
   living            INTEGER NOT NULL DEFAULT 1,
   summary           TEXT,
   portrait_media_id TEXT,
+  address           TEXT,
+  phone             TEXT,
+  email             TEXT,
+  cemetery          TEXT,
   branch_id         TEXT REFERENCES branch(id) ON DELETE SET NULL,
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL

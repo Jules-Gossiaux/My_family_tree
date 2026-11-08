@@ -18,6 +18,11 @@ function onDeleteAction(table: string, column: string): string | null {
   return found ? (found.on_delete as string) : null;
 }
 
+function hasColumn(table: string, column: string): boolean {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Row[];
+  return rows.some((row) => row.name === column);
+}
+
 function wasCascade(table: string, column: string): boolean {
   return onDeleteAction(table, column) === 'CASCADE';
 }
@@ -91,6 +96,20 @@ const MIGRATIONS: Migration[] = [
         UPDATE branch SET root_person_id = NULL
           WHERE root_person_id IS NOT NULL
             AND NOT EXISTS (SELECT 1 FROM person p WHERE p.id = branch.root_person_id);
+      `);
+    },
+  },
+  {
+    version: 3,
+    // Où joindre une personne et où elle repose : quatre colonnes ajoutées après coup. Les bases
+    // déjà écrites les reçoivent vides, sans rien toucher à ce qu'elles portent.
+    needed: () => !hasColumn('person', 'address'),
+    up: () => {
+      db.exec(`
+        ALTER TABLE person ADD COLUMN address TEXT;
+        ALTER TABLE person ADD COLUMN phone TEXT;
+        ALTER TABLE person ADD COLUMN email TEXT;
+        ALTER TABLE person ADD COLUMN cemetery TEXT;
       `);
     },
   },
