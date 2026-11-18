@@ -67,7 +67,7 @@ async function transaction<T>(
   });
 }
 
-export const mediaStore: MediaStore = {
+const localStore: MediaStore = {
   async put(key, blob) {
     memory.set(key, blob);
     const result = await transaction('readwrite', (store) => store.put(blob, key));
@@ -88,6 +88,35 @@ export const mediaStore: MediaStore = {
     memory.clear();
     await transaction('readwrite', (store) => store.clear());
   },
+};
+
+/**
+ * Accès direct au stockage local, nécessaire une seule fois : lors du passage
+ * au cloud, les octets déjà présents doivent être copiés dans Storage avant
+ * que le store actif ne bascule. Tout le reste du code continue d'utiliser
+ * `mediaStore`, qui suit le backend actif.
+ */
+export const localMediaStore: MediaStore = localStore;
+
+/**
+ * Store actif. Tout le code importe `mediaStore` ; basculer sur Supabase se
+ * fait donc en un seul appel, sans toucher aux composants ni au modèle.
+ */
+let activeStore: MediaStore = localStore;
+
+export function setMediaStore(store: MediaStore): void {
+  activeStore = store;
+}
+
+export function resetMediaStore(): void {
+  activeStore = localStore;
+}
+
+export const mediaStore: MediaStore = {
+  put: (key, blob) => activeStore.put(key, blob),
+  get: (key) => activeStore.get(key),
+  delete: (key) => activeStore.delete(key),
+  clear: () => activeStore.clear(),
 };
 
 export function blobToDataUrl(blob: Blob): Promise<string> {

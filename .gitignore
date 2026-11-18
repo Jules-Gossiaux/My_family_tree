@@ -8,6 +8,7 @@ out/
 # Secrets et configuration locale
 .env
 .env.*
+!.env.example
 config.local.json
 *.local.json
 # Réglages écrits par l'application dans le dossier de données — jamais dans le dépôt.
