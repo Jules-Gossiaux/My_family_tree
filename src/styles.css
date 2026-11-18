@@ -1143,6 +1143,40 @@ textarea {
   border-bottom: 1px solid var(--border-soft);
 }
 
+.parents-card .union-card-head {
+  margin-bottom: 10px;
+}
+
+.filiation-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.filiation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--border-soft);
+}
+
+.filiation-row:last-child {
+  border-bottom: 0;
+}
+
+.filiation-row .link-person {
+  align-self: center;
+  font-size: 12px;
+}
+
+.filiation-row .link-person:disabled {
+  color: var(--text-dim);
+  cursor: default;
+}
+
 .union-summary {
   padding-top: 10px;
 }

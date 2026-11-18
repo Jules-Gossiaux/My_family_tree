@@ -369,11 +369,11 @@ export default function SidePanel({
                 </section>
 
                 <section className="panel-section">
-                  <h3>Unions &amp; filiations</h3>
+                  <h3>Couples et parents</h3>
                   {unions.length === 0 ? (
                     <p className="panel-note">
-                      Aucune union pour l’instant. Ajoutez un parent, un enfant ou
-                      un conjoint pour commencer.
+                      Aucun couple ni parent renseigné. Ajoutez un parent, un
+                      enfant ou un conjoint pour commencer.
                     </p>
                   ) : (
                     <div className="union-list">
@@ -600,12 +600,80 @@ function UnionCard({
   const [expanded, setExpanded] = useState(false);
   const partners = unionPartnerIds(union);
   const isPartner = slotOfPartner(union, selectedId) !== null;
+
+  // Depuis la fiche d'un enfant, l'union de ses parents ne concerne que lui :
+  // qui sont ses parents et quel est son lien avec chacun. Le statut du couple,
+  // ses dates et la liste des frères et sœurs se gèrent depuis un parent.
+  if (!isPartner) {
+    const ownLink = union.children.find((child) => child.childId === selectedId);
+    return (
+      <article className="union-card parents-card">
+        <header className="union-card-head">
+          <strong>Parents</strong>
+        </header>
+        <div className="filiation-rows">
+          {(['A', 'B'] as UnionSlot[]).map((slot) => {
+            const parentId = slot === 'A' ? union.partnerAId : union.partnerBId;
+            const link = slot === 'A' ? ownLink?.linkA : ownLink?.linkB;
+            return (
+              <div key={slot} className="filiation-row">
+                <button
+                  type="button"
+                  className="link-person"
+                  disabled={!parentId}
+                  onClick={() => parentId && onSelectPerson(parentId)}
+                >
+                  {parentId ? nameOf(parentId) : 'Parent non renseigné'}
+                </button>
+                {parentId && ownLink ? (
+                  <label className="field">
+                    <span>Lien avec {nameOf(parentId)}</span>
+                    <select
+                      value={link}
+                      onChange={(event) =>
+                        onUpdateChildLink(
+                          union.id,
+                          selectedId,
+                          slot,
+                          event.target.value as LinkType,
+                        )
+                      }
+                    >
+                      {FILIATION_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {LINK_LABELS[type]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+        <p className="panel-note">
+          Le couple des parents, ses dates et les autres enfants se modifient
+          depuis la fiche de l’un des parents.
+        </p>
+        {ownLink && (
+          <button
+            type="button"
+            className="link-remove"
+            title="La personne reste dans l’arbre"
+            onClick={() => onRemoveChildLink(union.id, selectedId)}
+          >
+            Retirer ce lien de filiation
+          </button>
+        )}
+      </article>
+    );
+  }
+
   const others = partners.filter((id) => id !== selectedId);
-  const title = isPartner
-    ? others.length > 0
+  const title =
+    others.length > 0
       ? `Union avec ${others.map((id) => nameOf(id)).join(', ')}`
-      : 'Union · second parent non renseigné'
-    : `Filiation · ${partners.length > 0 ? partners.map(nameOf).join(' & ') : 'parents non renseignés'}`;
+      : 'Union · conjoint non renseigné';
 
   return (
     <article className="union-card">
