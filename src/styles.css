@@ -1525,6 +1525,64 @@ textarea {
   color: var(--text);
 }
 
+.quick-add {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface);
+  flex: 0 0 auto;
+}
+
+.quick-add button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.quick-add button:hover {
+  border-color: var(--accent);
+}
+
+.quick-add-symbol {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  background: rgba(224, 164, 94, 0.14);
+  color: var(--accent);
+  font-size: 18px;
+}
+
+.quick-add strong,
+.quick-add small {
+  display: block;
+  min-width: 0;
+}
+
+.quick-add strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.quick-add small {
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
 .modal-body,
 .directory-list {
   padding: 18px 22px;

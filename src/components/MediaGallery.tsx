@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import DirectorySelect from './DirectorySelect';
 import {
   addMedia,
@@ -26,6 +26,8 @@ interface MediaGalleryProps {
   data: FamilyData;
   personId: Id;
   onChange: (next: FamilyData) => void;
+  /** Incrémenté par le panneau pour ouvrir directement le sélecteur de fichiers. */
+  uploadSignal?: number;
 }
 
 function isDirectUrl(key: string): boolean {
@@ -33,10 +35,11 @@ function isDirectUrl(key: string): boolean {
 }
 
 /** Galerie partagée, portrait désigné et réglage de cadrage par personne. */
-export default function MediaGallery({ data, personId, onChange }: MediaGalleryProps) {
+export default function MediaGallery({ data, personId, onChange, uploadSignal }: MediaGalleryProps) {
   const person = data.persons.find((candidate) => candidate.id === personId);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +67,10 @@ export default function MediaGallery({ data, personId, onChange }: MediaGalleryP
       created.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [data.media]);
+
+  useEffect(() => {
+    if (uploadSignal && uploadSignal > 0) fileInputRef.current?.click();
+  }, [uploadSignal]);
 
   if (!person) return null;
   const ownMedia = mediaOfPerson(data, personId);
@@ -228,6 +235,7 @@ export default function MediaGallery({ data, personId, onChange }: MediaGalleryP
         <label className="btn btn-primary">
           Ajouter des fichiers
           <input
+            ref={fileInputRef}
             type="file"
             multiple
             accept="image/*,.pdf,.doc,.docx,.txt"

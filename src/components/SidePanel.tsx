@@ -82,6 +82,7 @@ export default function SidePanel({
   onDeleteEvent,
 }: SidePanelProps) {
   const [tab, setTab] = useState<Tab>('fiche');
+  const [uploadSignal, setUploadSignal] = useState(0);
   const person = selectedId ? getPerson(data, selectedId) : undefined;
   const relations = selectedId ? relationsOf(data, selectedId) : undefined;
   const unions = selectedId ? unionsOfPerson(data, selectedId) : [];
@@ -188,6 +189,29 @@ export default function SidePanel({
               onClick={() => setTab('gallery')}
             >
               Galerie
+            </button>
+          </div>
+
+          <div className="quick-add">
+            <button type="button" onClick={() => onOpenEvent()}>
+              <span className="quick-add-symbol">＋</span>
+              <span>
+                <strong>Ajouter un fait de vie</strong>
+                <small>Mariage, naissance, déménagement…</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTab('gallery');
+                setUploadSignal((value) => value + 1);
+              }}
+            >
+              <span className="quick-add-symbol">＋</span>
+              <span>
+                <strong>Ajouter une photo / un document</strong>
+                <small>Ouvrir la galerie et choisir des fichiers</small>
+              </span>
             </button>
           </div>
 
@@ -467,7 +491,12 @@ export default function SidePanel({
 
             {tab === 'gallery' && (
               <section className="panel-section">
-                <MediaGallery data={data} personId={person.id} onChange={onChange} />
+                <MediaGallery
+                  data={data}
+                  personId={person.id}
+                  onChange={onChange}
+                  uploadSignal={uploadSignal}
+                />
               </section>
             )}
           </div>

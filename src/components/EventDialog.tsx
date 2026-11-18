@@ -179,12 +179,17 @@ export default function EventDialog({
                 type="button"
                 className="btn btn-mini"
                 onClick={() =>
-                  setParticipants([...participants, { personId: '', role: 'témoin' }])
+                  setParticipants([...participants, { personId: '', role: 'principal' }])
                 }
               >
-                + Ajouter
+                + Ajouter une personne
               </button>
             </div>
+            {participants.length === 0 && (
+              <p className="panel-note">
+                Ajoutez la personne ou les personnes concernées par ce fait.
+              </p>
+            )}
             {participants.map((participant, index) => (
               <div key={index} className="event-participant">
                 <label className="field">
