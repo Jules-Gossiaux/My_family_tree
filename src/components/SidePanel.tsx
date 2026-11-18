@@ -24,6 +24,7 @@ import { now } from '../domain/id';
 import type { FiliationConflict } from '../domain/conflicts';
 import { GENDER_LABELS } from '../utils/format';
 import FuzzyDateField from './FuzzyDateField';
+import LifeTimeline from './LifeTimeline';
 import DirectorySelect from './DirectorySelect';
 import MediaGallery from './MediaGallery';
 import type { AddKind } from './PersonFormDialog';
@@ -84,6 +85,7 @@ export default function SidePanel({
   const [tab, setTab] = useState<Tab>('fiche');
   const [uploadSignal, setUploadSignal] = useState(0);
   const [showNames, setShowNames] = useState(false);
+  const [factsView, setFactsView] = useState<'timeline' | 'list'>('timeline');
   const person = selectedId ? getPerson(data, selectedId) : undefined;
   const relations = selectedId ? relationsOf(data, selectedId) : undefined;
   const unions = selectedId ? unionsOfPerson(data, selectedId) : [];
@@ -485,7 +487,29 @@ export default function SidePanel({
                       + Ajouter
                     </button>
                   </div>
-                  {events.length === 0 ? (
+                  <div className="view-switch" role="tablist" aria-label="Vue des faits">
+                    <button
+                      type="button"
+                      className={factsView === 'timeline' ? 'is-active' : ''}
+                      onClick={() => setFactsView('timeline')}
+                    >
+                      Frise
+                    </button>
+                    <button
+                      type="button"
+                      className={factsView === 'list' ? 'is-active' : ''}
+                      onClick={() => setFactsView('list')}
+                    >
+                      Liste
+                    </button>
+                  </div>
+                  {factsView === 'timeline' ? (
+                    <LifeTimeline
+                      data={data}
+                      personId={person.id}
+                      onOpenEvent={onOpenEvent}
+                    />
+                  ) : events.length === 0 ? (
                     <p className="panel-note">
                       Aucun fait de vie. Les dates de naissance et de décès
                       saisies dans la fiche apparaissent automatiquement ici.

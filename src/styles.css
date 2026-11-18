@@ -2492,3 +2492,109 @@ textarea {
   color: #c8c3bc;
   font-size: 11px;
 }
+
+/* Frise chronologique */
+.view-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  margin: 8px 0 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
+
+.view-switch button {
+  border: 0;
+  border-radius: 5px;
+  padding: 4px 12px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.view-switch button.is-active {
+  background: var(--accent-soft, #f4ece0);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.life-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 6px;
+}
+
+.timeline-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px 22px 1fr;
+  align-items: start;
+  gap: 6px;
+  padding: 0 0 14px 0;
+}
+
+.timeline-entry::before {
+  content: '';
+  position: absolute;
+  left: 61px;
+  top: 22px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--border-soft);
+}
+
+.timeline-entry:last-child::before {
+  display: none;
+}
+
+.timeline-year {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding-top: 1px;
+}
+
+.timeline-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--accent, #b5793b);
+  border-radius: 50%;
+  background: var(--surface, #fff);
+  color: var(--accent, #b5793b);
+  font-size: 11px;
+}
+
+.timeline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.timeline-body strong {
+  font-size: 12px;
+}
+
+.timeline-body strong button {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.timeline-date {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.timeline-detail {
+  font-size: 11px;
+  color: var(--text-dim);
+}
