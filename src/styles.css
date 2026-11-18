@@ -1184,6 +1184,34 @@ textarea {
   cursor: default;
 }
 
+/* Remplacement d'un parent : le contrôle reste discret tant qu'on n'en a pas
+   besoin, mais il est toujours accessible depuis la fiche de l'enfant. */
+.filiation-edit {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.filiation-edit .field {
+  flex: 1 1 220px;
+}
+
+.filiation-edit .link-remove {
+  flex: 0 0 auto;
+}
+
+.union-partner-edit {
+  padding: 4px 0 10px;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 10px;
+}
+
+.union-partner-edit .panel-note {
+  margin: 6px 0 0;
+}
+
 .union-summary {
   padding-top: 10px;
 }

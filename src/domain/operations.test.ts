@@ -11,6 +11,7 @@ import {
   planRelation,
   relationsOf,
   removePerson,
+  replaceUnionPartner,
   updateChildLink,
 } from '../domain/operations';
 import { findFiliationConflicts } from '../domain/conflicts';
@@ -129,6 +130,40 @@ describe('règles de filiation', () => {
     const child = person('Enfant');
     const data = couple(family(a, b, child), a, b, [child.id]);
     expect(unionHasBiological(data.unions[0].children[0])).toBe(true);
+  });
+
+  it('remplace un parent sans supprimer l’enfant ni l’union', () => {
+    const a = person('A');
+    const b = person('B');
+    const corrected = person('B corrigé');
+    const child = person('Enfant');
+    const data = couple(family(a, b, corrected, child), a, b, [child.id]);
+    const unionId = data.unions[0].id;
+
+    const next = replaceUnionPartner(data, unionId, 'B', corrected.id);
+    expect(next.persons).toHaveLength(4);
+    expect(next.unions[0].id).toBe(unionId);
+    expect(next.unions[0].partnerBId).toBe(corrected.id);
+    expect(next.unions[0].children[0].childId).toBe(child.id);
+    expect(next.unions[0].children[0].linkB).toBe('biological');
+  });
+
+  it('vide un emplacement de conjoint en gardant les enfants', () => {
+    const a = person('A');
+    const b = person('B');
+    const child = person('Enfant');
+    const data = couple(family(a, b, child), a, b, [child.id]);
+    const next = replaceUnionPartner(data, data.unions[0].id, 'B', null);
+    expect(next.unions[0].partnerBId).toBeNull();
+    expect(next.unions[0].children).toHaveLength(1);
+    expect(next.persons).toHaveLength(3);
+  });
+
+  it('refuse de mettre la même personne des deux côtés de l’union', () => {
+    const a = person('A');
+    const b = person('B');
+    const data = couple(family(a, b), a, b);
+    expect(replaceUnionPartner(data, data.unions[0].id, 'B', a.id)).toBe(data);
   });
 });
 

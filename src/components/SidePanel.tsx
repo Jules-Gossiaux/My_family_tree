@@ -46,6 +46,11 @@ interface SidePanelProps {
     link: LinkType,
   ) => void;
   onRemoveChildLink: (unionId: Id, childId: Id) => void;
+  onReplaceUnionPartner: (
+    unionId: Id,
+    slot: UnionSlot,
+    partnerId: Id | null,
+  ) => void;
   onRemoveUnion: (unionId: Id) => void;
   onSelectPerson: (id: Id) => void;
   onChange: (next: FamilyData) => void;
@@ -75,6 +80,7 @@ export default function SidePanel({
   onUpdateUnion,
   onUpdateChildLink,
   onRemoveChildLink,
+  onReplaceUnionPartner,
   onRemoveUnion,
   onSelectPerson,
   onChange,
@@ -440,10 +446,12 @@ export default function SidePanel({
                           key={union.id}
                           union={union}
                           selectedId={person.id}
+                          persons={data.persons}
                           nameOf={nameOf}
                           onUpdateUnion={onUpdateUnion}
                           onUpdateChildLink={onUpdateChildLink}
                           onRemoveChildLink={onRemoveChildLink}
+                          onReplaceUnionPartner={onReplaceUnionPartner}
                           onRemoveUnion={onRemoveUnion}
                           onSelectPerson={onSelectPerson}
                         />
@@ -654,6 +662,7 @@ export default function SidePanel({
 interface UnionCardProps {
   union: Union;
   selectedId: Id;
+  persons: Person[];
   nameOf: (id: Id | null) => string;
   onUpdateUnion: (unionId: Id, patch: Partial<UnionMetaInput>) => void;
   onUpdateChildLink: (
@@ -663,6 +672,11 @@ interface UnionCardProps {
     link: LinkType,
   ) => void;
   onRemoveChildLink: (unionId: Id, childId: Id) => void;
+  onReplaceUnionPartner: (
+    unionId: Id,
+    slot: UnionSlot,
+    partnerId: Id | null,
+  ) => void;
   onRemoveUnion: (unionId: Id) => void;
   onSelectPerson: (id: Id) => void;
 }
@@ -670,16 +684,23 @@ interface UnionCardProps {
 function UnionCard({
   union,
   selectedId,
+  persons,
   nameOf,
   onUpdateUnion,
   onUpdateChildLink,
   onRemoveChildLink,
+  onReplaceUnionPartner,
   onRemoveUnion,
   onSelectPerson,
 }: UnionCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [replaceSlot, setReplaceSlot] = useState<UnionSlot | null>(null);
   const partners = unionPartnerIds(union);
   const isPartner = slotOfPartner(union, selectedId) !== null;
+  const ownSlot = slotOfPartner(union, selectedId);
+  const otherSlot: UnionSlot = ownSlot === 'A' ? 'B' : 'A';
+  const otherPartnerId =
+    otherSlot === 'A' ? union.partnerAId : union.partnerBId;
 
   // Depuis la fiche d'un enfant, l'union de ses parents ne concerne que lui :
   // qui sont ses parents et quel est son lien avec chacun. Le statut du couple,
@@ -694,6 +715,8 @@ function UnionCard({
         <div className="filiation-rows">
           {(['A', 'B'] as UnionSlot[]).map((slot) => {
             const parentId = slot === 'A' ? union.partnerAId : union.partnerBId;
+            const otherParentId =
+              slot === 'A' ? union.partnerBId : union.partnerAId;
             const link = slot === 'A' ? ownLink?.linkA : ownLink?.linkB;
             return (
               <div key={slot} className="filiation-row">
@@ -727,6 +750,59 @@ function UnionCard({
                     </select>
                   </label>
                 ) : null}
+                <div className="filiation-edit">
+                  <button
+                    type="button"
+                    className="btn btn-mini"
+                    onClick={() =>
+                      setReplaceSlot(replaceSlot === slot ? null : slot)
+                    }
+                  >
+                    {parentId ? 'Changer ce parent' : 'Renseigner ce parent'}
+                  </button>
+                  {replaceSlot === slot && (
+                    <label className="field">
+                      <span>
+                        {parentId ? 'Nouveau parent' : 'Choisir un parent'}
+                      </span>
+                      <select
+                        value=""
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          if (!value) return;
+                          onReplaceUnionPartner(union.id, slot, value);
+                          setReplaceSlot(null);
+                        }}
+                      >
+                        <option value="">— Choisir une personne —</option>
+                        {persons
+                          .filter(
+                            (candidate) =>
+                              candidate.id !== selectedId &&
+                              candidate.id !== otherParentId,
+                          )
+                          .map((candidate) => (
+                            <option key={candidate.id} value={candidate.id}>
+                              {personLabel(candidate)}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
+                  {replaceSlot === slot && parentId && (
+                    <button
+                      type="button"
+                      className="link-remove"
+                      title="L’enfant reste rattaché à l’autre parent"
+                      onClick={() => {
+                        onReplaceUnionPartner(union.id, slot, null);
+                        setReplaceSlot(null);
+                      }}
+                    >
+                      Retirer ce parent de l’union
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -793,6 +869,35 @@ function UnionCard({
             <option value="former">Ancienne</option>
           </select>
         </label>
+      </div>
+
+      <div className="union-partner-edit">
+        <label className="field">
+          <span>Conjoint</span>
+          <select
+            value={otherPartnerId ?? ''}
+            onChange={(event) =>
+              onReplaceUnionPartner(
+                union.id,
+                otherSlot,
+                event.target.value || null,
+              )
+            }
+          >
+            <option value="">Non renseigné</option>
+            {persons
+              .filter((candidate) => candidate.id !== selectedId)
+              .map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {personLabel(candidate)}
+                </option>
+              ))}
+          </select>
+        </label>
+        <p className="panel-note">
+          Changer ce conjoint ne supprime aucune personne : l’union et ses
+          enfants restent en place.
+        </p>
       </div>
 
       {!expanded && (

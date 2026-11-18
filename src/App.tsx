@@ -79,6 +79,7 @@ import {
   removeChildLink,
   removePerson,
   removeUnion,
+  replaceUnionPartner,
   resolveRelation,
   updateChildLink,
   updatePerson,
@@ -569,6 +570,30 @@ export default function App() {
   const handleRemoveUnion = (unionId: Id) => {
     setData((previous) => (previous ? removeUnion(previous, unionId) : previous));
     setToast('Union supprimée.');
+  };
+
+  const handleReplaceUnionPartner = (
+    unionId: Id,
+    slot: UnionSlot,
+    partnerId: Id | null,
+  ) => {
+    if (!data) return;
+    const union = data.unions.find((candidate) => candidate.id === unionId);
+    if (!union) return;
+    const currentId = slot === 'A' ? union.partnerAId : union.partnerBId;
+    if (currentId === partnerId) return;
+    const labelOf = (id: Id | null): string => {
+      const person = id ? getPerson(data, id) : undefined;
+      return person ? personLabel(person) : 'l’emplacement vide';
+    };
+    const message = partnerId
+      ? `Remplacer ${labelOf(currentId)} par ${labelOf(partnerId)} ? Aucune personne n’est supprimée ; les enfants restent rattachés à cette union.`
+      : `Retirer ${labelOf(currentId)} de cette union ? La personne reste dans l’arbre et les enfants restent rattachés à l’autre parent.`;
+    if (!window.confirm(message)) return;
+    setData((previous) =>
+      previous ? replaceUnionPartner(previous, unionId, slot, partnerId) : previous,
+    );
+    setToast(partnerId ? 'Lien mis à jour.' : 'Emplacement libéré.');
   };
 
   const handleDelete = (id: Id | null = selectedId) => {
@@ -1174,6 +1199,7 @@ export default function App() {
           onUpdateUnion={handleUpdateUnion}
           onUpdateChildLink={handleUpdateChildLink}
           onRemoveChildLink={handleRemoveChildLink}
+          onReplaceUnionPartner={handleReplaceUnionPartner}
           onRemoveUnion={handleRemoveUnion}
           onSelectPerson={setSelectedId}
           onChange={setData}

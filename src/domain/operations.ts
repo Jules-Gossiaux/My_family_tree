@@ -766,6 +766,39 @@ export function updateUnion(
   });
 }
 
+/**
+ * Remplace (ou vide) un des deux emplacements d'une union.
+ *
+ * Utilisé quand on s'est trompé de parent ou de conjoint. Les enfants et
+ * leurs liens restent attachés à l'union : on ne supprime aucune personne et
+ * on ne fusionne rien automatiquement. Si le remplacement crée une seconde
+ * filiation biologique pour un enfant, le mécanisme existant de détection
+ * des conflits la signalera pour que l'utilisateur choisisse.
+ */
+export function replaceUnionPartner(
+  data: FamilyData,
+  unionId: Id,
+  slot: UnionSlot,
+  partnerId: Id | null,
+): FamilyData {
+  const union = getUnion(data, unionId);
+  if (!union) return data;
+  const field = slot === 'A' ? 'partnerAId' : 'partnerBId';
+  const otherField = slot === 'A' ? 'partnerBId' : 'partnerAId';
+  if (partnerId === union[field]) return data;
+  if (partnerId && (partnerId === union[otherField] || !getPerson(data, partnerId))) {
+    return data;
+  }
+  const unions = data.unions
+    .map((candidate) =>
+      candidate.id === unionId
+        ? { ...candidate, [field]: partnerId, updatedAt: now() }
+        : candidate,
+    )
+    .filter((candidate) => !isGhostUnion(candidate));
+  return touch({ ...data, unions });
+}
+
 export function updateChildLink(
   data: FamilyData,
   unionId: Id,

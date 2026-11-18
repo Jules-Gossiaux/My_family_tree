@@ -15,7 +15,7 @@ Arbre généalogique familial : visualisation, faits de vie, lieux, sources et m
 
 ### Arbre et fiches
 
-- Ajout d'une personne, d'un parent, d'un frère/sœur, d'un enfant ou d'un conjoint ; édition et suppression des fiches.
+- Ajout d'une personne, d'un parent, d'un frère/sœur, d'un enfant ou d'un conjoint ; édition et suppression des fiches. En cas d'erreur, un parent ou un conjoint peut être **remplacé ou retiré** sans supprimer la personne ni détacher les enfants.
 - Placement automatique déterministe (`balanced` par défaut, `siblings`, `couples`, `off`), pan/zoom, vues **classique / ascendants / sablier / éventail** et mise en page d'impression.
 - Recherche insensible aux accents et aux variantes de noms (`Ctrl/Cmd+K`), surlignage et recentrage.
 - Menu contextuel sur chaque carte : ouvrir la fiche, ajouter un lien, rattacher une personne existante, définir « Moi », créer une branche, calculer un lien de parenté, supprimer.
