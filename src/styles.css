@@ -2668,3 +2668,47 @@ textarea {
 .relationship-result strong {
   font-size: 16px;
 }
+
+/* Impression : arbre et fiche, sans chrome d'application */
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .topbar,
+  .side-panel,
+  .canvas-controls,
+  .quick-toolbar,
+  .context-menu,
+  .toast,
+  .save-error,
+  .modal-overlay,
+  .modal-backdrop {
+    display: none !important;
+  }
+
+  .workspace,
+  .canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .tree-svg {
+    width: 100%;
+    height: auto;
+    max-width: none;
+  }
+
+  .person-card-bg,
+  .union-node circle {
+    fill: #fff !important;
+    stroke: #222 !important;
+  }
+
+  .tree-edge {
+    stroke: #333 !important;
+    stroke-dasharray: none !important;
+  }
+}

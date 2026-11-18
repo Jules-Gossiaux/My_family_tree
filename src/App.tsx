@@ -79,6 +79,13 @@ import {
 import { normalizeSearch } from './domain/dates';
 import { computeLayout, structureKey, type TreeLayout } from './layout/layout';
 import {
+  VIEW_LABELS,
+  VIEW_MODES,
+  computeFocusedView,
+  isTreeViewMode,
+  type TreeViewMode,
+} from './layout/views';
+import {
   GROUPING_HINTS,
   GROUPING_LABELS,
   GROUPING_MODES,
@@ -161,6 +168,22 @@ export default function App() {
       return 'balanced';
     }
   });
+  const [viewMode, setViewMode] = useState<TreeViewMode>(() => {
+    try {
+      const saved = window.localStorage.getItem('simple-family-tree:view-mode');
+      return isTreeViewMode(saved) ? saved : 'classic';
+    } catch {
+      return 'classic';
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('simple-family-tree:view-mode', viewMode);
+    } catch {
+      // Réglage non critique.
+    }
+  }, [viewMode]);
+
   const [fitSignal, setFitSignal] = useState(0);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -223,6 +246,15 @@ export default function App() {
     const current = dataRef.current;
     if (!current) return;
     let cancelled = false;
+    if (viewMode !== 'classic') {
+      const rootId = selectedId ?? settings.referenceId ?? settings.meId;
+      setLayout(
+        rootId && current.persons.some((person) => person.id === rootId)
+          ? computeFocusedView(current, viewMode, rootId)
+          : EMPTY_LAYOUT,
+      );
+      return;
+    }
     void computeLayout(current, grouping)
       .then((result) => {
         if (!cancelled) setLayout(result);
@@ -235,7 +267,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [key, grouping]);
+  }, [key, grouping, viewMode, selectedId, settings.referenceId, settings.meId]);
 
   useEffect(() => {
     if (!toast) return;
@@ -865,6 +897,24 @@ export default function App() {
               </div>
             )}
           </div>
+          <label className="grouping-control" title="Vue de l’arbre">
+            <span>Vue</span>
+            <select
+              value={viewMode}
+              onChange={(event) => {
+                setViewMode(event.target.value as TreeViewMode);
+                setFitSignal((value) => value + 1);
+              }}
+              aria-label="Mode de vue de l’arbre"
+            >
+              {VIEW_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {VIEW_LABELS[mode]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {viewMode === 'classic' && (
           <label className="grouping-control" title={GROUPING_HINTS[grouping]}>
             <span>Proximité</span>
             <select
@@ -881,6 +931,7 @@ export default function App() {
               ))}
             </select>
           </label>
+          )}
           {settings.meId && (
             <button
               type="button"
@@ -967,6 +1018,13 @@ export default function App() {
             onClick={() => setFitSignal((value) => value + 1)}
           >
             Ajuster
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => window.print()}
+          >
+            Imprimer
           </button>
           <button
             type="button"
