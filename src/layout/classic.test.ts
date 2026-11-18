@@ -210,6 +210,75 @@ describe('moteur de placement classique', () => {
     expect(countOverlaps(data)).toBe(0);
   });
 
+  it('aligne deux conjoints dont les deux branches ont des profondeurs différentes', () => {
+    const grand = person('Grand-parent');
+    const mireille = person('Mireille');
+    const jules = person('Jules');
+    const christophe = person('Christophe');
+    const willy = person('Willy');
+    const jeanne = person('Jeanne');
+    const anne = person('Anne-Catherine');
+    const child = person('Enfant');
+    const data: FamilyData = {
+      ...family(
+        grand,
+        mireille,
+        jules,
+        christophe,
+        willy,
+        jeanne,
+        anne,
+        child,
+      ),
+      unions: [
+        {
+          ...createUnionFor(grand.id, null),
+          children: [
+            { childId: mireille.id, linkA: 'biological', linkB: 'unknown' },
+          ],
+        },
+        {
+          ...createUnionFor(mireille.id, jules.id),
+          children: [
+            { childId: christophe.id, linkA: 'biological', linkB: 'biological' },
+          ],
+        },
+        {
+          ...createUnionFor(willy.id, jeanne.id),
+          children: [
+            { childId: anne.id, linkA: 'biological', linkB: 'biological' },
+          ],
+        },
+        {
+          ...createUnionFor(christophe.id, anne.id),
+          children: [
+            { childId: child.id, linkA: 'biological', linkB: 'biological' },
+          ],
+        },
+      ],
+    };
+
+    const layout = computeClassicLayout(data);
+    const cardOf = (id: string) =>
+      layout.nodes.find((node) => node.kind === 'person' && node.refId === id);
+    // Les deux conjoints partagent la même rangée…
+    expect(cardOf(anne.id)?.y).toBe(cardOf(christophe.id)?.y);
+    // …et les deux belles-familles aussi, sinon le tronc traverserait une rangée.
+    expect(cardOf(willy.id)?.y).toBe(cardOf(mireille.id)?.y);
+    expect(cardOf(jeanne.id)?.y).toBe(cardOf(jules.id)?.y);
+    // La pastille du couple est entre les deux cartes, pas sous le conjoint bas.
+    const dot = layout.nodes.find(
+      (node) => node.kind === 'union' && node.refId === data.unions[3].id,
+    );
+    expect(dot?.y).toBeGreaterThan(cardOf(christophe.id)!.y);
+    expect(dot?.y).toBeLessThan(
+      cardOf(christophe.id)!.y + cardOf(christophe.id)!.height,
+    );
+    expect(countEdgeCardHits(data)).toBe(0);
+    expect(countCrossings(data)).toBe(0);
+    expect(countOverlaps(data)).toBe(0);
+  });
+
   it('gère une fratrie large sans croisement', () => {
     const parent = person('Parent');
     const kids = Array.from({ length: 6 }, (_, i) => person(`Enfant ${i}`));

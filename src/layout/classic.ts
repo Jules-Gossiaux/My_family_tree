@@ -263,6 +263,24 @@ function buildLayout(
     return !!birth && birth.partners.length > 0;
   };
 
+  /** Vrai si `ancestor` figure parmi les parents (directs ou non) de `descendant`. */
+  const isAncestor = (ancestor: Id, descendant: Id): boolean => {
+    const stack: Id[] = [descendant];
+    const seen = new Set<Id>();
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      const birth = birthUnion.get(current);
+      if (!birth) continue;
+      for (const parent of birth.partners) {
+        if (parent === ancestor) return true;
+        stack.push(parent);
+      }
+    }
+    return false;
+  };
+
   const partnerUnions = new Map<Id, UnionInfo[]>();
   for (const info of infos) {
     for (const partner of info.partners) {
@@ -375,6 +393,108 @@ function buildLayout(
           );
           changed = true;
         }
+      }
+    }
+
+    if (!changed) break;
+  }
+
+  /**
+   * Alignement global des conjoints.
+   *
+   * La relaxation ci-dessus laisse deux personnes mariées sur des rangées
+   * différentes dès que chacune a des parents connus à des profondeurs
+   * distinctes (une branche a des grands-parents, l'autre non). Le trait de
+   * couple traverse alors une rangée et vient se superposer à la descente des
+   * parents. On descend donc le conjoint le plus haut au niveau du plus bas,
+   * avec toute sa fratrie, puis on resserre les parents vers leurs enfants
+   * pour ne pas laisser de tronc traversant une rangée vide.
+   *
+   * Les rangées ne font que MONTER : chaque passe rapproche de la solution et
+   * le plafond borne les données incohérentes (mariage entre générations).
+   */
+  const alignmentPasses = Math.min(128, groupCount * 2 + 4);
+  for (let pass = 0; pass < alignmentPasses; pass += 1) {
+    let changed = false;
+
+    // Données contradictoires (mariage entre un ancêtre et son descendant) :
+    // forcer l'égalité ferait grimper les rangées sans fin. On laisse la
+    // relaxation normale traiter ce cas, et on borne les rangées.
+    let highestRow = 0;
+    for (const person of persons) {
+      highestRow = Math.max(highestRow, displayRow.get(person.id) ?? 0);
+    }
+    if (highestRow > groupCount + 2) break;
+
+    for (const info of infos) {
+      if (info.partners.length < 2) continue;
+      const [first, second] = info.partners;
+      if (isAncestor(first, second) || isAncestor(second, first)) continue;
+      let lowest = 0;
+      for (const partner of info.partners) {
+        lowest = Math.max(lowest, displayRow.get(partner) ?? 0);
+      }
+      for (const partner of info.partners) {
+        if ((displayRow.get(partner) ?? 0) >= lowest) continue;
+        displayRow.set(partner, lowest);
+        const group = groupOf(partner);
+        if (groupGeneration[group] < lowest) {
+          groupGeneration[group] = lowest;
+          changed = true;
+        }
+      }
+    }
+
+    // Les descendants suivent : un enfant reste strictement sous ses parents.
+    for (const info of infos) {
+      if (!info.children.length || !info.partners.length) continue;
+      let parentRow = 0;
+      for (const partner of info.partners) {
+        parentRow = Math.max(parentRow, displayRow.get(partner) ?? 0);
+      }
+      for (const child of info.children) {
+        const group = groupOf(child.id);
+        if (groupGeneration[group] < parentRow + 1) {
+          groupGeneration[group] = parentRow + 1;
+          changed = true;
+        }
+      }
+    }
+
+    for (const person of persons) {
+      const row = groupGeneration[groupOf(person.id)];
+      if ((displayRow.get(person.id) ?? 0) < row) {
+        displayRow.set(person.id, row);
+        changed = true;
+      }
+    }
+
+    // Resserrement : un parent descend au plus près de son enfant le plus
+    // haut, sans jamais dépasser la rangée juste au-dessus.
+    for (const info of infos) {
+      if (!info.children.length || !info.partners.length) continue;
+      let minChild = Number.POSITIVE_INFINITY;
+      for (const child of info.children) {
+        minChild = Math.min(minChild, displayRow.get(child.id) ?? 0);
+      }
+      if (!Number.isFinite(minChild)) continue;
+      const target = minChild - 1;
+      for (const partner of info.partners) {
+        if ((displayRow.get(partner) ?? 0) >= target) continue;
+        displayRow.set(partner, target);
+        const group = groupOf(partner);
+        if (groupGeneration[group] < target) {
+          groupGeneration[group] = target;
+          changed = true;
+        }
+      }
+    }
+
+    for (const person of persons) {
+      const row = groupGeneration[groupOf(person.id)];
+      if ((displayRow.get(person.id) ?? 0) < row) {
+        displayRow.set(person.id, row);
+        changed = true;
       }
     }
 
