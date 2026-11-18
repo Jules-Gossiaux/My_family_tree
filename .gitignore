@@ -49,3 +49,6 @@ apercu-*.png
 .vscode/
 .idea/
 *.swp
+
+# Rapports générés localement, non destinés au dépôt
+.revue-code-rapport.md
