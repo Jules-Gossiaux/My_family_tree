@@ -38,6 +38,7 @@ import {
   emptyFamily,
   freeSlot,
   personLabel,
+  personSearchText,
   unionPartnerIds,
   type FamilyData,
   type Id,
@@ -277,9 +278,7 @@ export default function App() {
     if (!query || !data) return [];
     return data.persons
       .filter((person) =>
-        normalizeSearch(
-          `${person.firstName} ${person.lastName} ${person.lastName} ${person.firstName}`,
-        ).includes(query),
+        normalizeSearch(personSearchText(person)).includes(query),
       )
       .slice(0, 8);
   }, [data, search]);

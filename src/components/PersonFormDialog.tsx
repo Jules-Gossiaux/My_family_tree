@@ -89,6 +89,7 @@ export default function PersonFormDialog({
   const [isCurrent, setIsCurrent] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [showNames, setShowNames] = useState(false);
   const [error, setError] = useState('');
 
   const canLinkExisting = config.kind !== 'first' && existingOptions.length > 0;
@@ -141,6 +142,10 @@ export default function PersonFormDialog({
       input: {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
+        birthSurname: form.birthSurname?.trim() || undefined,
+        usageSurname: form.usageSurname?.trim() || undefined,
+        additionalGivenNames: form.additionalGivenNames?.trim() || undefined,
+        aliases: form.aliases?.trim() || undefined,
         gender: form.gender,
         birthDate: form.birthDate || undefined,
         deathDate: form.deathDate || undefined,
@@ -245,6 +250,60 @@ export default function PersonFormDialog({
                 }}
               />
             </label>
+            <div className="field-full">
+              <button
+                type="button"
+                className="disclosure-toggle"
+                aria-expanded={showNames}
+                onClick={() => setShowNames((value) => !value)}
+              >
+                {showNames ? '▾' : '▸'} Variantes de nom (nom de naissance, nom d’usage, surnoms…)
+              </button>
+              {showNames && (
+                <div className="form-grid name-variants">
+                  <label className="field">
+                    <span>Nom de naissance</span>
+                    <input
+                      value={form.birthSurname ?? ''}
+                      placeholder="Nom de jeune fille / de naissance"
+                      onChange={(event) =>
+                        setForm({ ...form, birthSurname: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Nom d’usage</span>
+                    <input
+                      value={form.usageSurname ?? ''}
+                      placeholder="Nom utilisé couramment"
+                      onChange={(event) =>
+                        setForm({ ...form, usageSurname: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="field field-full">
+                    <span>Autres prénoms</span>
+                    <input
+                      value={form.additionalGivenNames ?? ''}
+                      placeholder="Deuxième prénom, prénoms composés…"
+                      onChange={(event) =>
+                        setForm({ ...form, additionalGivenNames: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="field field-full">
+                    <span>Surnoms et aliases</span>
+                    <input
+                      value={form.aliases ?? ''}
+                      placeholder="Séparés par une virgule"
+                      onChange={(event) =>
+                        setForm({ ...form, aliases: event.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
             <label className="field">
               <span>Genre</span>
               <select

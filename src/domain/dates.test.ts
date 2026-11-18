@@ -64,3 +64,22 @@ describe('analyse des dates floues', () => {
     expect(normalizeSearch('  Jeanne  Françoise ')).toBe('jeanne francoise');
   });
 });
+
+import { personSearchText } from '../domain/types';
+import { person as makePerson } from '../test/factories';
+
+describe('recherche par variantes de nom', () => {
+  it('inclut toutes les graphies dans le texte cherchable', () => {
+    const p = makePerson('Marie', {
+      lastName: 'Martin',
+      birthSurname: 'Petit',
+      usageSurname: 'Durand',
+      additionalGivenNames: 'Jeanne Claire',
+      aliases: 'Mimi, Manou',
+    });
+    const text = normalizeSearch(personSearchText(p));
+    for (const needle of ['marie', 'martin', 'petit', 'durand', 'jeanne', 'mimi', 'manou']) {
+      expect(text).toContain(normalizeSearch(needle));
+    }
+  });
+});

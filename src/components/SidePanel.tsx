@@ -83,6 +83,7 @@ export default function SidePanel({
 }: SidePanelProps) {
   const [tab, setTab] = useState<Tab>('fiche');
   const [uploadSignal, setUploadSignal] = useState(0);
+  const [showNames, setShowNames] = useState(false);
   const person = selectedId ? getPerson(data, selectedId) : undefined;
   const relations = selectedId ? relationsOf(data, selectedId) : undefined;
   const unions = selectedId ? unionsOfPerson(data, selectedId) : [];
@@ -285,6 +286,61 @@ export default function SidePanel({
                       />
                     </label>
                   </div>
+                </section>
+
+                <section className="panel-section">
+                  <button
+                    type="button"
+                    className="disclosure-toggle"
+                    aria-expanded={showNames}
+                    onClick={() => setShowNames((value) => !value)}
+                  >
+                    {showNames ? '▾' : '▸'} Variantes de nom
+                  </button>
+                  {showNames && (
+                    <div className="form-grid name-variants">
+                      <label className="field">
+                        <span>Nom de naissance</span>
+                        <input
+                          value={person.birthSurname ?? ''}
+                          placeholder="Nom de jeune fille / de naissance"
+                          onChange={(event) =>
+                            onUpdate({ birthSurname: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Nom d’usage</span>
+                        <input
+                          value={person.usageSurname ?? ''}
+                          placeholder="Nom utilisé couramment"
+                          onChange={(event) =>
+                            onUpdate({ usageSurname: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="field field-full">
+                        <span>Autres prénoms</span>
+                        <input
+                          value={person.additionalGivenNames ?? ''}
+                          placeholder="Deuxième prénom…"
+                          onChange={(event) =>
+                            onUpdate({ additionalGivenNames: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="field field-full">
+                        <span>Surnoms et aliases</span>
+                        <input
+                          value={person.aliases ?? ''}
+                          placeholder="Séparés par une virgule"
+                          onChange={(event) =>
+                            onUpdate({ aliases: event.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                  )}
                 </section>
 
                 <section className="panel-section">

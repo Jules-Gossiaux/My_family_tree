@@ -21,6 +21,10 @@ export function person(
     gender: (overrides.gender ?? 'unspecified') as Gender,
     birthDate: overrides.birthDate,
     deathDate: overrides.deathDate,
+    birthSurname: overrides.birthSurname,
+    usageSurname: overrides.usageSurname,
+    additionalGivenNames: overrides.additionalGivenNames,
+    aliases: overrides.aliases,
   });
   return overrides.id ? { ...created, id: overrides.id } : created;
 }

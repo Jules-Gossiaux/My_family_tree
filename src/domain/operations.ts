@@ -709,6 +709,18 @@ export function updatePerson(
             ...person,
             ...(has('firstName') ? { firstName: patch.firstName ?? '' } : {}),
             ...(has('lastName') ? { lastName: patch.lastName ?? '' } : {}),
+            ...(has('birthSurname')
+              ? { birthSurname: patch.birthSurname?.trim() || undefined }
+              : {}),
+            ...(has('usageSurname')
+              ? { usageSurname: patch.usageSurname?.trim() || undefined }
+              : {}),
+            ...(has('additionalGivenNames')
+              ? { additionalGivenNames: patch.additionalGivenNames?.trim() || undefined }
+              : {}),
+            ...(has('aliases')
+              ? { aliases: patch.aliases?.trim() || undefined }
+              : {}),
             ...(has('gender') && patch.gender ? { gender: patch.gender } : {}),
             ...(has('birthDate') ? { birthDate: patch.birthDate || undefined } : {}),
             ...(has('deathDate') ? { deathDate: patch.deathDate || undefined } : {}),

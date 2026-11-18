@@ -271,6 +271,11 @@ export interface Person {
   familyId: Id;
   firstName: string;
   lastName: string;
+  /** Variantes de nom, toutes facultatives, jamais fusionnées automatiquement. */
+  birthSurname?: string;
+  usageSurname?: string;
+  additionalGivenNames?: string;
+  aliases?: string;
   gender: Gender;
   /** Texte libre : « vers 1890 », « avant 1914 », ISO historique… */
   birthDate?: string;
@@ -334,6 +339,10 @@ export interface FamilyData {
 export interface NewPersonInput {
   firstName: string;
   lastName: string;
+  birthSurname?: string;
+  usageSurname?: string;
+  additionalGivenNames?: string;
+  aliases?: string;
   gender: Gender;
   birthDate?: string;
   deathDate?: string;
@@ -377,6 +386,10 @@ export function createPerson(familyId: Id, input: NewPersonInput): Person {
     familyId,
     firstName: input.firstName.trim(),
     lastName: input.lastName.trim(),
+    birthSurname: input.birthSurname?.trim() || undefined,
+    usageSurname: input.usageSurname?.trim() || undefined,
+    additionalGivenNames: input.additionalGivenNames?.trim() || undefined,
+    aliases: input.aliases?.trim() || undefined,
     gender: input.gender,
     birthDate: input.birthDate?.trim() || undefined,
     deathDate: input.deathDate?.trim() || undefined,
@@ -530,6 +543,20 @@ export function touch(data: FamilyData): FamilyData {
 export function personLabel(person: Person): string {
   const full = `${person.firstName} ${person.lastName}`.trim();
   return full || 'Sans nom';
+}
+
+/** Toutes les graphies utiles à la recherche (nom principal + variantes). */
+export function personSearchText(person: Person): string {
+  return [
+    person.firstName,
+    person.lastName,
+    person.birthSurname,
+    person.usageSurname,
+    person.additionalGivenNames,
+    person.aliases,
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 export function unionPartnerIds(union: Union): Id[] {
