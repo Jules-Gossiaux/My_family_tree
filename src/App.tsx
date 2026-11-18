@@ -10,6 +10,7 @@ import type { CardPortrait } from './components/PersonCard';
 import BackupDialog from './components/BackupDialog';
 import SettingsDialog from './components/SettingsDialog';
 import MediaInbox from './components/MediaInbox';
+import RelationshipDialog from './components/RelationshipDialog';
 import {
   LocalSettingsStore,
   type ViewSettings,
@@ -141,6 +142,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [branchStartId, setBranchStartId] = useState<Id | null>(null);
+  const [relationOpen, setRelationOpen] = useState(false);
+  const [relationFrom, setRelationFrom] = useState<Id | null>(null);
   const settingsStore = useMemo(() => new LocalSettingsStore(), []);
   const [settings, setSettings] = useState<ViewSettings>(() =>
     new LocalSettingsStore().load(),
@@ -565,6 +568,11 @@ export default function App() {
     setFocusRequest({ id: settings.meId, token: focusToken.current });
   };
 
+  const openRelationship = (from: Id | null = null) => {
+    setRelationFrom(from);
+    setRelationOpen(true);
+  };
+
   const openBranchFor = (id: Id) => {
     setBranchStartId(id);
     setSettingsOpen(true);
@@ -885,6 +893,13 @@ export default function App() {
           <button
             type="button"
             className="btn btn-secondary"
+            onClick={() => openRelationship()}
+          >
+            Lien de parenté
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
             onClick={() => setSettingsOpen(true)}
           >
             Réglages
@@ -986,6 +1001,7 @@ export default function App() {
             setToast('Personne de référence enregistrée.');
           }}
           onStartBranch={openBranchFor}
+          onOpenRelationship={openRelationship}
           onAttachExisting={() => handleAdd('child', true)}
           onAddFirst={() => handleAdd('first')}
           onImport={() => fileInputRef.current?.click()}
@@ -1066,6 +1082,14 @@ export default function App() {
             <MediaInbox data={data} onChange={setData} />
           </div>
         </div>
+      )}
+
+      {relationOpen && (
+        <RelationshipDialog
+          data={data}
+          initialId={relationFrom}
+          onClose={() => setRelationOpen(false)}
+        />
       )}
 
       {settingsOpen && (

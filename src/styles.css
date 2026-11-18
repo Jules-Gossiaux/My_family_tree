@@ -2650,3 +2650,21 @@ textarea {
   margin: 5px 4px;
   background: var(--border-soft);
 }
+
+/* Calcul de parenté */
+.relationship-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.relationship-result {
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-soft, #faf8f5);
+}
+
+.relationship-result strong {
+  font-size: 16px;
+}

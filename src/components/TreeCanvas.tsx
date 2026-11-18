@@ -33,6 +33,7 @@ interface TreeCanvasProps {
   onSetReference: (id: Id) => void;
   onStartBranch: (id: Id) => void;
   onAttachExisting: () => void;
+  onOpenRelationship: (id: Id) => void;
   onAddFirst: () => void;
   onImport: () => void;
 }
@@ -112,6 +113,7 @@ export default function TreeCanvas({
   onSetReference,
   onStartBranch,
   onAttachExisting,
+  onOpenRelationship,
   onAddFirst,
   onImport,
 }: TreeCanvasProps) {
@@ -507,6 +509,16 @@ export default function TreeCanvas({
             }}
           >
             Créer une branche ici
+          </button>
+          <span className="context-separator" />
+          <button
+            type="button"
+            onClick={() => {
+              onOpenRelationship(contextMenu.personId);
+              setContextMenu(null);
+            }}
+          >
+            Calculer un lien de parenté…
           </button>
           <span className="context-separator" />
           <button
