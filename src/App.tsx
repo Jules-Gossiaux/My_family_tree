@@ -935,7 +935,6 @@ export default function App() {
       {eventDialog && selectedId && (
         <EventDialog
           data={data}
-          personId={selectedId}
           eventId={eventDialog.eventId}
           onChange={setData}
           onDelete={handleDeleteEvent}

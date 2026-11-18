@@ -23,7 +23,6 @@ import {
 
 interface EventDialogProps {
   data: FamilyData;
-  personId: Id;
   eventId?: Id;
   onChange: (next: FamilyData) => void;
   onDelete?: (eventId: Id) => void;
@@ -43,7 +42,6 @@ function labelOfUnion(data: FamilyData, unionId: Id): string {
 /** Éditeur d'un fait de vie partagé entre une ou plusieurs personnes. */
 export default function EventDialog({
   data,
-  personId,
   eventId,
   onChange,
   onDelete,
@@ -56,7 +54,7 @@ export default function EventDialog({
   const [placeId, setPlaceId] = useState(existing?.placeId);
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [participants, setParticipants] = useState(
-    existing?.participants ?? [{ personId, role: 'principal' }],
+    existing?.participants ?? [],
   );
   const [citations, setCitations] = useState<SourceCitation[]>(
     existing?.citations ?? [],
