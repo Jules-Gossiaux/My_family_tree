@@ -40,6 +40,7 @@ $RECYCLE.BIN/
 
 # Fichiers temporaires de développement
 .tmp-*
+apercu-*.png
 
 # Métadonnées de l'espace de travail
 .workbuddy-ai/
