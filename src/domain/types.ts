@@ -287,8 +287,7 @@ export interface Person {
   /** Média choisi comme portrait, avec le cadrage propre à cette personne. */
   portraitMediaId?: Id;
   portraitCrop?: PortraitCrop;
-  /** Lieux nommés cités depuis la fiche. */
-  addressPlaceId?: Id;
+  /** Lieu nommé de sépulture, distinct de la mention texte du cimetière. */
   cemeteryPlaceId?: Id;
   /** Événements naissance/décès créés automatiquement et maintenus synchros. */
   defaultBirthEventId?: Id;

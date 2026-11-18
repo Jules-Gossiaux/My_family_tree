@@ -49,9 +49,6 @@ export function placeUsage(data: FamilyData, placeId: Id): Usage[] {
     }
   }
   for (const person of data.persons) {
-    if (person.addressPlaceId === placeId) {
-      usage.push({ kind: 'Adresse', label: `${person.firstName} ${person.lastName}`.trim() });
-    }
     if (person.cemeteryPlaceId === placeId) {
       usage.push({ kind: 'Sépulture', label: `${person.firstName} ${person.lastName}`.trim() });
     }

@@ -276,15 +276,6 @@ export default function SidePanel({
                         }
                       />
                     </label>
-                    <DirectorySelect
-                      label="Lieu de résidence"
-                      options={placeOptions}
-                      value={person.addressPlaceId}
-                      emptyLabel="Lieu non renseigné"
-                      createLabel="Nom du nouveau lieu"
-                      onCreate={createPlace}
-                      onChange={(id) => patchPerson({ addressPlaceId: id })}
-                    />
                     <label className="field">
                       <span>Téléphone</span>
                       <input

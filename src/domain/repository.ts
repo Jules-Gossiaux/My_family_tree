@@ -202,7 +202,6 @@ export function validateFamilyData(value: unknown): FamilyData {
       notes: asOptionalString(p.notes),
       portraitMediaId: typeof p.portraitMediaId === 'string' ? p.portraitMediaId : undefined,
       portraitCrop: readPortraitCrop(p.portraitCrop),
-      addressPlaceId: typeof p.addressPlaceId === 'string' ? p.addressPlaceId : undefined,
       cemeteryPlaceId: typeof p.cemeteryPlaceId === 'string' ? p.cemeteryPlaceId : undefined,
       defaultBirthEventId:
         typeof p.defaultBirthEventId === 'string' ? p.defaultBirthEventId : undefined,
@@ -249,9 +248,6 @@ export function validateFamilyData(value: unknown): FamilyData {
     const patch: Partial<Person> = {};
     if (person.portraitMediaId && !mediaIds.has(person.portraitMediaId)) {
       patch.portraitMediaId = undefined;
-    }
-    if (person.addressPlaceId && !placeIds.has(person.addressPlaceId)) {
-      patch.addressPlaceId = undefined;
     }
     if (person.cemeteryPlaceId && !placeIds.has(person.cemeteryPlaceId)) {
       patch.cemeteryPlaceId = undefined;
