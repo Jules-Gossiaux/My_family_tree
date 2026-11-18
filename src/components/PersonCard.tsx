@@ -1,3 +1,4 @@
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { Person, PortraitCrop } from '../domain/types';
 import type { LaidOutNode } from '../layout/layout';
 import { formatDates, initials, truncate } from '../utils/format';
@@ -17,6 +18,7 @@ interface PersonCardProps {
   branchColor?: string;
   branchLabel?: string;
   onSelect: (id: string) => void;
+  onContextMenu?: (event: ReactMouseEvent, id: string) => void;
 }
 
 export default function PersonCard({
@@ -29,6 +31,7 @@ export default function PersonCard({
   branchColor,
   branchLabel,
   onSelect,
+  onContextMenu,
 }: PersonCardProps) {
   const label = truncate(
     `${person.firstName} ${person.lastName}`.trim() || 'Sans nom',
@@ -52,6 +55,7 @@ export default function PersonCard({
         event.stopPropagation();
         onSelect(person.id);
       }}
+      onContextMenu={(event) => onContextMenu?.(event, person.id)}
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {

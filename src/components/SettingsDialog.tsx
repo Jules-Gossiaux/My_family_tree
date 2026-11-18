@@ -11,6 +11,8 @@ interface SettingsDialogProps {
   data: FamilyData;
   settings: ViewSettings;
   onChange: (settings: ViewSettings) => void;
+  /** Si fourni, précrée une branche démarrant sur cette personne. */
+  branchStartId?: Id | null;
   onClose: () => void;
 }
 
@@ -23,10 +25,31 @@ export default function SettingsDialog({
   data,
   settings,
   onChange,
+  branchStartId,
   onClose,
 }: SettingsDialogProps) {
   const [newBranchName, setNewBranchName] = useState('');
   const persons = PERSON_OPTIONS(data);
+
+  useEffect(() => {
+    if (!branchStartId) return;
+    const source = data.persons.find((person) => person.id === branchStartId);
+    if (!source) return;
+    const existing = settings.branches.find(
+      (branch) => branch.startPersonId === branchStartId,
+    );
+    if (existing) return;
+    const branch = createBranch(`Branche de ${personLabel(source)}`, settings.branches);
+    onChange({
+      ...settings,
+      branches: [
+        ...settings.branches,
+        { ...branch, startPersonId: branchStartId, memberIds: [branchStartId] },
+      ],
+    });
+    // Une seule précréation par ouverture du dialogue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchStartId]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {

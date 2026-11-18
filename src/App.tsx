@@ -139,6 +139,7 @@ export default function App() {
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [branchStartId, setBranchStartId] = useState<Id | null>(null);
   const settingsStore = useMemo(() => new LocalSettingsStore(), []);
   const [settings, setSettings] = useState<ViewSettings>(() =>
     new LocalSettingsStore().load(),
@@ -332,13 +333,13 @@ export default function App() {
     setFitSignal((value) => value + 1);
   };
 
-  const handleAdd = (kind: AddKind) => {
+  const handleAdd = (kind: AddKind, preferExisting = false) => {
     if (kind === 'first') {
       setDialog({ kind });
       return;
     }
     if (!selectedId) return;
-    setDialog({ kind, personId: selectedId });
+    setDialog({ kind, personId: selectedId, preferExisting });
   };
 
   const handleSubmit = (result: DialogResult) => {
@@ -561,6 +562,11 @@ export default function App() {
     focusToken.current += 1;
     setSelectedId(settings.meId);
     setFocusRequest({ id: settings.meId, token: focusToken.current });
+  };
+
+  const openBranchFor = (id: Id) => {
+    setBranchStartId(id);
+    setSettingsOpen(true);
   };
 
   const handleDeleteEvent = (eventId: Id) => {
@@ -961,6 +967,16 @@ export default function App() {
           onSelect={setSelectedId}
           onAdd={handleAdd}
           onDelete={handleDelete}
+          onSetMe={(id) => {
+            setSettings((current) => ({ ...current, meId: id }));
+            setToast('Marqueur « Moi » enregistré pour votre compte.');
+          }}
+          onSetReference={(id) => {
+            setSettings((current) => ({ ...current, referenceId: id }));
+            setToast('Personne de référence enregistrée.');
+          }}
+          onStartBranch={openBranchFor}
+          onAttachExisting={() => handleAdd('child', true)}
           onAddFirst={() => handleAdd('first')}
           onImport={() => fileInputRef.current?.click()}
         />
@@ -1046,8 +1062,12 @@ export default function App() {
         <SettingsDialog
           data={data}
           settings={settings}
+          branchStartId={branchStartId}
           onChange={setSettings}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false);
+            setBranchStartId(null);
+          }}
         />
       )}
 

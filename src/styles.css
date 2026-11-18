@@ -2598,3 +2598,55 @@ textarea {
   font-size: 11px;
   color: var(--text-dim);
 }
+
+/* Menu contextuel sur les cartes */
+.context-menu {
+  position: absolute;
+  z-index: 40;
+  width: 216px;
+  max-height: 78vh;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  box-shadow: 0 16px 44px rgba(30, 24, 18, 0.18);
+}
+
+.context-title {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu button:hover {
+  background: var(--accent-soft, #f4ece0);
+}
+
+.context-menu button.context-danger {
+  color: #a3402d;
+}
+
+.context-separator {
+  display: block;
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--border-soft);
+}

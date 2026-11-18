@@ -29,6 +29,10 @@ interface TreeCanvasProps {
   onSelect: (id: Id | null) => void;
   onAdd: (kind: AddKind) => void;
   onDelete: (id: Id) => void;
+  onSetMe: (id: Id) => void;
+  onSetReference: (id: Id) => void;
+  onStartBranch: (id: Id) => void;
+  onAttachExisting: () => void;
   onAddFirst: () => void;
   onImport: () => void;
 }
@@ -104,6 +108,10 @@ export default function TreeCanvas({
   onSelect,
   onAdd,
   onDelete,
+  onSetMe,
+  onSetReference,
+  onStartBranch,
+  onAttachExisting,
   onAddFirst,
   onImport,
 }: TreeCanvasProps) {
@@ -122,6 +130,12 @@ export default function TreeCanvas({
     clientY: number;
     viewX: number;
     viewY: number;
+  } | null>(null);
+
+  const [contextMenu, setContextMenu] = useState<{
+    personId: Id;
+    x: number;
+    y: number;
   } | null>(null);
 
   const fittedRef = useRef(false);
@@ -303,7 +317,7 @@ export default function TreeCanvas({
     : 0;
 
   return (
-    <div className="canvas" ref={containerRef}>
+    <div className="canvas" ref={containerRef} onClick={() => setContextMenu(null)}>
       <svg
         className={`tree-svg${dragging ? ' is-dragging' : ''}`}
         onPointerDown={handlePointerDown}
@@ -356,6 +370,17 @@ export default function TreeCanvas({
                 branchColor={settings ? branchColorOf(settings, person.id) : undefined}
                 branchLabel={settings ? branchLabelsOf(settings, person.id) : undefined}
                 onSelect={onSelect}
+                onContextMenu={(event, id) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const rect = containerRef.current?.getBoundingClientRect();
+                  onSelect(id);
+                  setContextMenu({
+                    personId: id,
+                    x: event.clientX - (rect?.left ?? 0),
+                    y: event.clientY - (rect?.top ?? 0),
+                  });
+                }}
               />
             );
           })}
@@ -398,6 +423,101 @@ export default function TreeCanvas({
             title="Supprimer cette personne (touche Suppr)"
           >
             <QuickIcon name="delete" />
+          </button>
+        </div>
+      )}
+
+      {contextMenu && (
+        <div
+          className="context-menu"
+          style={{
+            left: clamp(contextMenu.x, 8, Math.max(8, size.width - 224)),
+            top: clamp(contextMenu.y, 8, Math.max(8, size.height - 300)),
+          }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="context-title">
+            {persons.get(contextMenu.personId)
+              ? `${persons.get(contextMenu.personId)!.firstName} ${persons.get(contextMenu.personId)!.lastName}`.trim()
+              : 'Personne'}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onSelect(contextMenu.personId);
+              setContextMenu(null);
+            }}
+          >
+            Ouvrir la fiche
+          </button>
+          <span className="context-separator" />
+          {(
+            [
+              ['parent', '+ Parent'],
+              ['sibling', '+ Frère / Sœur'],
+              ['child', '+ Enfant'],
+              ['spouse', '+ Conjoint'],
+            ] as Array<[AddKind, string]>
+          ).map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => {
+                onAdd(kind);
+                setContextMenu(null);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              onAttachExisting();
+              setContextMenu(null);
+            }}
+            title="Relier une personne déjà dans l’arbre"
+          >
+            Rattacher une personne existante…
+          </button>
+          <span className="context-separator" />
+          <button
+            type="button"
+            onClick={() => {
+              onSetMe(contextMenu.personId);
+              setContextMenu(null);
+            }}
+          >
+            C’est moi
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onSetReference(contextMenu.personId);
+              setContextMenu(null);
+            }}
+          >
+            Personne de référence
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onStartBranch(contextMenu.personId);
+              setContextMenu(null);
+            }}
+          >
+            Créer une branche ici
+          </button>
+          <span className="context-separator" />
+          <button
+            type="button"
+            className="context-danger"
+            onClick={() => {
+              onDelete(contextMenu.personId);
+              setContextMenu(null);
+            }}
+          >
+            Supprimer
           </button>
         </div>
       )}

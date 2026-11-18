@@ -19,6 +19,8 @@ export type AddKind = 'first' | 'parent' | 'sibling' | 'child' | 'spouse';
 export interface DialogConfig {
   kind: AddKind;
   personId?: Id;
+  /** Ouvre directement sur « Personne existante » (menu contextuel). */
+  preferExisting?: boolean;
 }
 
 export interface SelectOption {
@@ -45,6 +47,13 @@ interface PersonFormDialogProps {
   unionOptions: SelectOption[];
   onSubmit: (result: DialogResult) => void;
   onCancel: () => void;
+}
+
+function canLinkExistingEarly(
+  config: DialogConfig,
+  options: SelectOption[],
+): boolean {
+  return config.kind !== 'first' && options.length > 0;
 }
 
 const TITLES: Record<AddKind, string> = {
@@ -74,7 +83,11 @@ export default function PersonFormDialog({
   onSubmit,
   onCancel,
 }: PersonFormDialogProps) {
-  const [mode, setMode] = useState<'new' | 'existing'>('new');
+  const [mode, setMode] = useState<'new' | 'existing'>(
+    config.preferExisting && canLinkExistingEarly(config, existingOptions)
+      ? 'existing'
+      : 'new',
+  );
   const [form, setForm] = useState<NewPersonInput>({
     firstName: '',
     lastName: '',
