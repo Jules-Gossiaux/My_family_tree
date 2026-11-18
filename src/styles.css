@@ -1135,6 +1135,13 @@ textarea {
   border-style: dashed;
 }
 
+.union-status-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
 .union-meta {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -679,15 +679,41 @@ function UnionCard({
     <article className="union-card">
       <header className="union-card-head">
         <strong>{title}</strong>
-        <div className="union-badges">
-          <span className={`union-badge${union.isCurrent ? '' : ' is-former'}`}>
-            {union.isCurrent ? 'Actuelle' : 'Ancienne'}
-          </span>
-          <span className="union-badge">
-            {UNION_STATUS_LABELS[union.status]}
-          </span>
-        </div>
       </header>
+
+      <div className="union-status-row">
+        <label className="field">
+          <span>Statut</span>
+          <select
+            value={union.status}
+            onChange={(event) =>
+              onUpdateUnion(union.id, {
+                status: event.target.value as Union['status'],
+              })
+            }
+          >
+            {UNION_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {UNION_STATUS_LABELS[status]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>État de l’union</span>
+          <select
+            value={union.isCurrent ? 'current' : 'former'}
+            onChange={(event) =>
+              onUpdateUnion(union.id, {
+                isCurrent: event.target.value === 'current',
+              })
+            }
+          >
+            <option value="current">Actuelle</option>
+            <option value="former">Ancienne</option>
+          </select>
+        </label>
+      </div>
 
       {!expanded && (
         <div className="union-summary">
@@ -719,37 +745,7 @@ function UnionCard({
 
       {expanded && (
         <>
-      <div className="union-meta">
-        <label className="field">
-          <span>Statut</span>
-          <select
-            value={union.status}
-            onChange={(event) =>
-              onUpdateUnion(union.id, {
-                status: event.target.value as Union['status'],
-              })
-            }
-          >
-            {UNION_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {UNION_STATUS_LABELS[status]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Actuelle</span>
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={union.isCurrent}
-              onChange={(event) =>
-                onUpdateUnion(union.id, { isCurrent: event.target.checked })
-              }
-            />
-            <span>{union.isCurrent ? 'Oui' : 'Non'}</span>
-          </label>
-        </label>
+      <div className="union-meta union-dates">
         <FuzzyDateField
           label="Début"
           value={union.startDate}
