@@ -24,6 +24,32 @@ import {
 const STORAGE_KEY = 'simple-family-tree:v3';
 /** Anciens emplacements : conservés tels quels, lus une seule fois pour migrer. */
 const LEGACY_KEYS = ['simple-family-tree:v2', 'simple-family-tree:v1'];
+/**
+ * Copies de secours automatiques, écrites AVANT chaque écrasement. Elles sont
+ * conservées dans le même stockage que le document, sous forme de snapshots
+ * complets : les octets des médias restent dans IndexedDB et ne sont donc pas
+ * dupliqués, exactement comme pour le futur bucket Supabase.
+ */
+const BACKUP_KEY = 'simple-family-tree:v3:backups';
+const MAX_BACKUPS = 4;
+
+export interface BackupSummary {
+  id: string;
+  savedAt: string;
+  persons: number;
+  unions: number;
+}
+
+interface BackupEntry extends BackupSummary {
+  document: unknown;
+}
+
+export interface RepositoryEvents {
+  /** Sauvegarde impossible : l'interface doit l'afficher, pas se taire. */
+  onSaveError?: (message: string) => void;
+  /** Document illisible mais copie de secours utilisable : on l'a récupéré. */
+  onRecovered?: (message: string) => void;
+}
 
 /**
  * Contrat unique de persistance. L'implémentation locale est asynchrone pour
@@ -33,13 +59,41 @@ export interface FamilyRepository {
   load(): Promise<FamilyData>;
   save(data: FamilyData): Promise<void>;
   clear(): Promise<void>;
+  listBackups?(): Promise<BackupSummary[]>;
+  restoreBackup?(id: string): Promise<FamilyData>;
 }
 
 export class LocalFamilyRepository implements FamilyRepository {
+  constructor(private readonly events: RepositoryEvents = {}) {}
+
   async load(): Promise<FamilyData> {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) return validateFamilyData(JSON.parse(raw));
+      if (raw) {
+        try {
+          return validateFamilyData(JSON.parse(raw));
+        } catch (error) {
+          // Document corrompu : on tente une copie de secours avant de
+          // renoncer, pour ne jamais démarrer sur un arbre vide silencieusement.
+          const recovered = this.readBackups().find((entry) => {
+            try {
+              validateFamilyData(entry.document);
+              return true;
+            } catch {
+              return false;
+            }
+          });
+          if (recovered) {
+            const data = validateFamilyData(recovered.document);
+            this.events.onRecovered?.(
+              `Document illisible : copie de secours du ${formatBackupDate(recovered.savedAt)} restaurée.`,
+            );
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            return data;
+          }
+          throw error;
+        }
+      }
 
       for (const legacyKey of LEGACY_KEYS) {
         const legacy = window.localStorage.getItem(legacyKey);
@@ -53,27 +107,107 @@ export class LocalFamilyRepository implements FamilyRepository {
       return emptyFamily();
     } catch (error) {
       console.warn('Impossible de lire les données locales, arbre vide.', error);
+      this.events.onSaveError?.(
+        'Données locales illisibles et aucune copie de secours utilisable : un arbre vide a été ouvert.',
+      );
       return emptyFamily();
     }
   }
 
   async save(data: FamilyData): Promise<void> {
+    const next = JSON.stringify(touch(data));
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(touch(data)));
+      const previous = window.localStorage.getItem(STORAGE_KEY);
+      if (previous && previous !== next) this.rotateBackup(previous);
+      window.localStorage.setItem(STORAGE_KEY, next);
+      this.events.onSaveError?.('');
     } catch (error) {
-      console.warn('Impossible de sauvegarder les données locales.', error);
+      console.error('Échec de la sauvegarde locale.', error);
+      this.events.onSaveError?.(
+        'Sauvegarde impossible : vérifiez l’espace disponible du navigateur. Vos modifications ne sont pas enregistrées.',
+      );
+      throw error;
     }
   }
 
   async clear(): Promise<void> {
     try {
       window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(BACKUP_KEY);
       for (const key of LEGACY_KEYS) window.localStorage.removeItem(key);
       await mediaStore.clear();
     } catch (error) {
       console.warn('Impossible de réinitialiser le stockage local.', error);
     }
   }
+
+  async listBackups(): Promise<BackupSummary[]> {
+    return this.readBackups().map(({ id, savedAt, persons, unions }) => ({
+      id,
+      savedAt,
+      persons,
+      unions,
+    }));
+  }
+
+  async restoreBackup(id: string): Promise<FamilyData> {
+    const entry = this.readBackups().find((backup) => backup.id === id);
+    if (!entry) throw new Error('Copie de secours introuvable.');
+    const data = validateFamilyData(entry.document);
+    // La restauration repasse par save() : l'état avant restauration devient
+    // lui-même une copie de secours, donc rien n'est perdu.
+    await this.save(data);
+    return data;
+  }
+
+  private rotateBackup(previous: string): void {
+    try {
+      const entries = this.readBackups();
+      const parsed = validateFamilyData(JSON.parse(previous));
+      const signature = JSON.stringify(entries[0]?.document ?? null);
+      if (signature === previous) return;
+      entries.unshift({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        savedAt: new Date().toISOString(),
+        persons: parsed.persons.length,
+        unions: parsed.unions.length,
+        document: parsed,
+      });
+      window.localStorage.setItem(
+        BACKUP_KEY,
+        JSON.stringify(entries.slice(0, MAX_BACKUPS)),
+      );
+    } catch (error) {
+      console.warn('Copie de secours non écrite.', error);
+    }
+  }
+
+  private readBackups(): BackupEntry[] {
+    try {
+      const raw = window.localStorage.getItem(BACKUP_KEY);
+      if (!raw) return [];
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (entry): entry is BackupEntry =>
+          !!entry &&
+          typeof entry === 'object' &&
+          typeof (entry as BackupEntry).id === 'string' &&
+          typeof (entry as BackupEntry).savedAt === 'string',
+      );
+    } catch {
+      return [];
+    }
+  }
+}
+
+export function formatBackupDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date);
 }
 
 /** JSON nu, sans fichiers : conservé pour les outils et les tests. */

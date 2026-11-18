@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LocalFamilyRepository,
   parseFamilyDocument,
   serialize,
   validateFamilyData,
@@ -178,5 +179,50 @@ describe('gardes des répertoires', () => {
     };
     expect(deleteSource(withEvent, source.id)).toBe(withEvent);
     expect(deleteSource(withSource, source.id).sources).toHaveLength(0);
+  });
+});
+
+describe('copies de secours automatiques', () => {
+  it('écrit une copie avant d’écraser, puis permet de restaurer', async () => {
+    window.localStorage.clear();
+    const errors: string[] = [];
+    const repo = new LocalFamilyRepository({ onSaveError: (m) => m && errors.push(m) });
+    const original = family(person('Original'), person('Deux'));
+    await repo.save(original);
+    const changed = family(person('Modifié'));
+    await repo.save(changed);
+
+    const backups = await repo.listBackups();
+    expect(backups.length).toBe(1);
+    expect(backups[0].persons).toBe(2);
+
+    const restored = await repo.restoreBackup(backups[0].id);
+    expect(restored.persons.map((p) => p.firstName)).toEqual(['Original', 'Deux']);
+    expect(errors).toEqual([]);
+  });
+
+  it('limite le nombre de copies conservées', async () => {
+    window.localStorage.clear();
+    const repo = new LocalFamilyRepository();
+    for (let i = 0; i < 7; i += 1) {
+      await repo.save(family(person(`Personne ${i}`)));
+    }
+    expect((await repo.listBackups()).length).toBe(4);
+  });
+
+  it('signale une erreur de sauvegarde au lieu de la masquer', async () => {
+    window.localStorage.clear();
+    const errors: string[] = [];
+    const repo = new LocalFamilyRepository({ onSaveError: (m) => m && errors.push(m) });
+    const original = window.localStorage.setItem;
+    window.localStorage.setItem = () => {
+      throw new Error('Quota dépassé');
+    };
+    try {
+      await expect(repo.save(family(person('A')))).rejects.toThrow();
+      expect(errors.length).toBe(1);
+    } finally {
+      window.localStorage.setItem = original;
+    }
   });
 });

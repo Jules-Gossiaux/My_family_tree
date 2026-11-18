@@ -7,6 +7,7 @@ import {
 } from 'react';
 import TreeCanvas, { type FocusRequest } from './components/TreeCanvas';
 import type { CardPortrait } from './components/PersonCard';
+import BackupDialog from './components/BackupDialog';
 import SidePanel from './components/SidePanel';
 import DirectoryDialog from './components/DirectoryDialog';
 import EventDialog from './components/EventDialog';
@@ -23,6 +24,7 @@ import {
   exportFamilyBundle,
   LocalFamilyRepository,
   parseFamilyDocument,
+  type BackupSummary,
 } from './domain/repository';
 import { mediaStore } from './domain/mediaStore';
 import { deleteEvent, personDeletionImpact } from './domain/lifeEvents';
@@ -125,7 +127,9 @@ function hintFor(kind: AddKind, data: FamilyData, personId?: Id): string {
 }
 
 export default function App() {
-  const repository = useMemo(() => new LocalFamilyRepository(), []);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [data, setData] = useState<FamilyData | null>(null);
   const [selectedId, setSelectedId] = useState<Id | null>(null);
   const [dialog, setDialog] = useState<DialogConfig | null>(null);
@@ -146,6 +150,14 @@ export default function App() {
   const focusToken = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const repository = useMemo(
+    () =>
+      new LocalFamilyRepository({
+        onSaveError: (message) => setSaveError(message || null),
+        onRecovered: (message) => setToast(message),
+      }),
+    [],
+  );
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [eventDialog, setEventDialog] = useState<{ eventId?: Id } | null>(null);
   const [portraits, setPortraits] = useState<Map<Id, CardPortrait>>(new Map());
@@ -158,7 +170,10 @@ export default function App() {
   }, [repository]);
 
   useEffect(() => {
-    if (data) void repository.save(data);
+    if (!data) return;
+    void repository.save(data).catch(() => {
+      // L'erreur est déjà remontée à l'interface via onSaveError.
+    });
   }, [data, repository]);
 
   useEffect(() => {
@@ -499,6 +514,22 @@ export default function App() {
     setToast('Fichier JSON exporté.');
   };
 
+  const handleOpenBackups = () => {
+    void repository.listBackups?.().then(setBackups);
+    setBackupOpen(true);
+  };
+
+  const handleRestoreBackup = (id: string) => {
+    if (!repository.restoreBackup) return;
+    void repository.restoreBackup(id).then((restored) => {
+      setData(restored);
+      setSelectedId(null);
+      setFitSignal((value) => value + 1);
+      setBackupOpen(false);
+      setToast('Copie de secours restaurée.');
+    });
+  };
+
   const handleDeleteEvent = (eventId: Id) => {
     if (!window.confirm('Supprimer ce fait de vie ?')) return;
     setData((previous) =>
@@ -805,6 +836,13 @@ export default function App() {
           <button
             type="button"
             className="btn btn-secondary"
+            onClick={handleOpenBackups}
+          >
+            Sauvegardes
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
             onClick={() => setDirectoryOpen(true)}
           >
             Lieux &amp; sources
@@ -924,6 +962,15 @@ export default function App() {
         />
       )}
 
+      {backupOpen && (
+        <BackupDialog
+          backups={backups}
+          onRestore={handleRestoreBackup}
+          onExport={() => void handleExport()}
+          onClose={() => setBackupOpen(false)}
+        />
+      )}
+
       {directoryOpen && (
         <DirectoryDialog
           data={data}
@@ -942,6 +989,14 @@ export default function App() {
         />
       )}
 
+      {saveError && (
+        <div className="save-error" role="alert">
+          <span>{saveError}</span>
+          <button type="button" onClick={() => setSaveError(null)} aria-label="Fermer">
+            ×
+          </button>
+        </div>
+      )}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
