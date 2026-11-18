@@ -257,6 +257,12 @@ function buildLayout(
     }
   }
 
+  /** Une filiation connue seulement si l'union de naissance a au moins un parent. */
+  const hasKnownParents = (id: Id): boolean => {
+    const birth = birthUnion.get(id);
+    return !!birth && birth.partners.length > 0;
+  };
+
   const partnerUnions = new Map<Id, UnionInfo[]>();
   for (const info of infos) {
     for (const partner of info.partners) {
@@ -354,11 +360,19 @@ function buildLayout(
         row = Math.max(row, displayRow.get(partner) ?? 0);
       }
       for (const partner of info.partners) {
-        // Une personne qui a déjà une fratrie garde SA rangée : c'est elle
-        // qui fait autorité, pas le conjoint externe.
-        if (birthUnion.has(partner)) continue;
+        // Une personne dont les parents sont connus garde SA rangée : c'est
+        // elle qui fait autorité, pas le conjoint externe. En revanche une
+        // personne née d'une union « parents non renseignés » n'a aucun
+        // ancrage générationnel : elle rejoint la rangée de son conjoint,
+        // sinon un couple se retrouve à deux niveaux d'écart et son trait
+        // passe sous les cartes intermédiaires (cas Anne-Catherine / Christophe).
+        if (hasKnownParents(partner)) continue;
         if ((displayRow.get(partner) ?? 0) < row) {
           displayRow.set(partner, row);
+          groupGeneration[groupOf(partner)] = Math.max(
+            groupGeneration[groupOf(partner)],
+            row,
+          );
           changed = true;
         }
       }
@@ -917,6 +931,8 @@ function buildLayout(
     former: boolean;
     dropX: number;
     dropStartY: number | null;
+    /** Pastille décalée quand le trait de couple contourne une rangée. */
+    dotY?: number;
     childrenTop: number;
     barStart: number;
     barEnd: number;
@@ -950,6 +966,7 @@ function buildLayout(
 
     let dropX = 0;
     let dropStartY: number | null = null;
+    let dotY: number | null = null;
 
     if (info.partners.length === 2) {
       const [left, right] = [...info.partners].sort(
@@ -991,40 +1008,86 @@ function buildLayout(
       } else {
         // Couple séparé (remariage, cousinage) : bus horizontal dans une zone
         // LIBRE. Sur une même rangée, on passe sous les cartes ; entre deux
-        // générations, on passe dans l'espace qui sépare les deux rangées, on
-        // part du bas de la carte haute et on arrive en HAUT de la carte basse.
-        // Aucun trait ne traverse ainsi une fiche (cas philippe / anneC).
+        // générations voisines, on passe dans l'espace entre les rangées ;
+        // entre deux générations ÉLOIGNÉES, on contourne par un couloir latéral
+        // plutôt que de traverser la rangée intermédiaire (cas où un conjoint
+        // n'a pas de parents renseignés et reste ainsi une génération au-dessus).
         const upperIsLeft = leftTop <= rightTop;
         const upperCenter = upperIsLeft ? leftCenter : rightCenter;
         const lowerCenter = upperIsLeft ? rightCenter : leftCenter;
         const upperBottom = Math.min(leftBottom, rightBottom);
         const lowerTop = Math.max(leftTop, rightTop);
         const lowerBottom = Math.max(leftBottom, rightBottom);
-        const busY = sameRow
-          ? leftBottom + BUS_OFFSET
-          : Math.min(
-              lowerTop - 12,
-              upperBottom + Math.max(12, (lowerTop - upperBottom) / 2),
-            );
-        const startX = sameRow ? leftCenter : upperCenter;
-        const endX = sameRow ? rightCenter : lowerCenter;
-        addEdge(
-          `partner:${info.union.id}`,
-          'partner',
-          [
-            { x: startX, y: sameRow ? leftBottom : upperBottom },
-            { x: startX, y: busY },
-            { x: endX, y: busY },
-            { x: endX, y: sameRow ? rightBottom : lowerTop },
-          ],
-          former,
-          undefined,
-          info.title,
-        );
-        // La descente vers les enfants repart du bas de la carte la plus basse :
-        // elle ne peut donc pas non plus traverser une rangée intermédiaire.
-        dropStartY = sameRow ? busY : lowerBottom;
-        dropX = sameRow ? (leftCenter + rightCenter) / 2 : lowerCenter;
+        const farApart = !sameRow && lowerTop - upperBottom > ROW_STEP;
+
+        if (farApart) {
+          const middle = persons.filter((candidate) => {
+            const top = rowY(generationOf(candidate.id));
+            return top > upperBottom && top + PERSON_H < lowerTop;
+          });
+          const minX = middle.length
+            ? Math.min(...middle.map((candidate) => cardLeft.get(candidate.id) ?? 0))
+            : Math.min(upperCenter, lowerCenter);
+          const maxX = middle.length
+            ? Math.max(
+                ...middle.map(
+                  (candidate) => (cardLeft.get(candidate.id) ?? 0) + PERSON_W,
+                ),
+              )
+            : Math.max(upperCenter, lowerCenter);
+          const leftCorridor = minX - 40;
+          const rightCorridor = maxX + 40;
+          const corridorX =
+            Math.abs(leftCorridor - upperCenter) <=
+            Math.abs(rightCorridor - upperCenter)
+              ? leftCorridor
+              : rightCorridor;
+          addEdge(
+            `partner:${info.union.id}`,
+            'partner',
+            [
+              { x: upperCenter, y: upperBottom },
+              { x: upperCenter, y: upperBottom + 12 },
+              { x: corridorX, y: upperBottom + 12 },
+              { x: corridorX, y: lowerTop - 12 },
+              { x: lowerCenter, y: lowerTop - 12 },
+              { x: lowerCenter, y: lowerTop },
+            ],
+            former,
+            undefined,
+            info.title,
+          );
+          // La pastille reste visible juste au-dessus de la carte basse. La
+          // descente vers les enfants, elle, part du bas de cette carte pour
+          // ne pas la traverser.
+          dotY = lowerTop - 12;
+          dropStartY = lowerBottom;
+          dropX = lowerCenter;
+        } else {
+          const busY = sameRow
+            ? leftBottom + BUS_OFFSET
+            : Math.min(
+                lowerTop - 12,
+                upperBottom + Math.max(12, (lowerTop - upperBottom) / 2),
+              );
+          const startX = sameRow ? leftCenter : upperCenter;
+          const endX = sameRow ? rightCenter : lowerCenter;
+          addEdge(
+            `partner:${info.union.id}`,
+            'partner',
+            [
+              { x: startX, y: sameRow ? leftBottom : upperBottom },
+              { x: startX, y: busY },
+              { x: endX, y: busY },
+              { x: endX, y: sameRow ? rightBottom : lowerTop },
+            ],
+            former,
+            undefined,
+            info.title,
+          );
+          dropStartY = sameRow ? busY : lowerBottom;
+          dropX = sameRow ? (leftCenter + rightCenter) / 2 : lowerCenter;
+        }
       }
     } else if (info.partners.length === 1) {
       dropX = centerX(info.partners[0]);
@@ -1034,7 +1097,8 @@ function buildLayout(
     // Une union sans enfant garde sa pastille : c'est elle qui dit « ce couple
     // existe », même quand aucune branche n'en part.
     if (info.children.length === 0) {
-      if (dropStartY !== null) addDot(info, dropX, dropStartY, former);
+      const y = dotY ?? dropStartY;
+      if (y !== null) addDot(info, dropX, y, former);
       continue;
     }
 
@@ -1050,6 +1114,7 @@ function buildLayout(
       former,
       dropX,
       dropStartY,
+      dotY: dotY ?? undefined,
       childrenTop,
       barStart: Math.min(dropX, ...childCenters),
       barEnd: Math.max(dropX, ...childCenters),
@@ -1113,7 +1178,7 @@ function buildLayout(
 
   for (const branch of branches) {
     const { info, former, lane } = branch;
-    const dotY = branch.dropStartY ?? branch.barY;
+    const dotY = branch.dotY ?? branch.dropStartY ?? branch.barY;
     addDot(info, branch.dropX, dotY, former);
 
     if (branch.dropStartY !== null && branch.barY > branch.dropStartY + 1) {

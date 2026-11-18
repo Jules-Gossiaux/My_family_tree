@@ -64,6 +64,29 @@ function countOverlaps(data: FamilyData): number {
   return total;
 }
 
+/** Un trait qui traverse l'INTÉRIEUR d'une carte (les extrémités sont permises). */
+function countEdgeCardHits(data: FamilyData): number {
+  const layout = computeClassicLayout(data);
+  const cards = layout.nodes.filter((node) => node.kind === 'person');
+  let total = 0;
+  for (const edge of layout.edges) {
+    for (const segment of segments(edge)) {
+      const x1 = Math.min(segment.a.x, segment.b.x);
+      const x2 = Math.max(segment.a.x, segment.b.x);
+      const y1 = Math.min(segment.a.y, segment.b.y);
+      const y2 = Math.max(segment.a.y, segment.b.y);
+      for (const card of cards) {
+        const overlapX =
+          Math.min(x2, card.x + card.width - 2) - Math.max(x1, card.x + 2);
+        const overlapY =
+          Math.min(y2, card.y + card.height - 2) - Math.max(y1, card.y + 2);
+        if (overlapX > 0.5 && overlapY > 0.5) total += 1;
+      }
+    }
+  }
+  return total;
+}
+
 describe('moteur de placement classique', () => {
   it('place chaque personne exactement une fois', () => {
     const a = person('A');
@@ -98,6 +121,91 @@ describe('moteur de placement classique', () => {
       otherWife,
       [grandchild.id],
     );
+    expect(countCrossings(data)).toBe(0);
+    expect(countOverlaps(data)).toBe(0);
+  });
+
+  it('aligne un conjoint sans parents connus sur la rangée de son partenaire', () => {
+    const mireille = person('Mireille');
+    const jules = person('Jules');
+    const christophe = person('Christophe');
+    const anne = person('Anne-Catherine');
+    const emma = person('Emma');
+    const childOne = person('Jules');
+    const childTwo = person('Ninon');
+    let data = family(
+      mireille,
+      jules,
+      christophe,
+      anne,
+      emma,
+      childOne,
+      childTwo,
+    );
+    data = couple(data, mireille, jules, [christophe.id]);
+    // Anne-Catherine et Emma sont sœurs, mais leurs parents ne sont pas connus :
+    // leur union de naissance n'a aucun partenaire. Anne-Catherine ne doit pas
+    // rester une génération au-dessus de Christophe pour autant.
+    data = {
+      ...data,
+      unions: [
+        ...data.unions,
+        {
+          ...createUnionFor(null, null),
+          children: [anne.id, emma.id].map((childId) => ({
+            childId,
+            linkA: 'unknown' as const,
+            linkB: 'unknown' as const,
+          })),
+        },
+      ],
+    };
+    data = couple(data, christophe, anne, [childOne.id, childTwo.id]);
+
+    const layout = computeClassicLayout(data);
+    const cardOf = (id: string) =>
+      layout.nodes.find((node) => node.kind === 'person' && node.refId === id);
+    expect(cardOf(anne.id)?.y).toBe(cardOf(christophe.id)?.y);
+    expect(cardOf(emma.id)?.y).toBe(cardOf(anne.id)?.y);
+    expect(countCrossings(data)).toBe(0);
+    expect(countOverlaps(data)).toBe(0);
+    expect(countEdgeCardHits(data)).toBe(0);
+  });
+
+  it('contourne les cartes quand deux conjoints restent à deux générations d’écart', () => {
+    const great = person('Aïeul');
+    const grand = person('Grand');
+    const parent = person('Parent');
+    const other = person('Autre parent');
+    const child = person('Enfant');
+    const root = person('Racine');
+    const spouse = person('Conjoint');
+    const data: FamilyData = {
+      ...family(great, grand, parent, other, child, root, spouse),
+      unions: [
+        {
+          ...createUnionFor(great.id, null),
+          children: [{ childId: grand.id, linkA: 'biological', linkB: 'unknown' }],
+        },
+        {
+          ...createUnionFor(grand.id, null),
+          children: [{ childId: parent.id, linkA: 'biological', linkB: 'unknown' }],
+        },
+        {
+          ...createUnionFor(parent.id, other.id),
+          children: [{ childId: child.id, linkA: 'biological', linkB: 'biological' }],
+        },
+        {
+          ...createUnionFor(root.id, null),
+          children: [{ childId: spouse.id, linkA: 'biological', linkB: 'unknown' }],
+        },
+        createUnionFor(child.id, spouse.id),
+      ],
+    };
+
+    // Les deux conjoints ont des parents connus : aucun ne peut être déplacé.
+    // Leur trait doit donc contourner la rangée intermédiaire, sans la traverser.
+    expect(countEdgeCardHits(data)).toBe(0);
     expect(countCrossings(data)).toBe(0);
     expect(countOverlaps(data)).toBe(0);
   });
