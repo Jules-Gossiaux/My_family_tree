@@ -258,6 +258,8 @@ export interface Media {
   key: string;
   fileName: string;
   mimeType: string;
+  /** Empreinte sha256 du fichier, pour détecter les doublons à l'import. */
+  fingerprint?: string;
   title?: string;
   date?: string;
   personIds: Id[];
@@ -510,6 +512,7 @@ export interface MediaInput {
   key?: string;
   fileName: string;
   mimeType: string;
+  fingerprint?: string;
   personIds?: Id[];
   title?: string;
 }
@@ -523,6 +526,7 @@ export function createMedia(familyId: Id, input: MediaInput): Media {
     key: input.key ?? mediaKey(familyId, 'pending'),
     fileName: input.fileName.trim(),
     mimeType: input.mimeType,
+    fingerprint: input.fingerprint?.trim() || undefined,
     personIds: input.personIds ?? [],
     title: input.title?.trim() || undefined,
     citations: [],

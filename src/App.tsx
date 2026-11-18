@@ -9,6 +9,7 @@ import TreeCanvas, { type FocusRequest } from './components/TreeCanvas';
 import type { CardPortrait } from './components/PersonCard';
 import BackupDialog from './components/BackupDialog';
 import SettingsDialog from './components/SettingsDialog';
+import MediaInbox from './components/MediaInbox';
 import {
   LocalSettingsStore,
   type ViewSettings,
@@ -137,6 +138,7 @@ export default function App() {
   const [backupOpen, setBackupOpen] = useState(false);
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const settingsStore = useMemo(() => new LocalSettingsStore(), []);
   const [settings, setSettings] = useState<ViewSettings>(() =>
     new LocalSettingsStore().load(),
@@ -901,6 +903,14 @@ export default function App() {
           <button
             type="button"
             className="btn btn-primary"
+            onClick={() => setMediaOpen(true)}
+          >
+            Photos
+            {data.media.length > 0 && <span className="tab-count">{data.media.length}</span>}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
             onClick={() => handleAdd('first')}
           >
             Nouvelle personne
@@ -1008,6 +1018,28 @@ export default function App() {
           onChoose={handleResolution}
           onCancel={() => setPending(null)}
         />
+      )}
+
+      {mediaOpen && (
+        <div className="modal-overlay" onMouseDown={() => setMediaOpen(false)}>
+          <div
+            className="modal media-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Photos et documents"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="icon-button modal-close"
+              aria-label="Fermer"
+              onClick={() => setMediaOpen(false)}
+            >
+              ×
+            </button>
+            <MediaInbox data={data} onChange={setData} />
+          </div>
+        </div>
       )}
 
       {settingsOpen && (

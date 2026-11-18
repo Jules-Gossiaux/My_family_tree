@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import DirectorySelect from './DirectorySelect';
 import {
-  addMedia,
   addSource,
   deleteMedia,
   duplicateSource,
-  insertMedia,
   linkMedia,
   mediaOfPerson,
   setPortrait,
@@ -14,6 +12,7 @@ import {
   updateMedia,
 } from '../domain/directories';
 import { mediaStore } from '../domain/mediaStore';
+import { importFiles, prepareFiles } from '../domain/mediaInbox';
 import {
   DEFAULT_PORTRAIT_CROP,
   type FamilyData,
@@ -84,22 +83,15 @@ export default function MediaGallery({ data, personId, onChange, uploadSignal }:
   const handleFiles = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
-    let next = data;
-    for (const file of files) {
-      const medium = addMedia(next, {
-        kind: file.type.startsWith('image/') ? 'photo' : 'document',
-        fileName: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        personIds: [personId],
-      });
-      try {
-        await mediaStore.put(medium.key, file);
-        next = insertMedia(next, medium);
-      } catch {
-        setError(`Impossible d’enregistrer « ${file.name} ».`);
-      }
-    }
-    if (next !== data) onChange(next);
+    if (files.length === 0) return;
+    const prepared = await prepareFiles(files, data);
+    const outcome = await importFiles(data, prepared, [personId]);
+    onChange(outcome.data);
+    const messages: string[] = [];
+    if (outcome.added) messages.push(`${outcome.added} fichier(s) ajouté(s).`);
+    if (outcome.duplicates) messages.push(`${outcome.duplicates} doublon(s) réutilisé(s).`);
+    if (outcome.errors.length) messages.push(outcome.errors.join(' '));
+    setError(messages.join(' ') || null);
   };
 
   const quickSource = (name: string): string | undefined => {

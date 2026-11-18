@@ -590,6 +590,7 @@ function readMedia(
         key: asString(m.key) || `${familyId}/${id}`,
         fileName: asString(m.fileName) || 'fichier',
         mimeType: asString(m.mimeType) || 'application/octet-stream',
+        fingerprint: asOptionalString(m.fingerprint),
         title: asOptionalString(m.title),
         date: asOptionalString(m.date),
         personIds: uniqueIds(
