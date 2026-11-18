@@ -597,6 +597,7 @@ function UnionCard({
   onRemoveUnion,
   onSelectPerson,
 }: UnionCardProps) {
+  const [expanded, setExpanded] = useState(false);
   const partners = unionPartnerIds(union);
   const isPartner = slotOfPartner(union, selectedId) !== null;
   const others = partners.filter((id) => id !== selectedId);
@@ -620,6 +621,36 @@ function UnionCard({
         </div>
       </header>
 
+      {!expanded && (
+        <div className="union-summary">
+          <p className="panel-note">
+            {union.children.length === 0
+              ? 'Aucun enfant rattaché.'
+              : `${union.children.length} enfant${union.children.length > 1 ? 's' : ''} rattaché${union.children.length > 1 ? 's' : ''}.`}
+          </p>
+          <div className="union-summary-children">
+            {union.children.map((child) => (
+              <button
+                key={child.childId}
+                type="button"
+                onClick={() => onSelectPerson(child.childId)}
+              >
+                {nameOf(child.childId)}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn btn-mini"
+            onClick={() => setExpanded(true)}
+          >
+            Modifier l’union et les liens
+          </button>
+        </div>
+      )}
+
+      {expanded && (
+        <>
       <div className="union-meta">
         <label className="field">
           <span>Statut</span>
@@ -738,6 +769,15 @@ function UnionCard({
       >
         Supprimer cette union
       </button>
+      <button
+        type="button"
+        className="btn btn-mini"
+        onClick={() => setExpanded(false)}
+      >
+        Réduire
+      </button>
+        </>
+      )}
     </article>
   );
 }

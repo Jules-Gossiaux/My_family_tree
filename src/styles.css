@@ -1143,6 +1143,31 @@ textarea {
   border-bottom: 1px solid var(--border-soft);
 }
 
+.union-summary {
+  padding-top: 10px;
+}
+
+.union-summary-children {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+
+.union-summary-children button {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.union-summary-children button:hover {
+  border-color: var(--accent);
+}
+
 .union-children {
   padding-top: 11px;
 }
