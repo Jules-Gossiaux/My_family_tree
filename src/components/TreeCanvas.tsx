@@ -7,6 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import type { Id, Person } from '../domain/types';
+import { branchColorOf, branchLabelsOf, type ViewSettings } from '../domain/settings';
 import { roundedPath, type TreeLayout } from '../layout/layout';
 import PersonCard, { type CardPortrait } from './PersonCard';
 import type { AddKind } from './PersonFormDialog';
@@ -24,6 +25,7 @@ interface TreeCanvasProps {
   focusRequest?: FocusRequest | null;
   matchedIds?: Set<Id>;
   portraits?: Map<Id, CardPortrait>;
+  settings?: ViewSettings;
   onSelect: (id: Id | null) => void;
   onAdd: (kind: AddKind) => void;
   onDelete: (id: Id) => void;
@@ -98,6 +100,7 @@ export default function TreeCanvas({
   focusRequest,
   matchedIds,
   portraits,
+  settings,
   onSelect,
   onAdd,
   onDelete,
@@ -349,6 +352,9 @@ export default function TreeCanvas({
                 selected={selectedId === person.id}
                 matched={matchedIds?.has(person.id) ?? false}
                 portrait={portraits?.get(person.id)}
+                isMe={settings?.meId === person.id}
+                branchColor={settings ? branchColorOf(settings, person.id) : undefined}
+                branchLabel={settings ? branchLabelsOf(settings, person.id) : undefined}
                 onSelect={onSelect}
               />
             );

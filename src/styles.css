@@ -2170,3 +2170,116 @@ textarea {
 .name-variants {
   padding-top: 10px;
 }
+
+/* Repères personnels : branches et marqueur « Moi » */
+.person-branch-stripe {
+  pointer-events: none;
+}
+
+.person-me-marker circle {
+  fill: #c0574b;
+}
+
+.person-me-marker text {
+  fill: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.person-card.is-me .person-card-bg {
+  stroke: #c0574b;
+  stroke-width: 2;
+}
+
+.settings-modal {
+  width: min(720px, 94vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-body {
+  overflow-y: auto;
+}
+
+.settings-section + .settings-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.settings-section h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.branch-new {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.branch-new input {
+  flex: 1;
+}
+
+.branch-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.branch-item {
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-soft, #fff);
+}
+
+.branch-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.branch-item-head input[type='color'] {
+  width: 34px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.branch-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.branch-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.branch-members {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 4px 10px;
+  margin-top: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.branch-member {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  cursor: pointer;
+}

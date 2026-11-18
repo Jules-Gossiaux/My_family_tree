@@ -13,6 +13,9 @@ interface PersonCardProps {
   selected: boolean;
   matched?: boolean;
   portrait?: CardPortrait;
+  isMe?: boolean;
+  branchColor?: string;
+  branchLabel?: string;
   onSelect: (id: string) => void;
 }
 
@@ -22,6 +25,9 @@ export default function PersonCard({
   selected,
   matched = false,
   portrait,
+  isMe = false,
+  branchColor,
+  branchLabel,
   onSelect,
 }: PersonCardProps) {
   const label = truncate(
@@ -40,7 +46,7 @@ export default function PersonCard({
       data-person-card
       className={`person-card${selected ? ' is-selected' : ''}${
         matched ? ' is-match' : ''
-      }`}
+      }${isMe ? ' is-me' : ''}`}
       transform={`translate(${node.x} ${node.y})`}
       onClick={(event) => {
         event.stopPropagation();
@@ -55,13 +61,30 @@ export default function PersonCard({
         }
       }}
     >
-      <title>{`${person.firstName} ${person.lastName}`.trim() || 'Sans nom'}</title>
+      <title>{`${`${person.firstName} ${person.lastName}`.trim() || 'Sans nom'}${branchLabel ? ` · ${branchLabel}` : ''}${isMe ? ' · Moi' : ''}`}</title>
       <rect
         className="person-card-bg"
         width={node.width}
         height={node.height}
         rx={12}
       />
+      {branchColor && (
+        <rect
+          className="person-branch-stripe"
+          width={5}
+          height={node.height}
+          rx={2.5}
+          fill={branchColor}
+        />
+      )}
+      {isMe && (
+        <g className="person-me-marker" aria-label="Moi">
+          <circle cx={node.width - 16} cy={16} r={11} />
+          <text x={node.width - 16} y={17} textAnchor="middle" dominantBaseline="central">
+            M
+          </text>
+        </g>
+      )}
       <circle className="person-avatar" cx={36} cy={centerY} r={20} />
       <text
         className="person-initials"

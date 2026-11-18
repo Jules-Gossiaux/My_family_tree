@@ -8,6 +8,11 @@ import {
 import TreeCanvas, { type FocusRequest } from './components/TreeCanvas';
 import type { CardPortrait } from './components/PersonCard';
 import BackupDialog from './components/BackupDialog';
+import SettingsDialog from './components/SettingsDialog';
+import {
+  LocalSettingsStore,
+  type ViewSettings,
+} from './domain/settings';
 import SidePanel from './components/SidePanel';
 import DirectoryDialog from './components/DirectoryDialog';
 import EventDialog from './components/EventDialog';
@@ -131,6 +136,11 @@ export default function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [backupOpen, setBackupOpen] = useState(false);
   const [backups, setBackups] = useState<BackupSummary[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsStore = useMemo(() => new LocalSettingsStore(), []);
+  const [settings, setSettings] = useState<ViewSettings>(() =>
+    new LocalSettingsStore().load(),
+  );
   const [data, setData] = useState<FamilyData | null>(null);
   const [selectedId, setSelectedId] = useState<Id | null>(null);
   const [dialog, setDialog] = useState<DialogConfig | null>(null);
@@ -166,9 +176,24 @@ export default function App() {
   const dataRef = useRef<FamilyData | null>(null);
   dataRef.current = data;
 
+  const initialFocusApplied = useRef(false);
+
   useEffect(() => {
-    void repository.load().then(setData);
+    void repository.load().then((loaded) => {
+      setData(loaded);
+      if (initialFocusApplied.current) return;
+      initialFocusApplied.current = true;
+      const id = settings.referenceId ?? settings.meId;
+      if (!id || !loaded.persons.some((person) => person.id === id)) return;
+      focusToken.current += 1;
+      setSelectedId(id);
+      setFocusRequest({ id, token: focusToken.current });
+    });
   }, [repository]);
+
+  useEffect(() => {
+    settingsStore.save(settings);
+  }, [settings, settingsStore]);
 
   useEffect(() => {
     if (!data) return;
@@ -529,6 +554,13 @@ export default function App() {
     });
   };
 
+  const recenterOnMe = () => {
+    if (!settings.meId) return;
+    focusToken.current += 1;
+    setSelectedId(settings.meId);
+    setFocusRequest({ id: settings.meId, token: focusToken.current });
+  };
+
   const handleDeleteEvent = (eventId: Id) => {
     if (!window.confirm('Supprimer ce fait de vie ?')) return;
     setData((previous) =>
@@ -832,6 +864,22 @@ export default function App() {
               ))}
             </select>
           </label>
+          {settings.meId && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={recenterOnMe}
+            >
+              Me recentrer
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setSettingsOpen(true)}
+          >
+            Réglages
+          </button>
           <button
             type="button"
             className="btn btn-secondary"
@@ -899,6 +947,7 @@ export default function App() {
           focusRequest={focusRequest}
           matchedIds={matchedIds}
           portraits={portraits}
+          settings={settings}
           onSelect={setSelectedId}
           onAdd={handleAdd}
           onDelete={handleDelete}
@@ -958,6 +1007,15 @@ export default function App() {
           options={resolutionView.options}
           onChoose={handleResolution}
           onCancel={() => setPending(null)}
+        />
+      )}
+
+      {settingsOpen && (
+        <SettingsDialog
+          data={data}
+          settings={settings}
+          onChange={setSettings}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
 
