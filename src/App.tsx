@@ -33,6 +33,7 @@ import {
   type BackupSummary,
 } from './domain/repository';
 import { mediaStore } from './domain/mediaStore';
+import { downloadGedcom } from './domain/gedcom';
 import { deleteEvent, personDeletionImpact } from './domain/lifeEvents';
 import {
   findFiliationConflicts,
@@ -935,6 +936,15 @@ export default function App() {
             disabled={data.persons.length === 0}
           >
             Exporter
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => downloadGedcom(data)}
+            disabled={data.persons.length === 0}
+            title="Exporter au format GEDCOM 5.5.1"
+          >
+            GEDCOM
           </button>
           <button
             type="button"
