@@ -4,11 +4,11 @@ import type { Id } from './types';
 /**
  * Réglages de lecture, DISTINCTS des données familiales.
  *
- * `meId` est personnel :_two personnes connectées au même arbre n'ont pas le
+ * `meId` est personnel : deux personnes connectées au même arbre n'ont pas le
  * même « moi ». La clé de stockage est donc `simple-family-tree:settings:<profil>`.
- * En local il n'existe qu'un profil (`local`) ; avec Supabase, il suffira de
- * remplacer `profileId` par l'identifiant Auth de l'utilisateur connecté pour
- * que chacun retrouve son propre marqueur sans toucher au modèle de données.
+ * Le profil est `local` hors ligne, et l'identifiant Auth de l'utilisateur
+ * connecté en ligne : chacun retrouve son marqueur sans modifier le document
+ * familial partagé.
  */
 export const LOCAL_PROFILE_ID = 'local';
 

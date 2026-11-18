@@ -11,8 +11,19 @@ import BackupDialog from './components/BackupDialog';
 import SettingsDialog from './components/SettingsDialog';
 import MediaInbox from './components/MediaInbox';
 import RelationshipDialog from './components/RelationshipDialog';
+import CloudGate from './components/CloudGate';
+import { resetMediaStore, setMediaStore } from './domain/mediaStore';
+import {
+  currentUser,
+  migrateLocalMediaToCloud,
+  SupabaseFamilyRepository,
+  SupabaseMediaStore,
+  supabaseConfigured,
+} from './domain/supabase';
 import {
   LocalSettingsStore,
+  LOCAL_PROFILE_ID,
+  type SettingsStore,
   type ViewSettings,
 } from './domain/settings';
 import SidePanel from './components/SidePanel';
@@ -149,12 +160,22 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [branchStartId, setBranchStartId] = useState<Id | null>(null);
+  const [cloudGateOpen, setCloudGateOpen] = useState(false);
+  const [cloudFamilyId, setCloudFamilyId] = useState<Id | null>(null);
+  const [cloudUser, setCloudUser] = useState<string | null>(null);
   const [relationOpen, setRelationOpen] = useState(false);
   const [relationFrom, setRelationFrom] = useState<Id | null>(null);
-  const settingsStore = useMemo(() => new LocalSettingsStore(), []);
-  const [settings, setSettings] = useState<ViewSettings>(() =>
-    new LocalSettingsStore().load(),
+  // Les réglages de lecture sont personnels : clés par compte Auth en ligne,
+  // par profil `local` hors ligne. Les données familiales restent partagées.
+  const [profileId, setProfileId] = useState<Id>(LOCAL_PROFILE_ID);
+  const settingsStore = useMemo(
+    () => new LocalSettingsStore(profileId),
+    [profileId],
   );
+  const [settings, setSettings] = useState<ViewSettings>(() =>
+    new LocalSettingsStore(LOCAL_PROFILE_ID).load(),
+  );
+  const loadedStore = useRef<SettingsStore | null>(null);
   const [data, setData] = useState<FamilyData | null>(null);
   const [selectedId, setSelectedId] = useState<Id | null>(null);
   const [dialog, setDialog] = useState<DialogConfig | null>(null);
@@ -191,7 +212,7 @@ export default function App() {
   const focusToken = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const repository = useMemo(
+  const localRepository = useMemo(
     () =>
       new LocalFamilyRepository({
         onSaveError: (message) => setSaveError(message || null),
@@ -199,6 +220,48 @@ export default function App() {
       }),
     [],
   );
+  const repository = useMemo(
+    () =>
+      cloudFamilyId
+        ? new SupabaseFamilyRepository(cloudFamilyId, {
+            onSaveError: (message) => setSaveError(message || null),
+          })
+        : localRepository,
+    [cloudFamilyId, localRepository],
+  );
+
+  useEffect(() => {
+    if (cloudFamilyId) {
+      setMediaStore(new SupabaseMediaStore(cloudFamilyId));
+      void currentUser().then((user) => setCloudUser(user?.email ?? null));
+    } else {
+      resetMediaStore();
+      setCloudUser(null);
+    }
+  }, [cloudFamilyId]);
+
+  const enterCloud = async (familyId: Id) => {
+    if (!data) return;
+    let mediaNote = '';
+    // Les octets sont copiés avant le document : même si l'interface recharge
+    // immédiatement après le basculement, aucun portrait ne manque.
+    if (!cloudFamilyId) {
+      const report = await migrateLocalMediaToCloud(familyId, data);
+      mediaNote = `${report.uploaded} média(s) envoyé(s)`;
+      if (report.missing.length) {
+        mediaNote += ` · ${report.missing.length} absent(s) en local`;
+      }
+      if (report.failed.length) {
+        mediaNote += ` · ${report.failed.length} envoi(s) refusé(s)`;
+      }
+    }
+    await new SupabaseFamilyRepository(familyId).save(data);
+    setCloudFamilyId(familyId);
+    setCloudGateOpen(false);
+    setToast(
+      `Arbre en ligne${mediaNote ? ` · ${mediaNote}` : ''}. Vos réglages personnels suivent votre compte.`,
+    );
+  };
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [eventDialog, setEventDialog] = useState<{ eventId?: Id } | null>(null);
   const [portraits, setPortraits] = useState<Map<Id, CardPortrait>>(new Map());
@@ -209,21 +272,43 @@ export default function App() {
   const initialFocusApplied = useRef(false);
 
   useEffect(() => {
-    void repository.load().then((loaded) => {
-      setData(loaded);
-      if (initialFocusApplied.current) return;
-      initialFocusApplied.current = true;
-      const id = settings.referenceId ?? settings.meId;
-      if (!id || !loaded.persons.some((person) => person.id === id)) return;
-      focusToken.current += 1;
-      setSelectedId(id);
-      setFocusRequest({ id, token: focusToken.current });
-    });
+    void repository
+      .load()
+      .then((loaded) => {
+        setData(loaded);
+        if (initialFocusApplied.current) return;
+        initialFocusApplied.current = true;
+        const id = settings.referenceId ?? settings.meId;
+        if (!id || !loaded.persons.some((person) => person.id === id)) return;
+        focusToken.current += 1;
+        setSelectedId(id);
+        setFocusRequest({ id, token: focusToken.current });
+      })
+      .catch((error: unknown) => {
+        setToast(error instanceof Error ? error.message : 'Chargement impossible.');
+      });
   }, [repository]);
 
+  // Chaque changement de profil recharge ses réglages avant toute écriture :
+  // le garde-fou évite de copier le « Moi » d'un compte sur un autre.
   useEffect(() => {
+    setSettings(settingsStore.load());
+  }, [settingsStore]);
+
+  useEffect(() => {
+    if (loadedStore.current !== settingsStore) {
+      loadedStore.current = settingsStore;
+      return;
+    }
     settingsStore.save(settings);
   }, [settings, settingsStore]);
+
+  useEffect(() => {
+    if (!supabaseConfigured) return;
+    void currentUser().then((user) => {
+      setProfileId(user?.id ?? LOCAL_PROFILE_ID);
+    });
+  }, []);
 
   useEffect(() => {
     if (!data) return;
@@ -583,8 +668,8 @@ export default function App() {
   };
 
   const handleRestoreBackup = (id: string) => {
-    if (!repository.restoreBackup) return;
-    void repository.restoreBackup(id).then((restored) => {
+    if (!(repository instanceof LocalFamilyRepository)) return;
+    void repository.restoreBackup(id).then((restored: FamilyData) => {
       setData(restored);
       setSelectedId(null);
       setFitSignal((value) => value + 1);
@@ -628,6 +713,7 @@ export default function App() {
       return;
     }
     await repository.clear();
+    if (cloudFamilyId) await mediaStore.clear();
     setData(emptyFamily());
     setSelectedId(null);
     setDialog(null);
@@ -941,6 +1027,16 @@ export default function App() {
               Me recentrer
             </button>
           )}
+          {supabaseConfigured && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setCloudGateOpen(true)}
+              title={cloudUser ? `Connecté : ${cloudUser}` : 'Comptes et arbre partagé'}
+            >
+              {cloudFamilyId ? '☁ En ligne' : 'Passer au cloud'}
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-secondary"
@@ -1140,6 +1236,15 @@ export default function App() {
             <MediaInbox data={data} onChange={setData} />
           </div>
         </div>
+      )}
+
+      {cloudGateOpen && data && (
+        <CloudGate
+          localData={data}
+          onReady={enterCloud}
+          onCancel={() => setCloudGateOpen(false)}
+          onUserChange={(user) => setProfileId(user?.id ?? LOCAL_PROFILE_ID)}
+        />
       )}
 
       {relationOpen && (
