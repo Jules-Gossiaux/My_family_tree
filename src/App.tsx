@@ -89,6 +89,7 @@ import {
   type RelationQuestion,
 } from './domain/operations';
 import { normalizeSearch } from './domain/dates';
+import { personChoiceLabel, personContextLabel } from './domain/personChoices';
 import { computeLayout, structureKey, type TreeLayout } from './layout/layout';
 import {
   VIEW_LABELS,
@@ -209,6 +210,7 @@ export default function App() {
   const [fitSignal, setFitSignal] = useState(0);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [highlightedId, setHighlightedId] = useState<Id | null>(null);
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const focusToken = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -434,13 +436,14 @@ export default function App() {
   }, [data, search]);
 
   const matchedIds = useMemo(
-    () => new Set(searchResults.map((person) => person.id)),
-    [searchResults],
+    () => new Set(highlightedId ? [highlightedId] : []),
+    [highlightedId],
   );
 
   const chooseSearchResult = (person: Person) => {
     setSelectedId(person.id);
     setSearch(personLabel(person));
+    setHighlightedId(person.id);
     setSearchOpen(false);
     focusToken.current += 1;
     setFocusRequest({ id: person.id, token: focusToken.current });
@@ -756,7 +759,7 @@ export default function App() {
     }
     return linkCandidates(data, dialog.kind, dialog.personId).map((person) => ({
       id: person.id,
-      label: personLabel(person),
+      label: personChoiceLabel(data, person),
     }));
   }, [data, dialog]);
 
@@ -950,6 +953,7 @@ export default function App() {
               aria-label="Rechercher une personne dans l’arbre"
               onChange={(event) => {
                 setSearch(event.target.value);
+                setHighlightedId(null);
                 setSearchOpen(true);
               }}
               onFocus={() => setSearchOpen(true)}
@@ -964,6 +968,7 @@ export default function App() {
                 }
                 if (event.key === 'Escape') {
                   setSearch('');
+                  setHighlightedId(null);
                   setSearchOpen(false);
                   searchInputRef.current?.blur();
                 }
@@ -976,6 +981,7 @@ export default function App() {
                 aria-label="Effacer la recherche"
                 onClick={() => {
                   setSearch('');
+                  setHighlightedId(null);
                   setSearchOpen(false);
                   searchInputRef.current?.focus();
                 }}
@@ -988,22 +994,23 @@ export default function App() {
                 {searchResults.length === 0 ? (
                   <p className="search-empty">Aucune personne trouvée.</p>
                 ) : (
-                  searchResults.map((person) => (
-                    <button
-                      key={person.id}
-                      type="button"
-                      className="search-result"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => chooseSearchResult(person)}
-                    >
-                      <strong>{personLabel(person)}</strong>
-                      <span>
-                        {[person.birthDate, person.deathDate]
-                          .filter(Boolean)
-                          .join(' – ') || 'Dates non renseignées'}
-                      </span>
-                    </button>
-                  ))
+                  <>
+                    <p className="search-help">
+                      Seule la personne choisie sera surlignée dans l’arbre.
+                    </p>
+                    {searchResults.map((person) => (
+                      <button
+                        key={person.id}
+                        type="button"
+                        className="search-result"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => chooseSearchResult(person)}
+                      >
+                        <strong>{personLabel(person)}</strong>
+                        <span>{personContextLabel(data, person)}</span>
+                      </button>
+                    ))}
+                  </>
                 )}
               </div>
             )}
@@ -1204,9 +1211,7 @@ export default function App() {
           onSelectPerson={setSelectedId}
           onChange={setData}
           onOpenDirectories={() => setDirectoryOpen(true)}
-          onOpenEvent={(eventId) =>
-            selectedId ? setEventDialog({ eventId }) : undefined
-          }
+          onOpenEvent={(eventId) => setEventDialog({ eventId })}
           onDeleteEvent={handleDeleteEvent}
         />
       </main>
@@ -1311,7 +1316,7 @@ export default function App() {
         />
       )}
 
-      {eventDialog && selectedId && (
+      {eventDialog && (
         <EventDialog
           data={data}
           eventId={eventDialog.eventId}

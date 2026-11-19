@@ -1,8 +1,8 @@
-import type { Id } from '../domain/types';
+import type { FamilyData, Id } from '../domain/types';
 import { buildTimeline, type TimelineEntry } from '../domain/timeline';
 
 interface LifeTimelineProps {
-  data: Parameters<typeof buildTimeline>[0];
+  data: FamilyData;
   personId: Id;
   onOpenEvent?: (eventId: Id) => void;
 }
@@ -35,13 +35,13 @@ export default function LifeTimeline({ data, personId, onOpenEvent }: LifeTimeli
         const showYear = entry.year !== previous?.year;
         return (
           <li key={entry.key} className={`timeline-entry${entry.eventId ? ' is-clickable' : ''}`}>
-            {showYear && (
-              <span className="timeline-year">
-                {entry.year !== undefined ? entry.year : 'Sans date'}
-              </span>
-            )}
             <span className="timeline-marker">{TYPE_SYMBOLS[entry.type] ?? '•'}</span>
             <div className="timeline-body">
+              {showYear && (
+                <span className="timeline-year">
+                  {entry.year !== undefined ? entry.year : 'Sans date'}
+                </span>
+              )}
               <strong>
                 {entry.eventId ? (
                   <button type="button" onClick={() => onOpenEvent?.(entry.eventId!)}>
@@ -53,6 +53,15 @@ export default function LifeTimeline({ data, personId, onOpenEvent }: LifeTimeli
               </strong>
               {entry.yearLabel && <span className="timeline-date">{entry.yearLabel}</span>}
               {entry.detail && <span className="timeline-detail">{entry.detail}</span>}
+              {entry.eventId && onOpenEvent && (
+                <button
+                  type="button"
+                  className="timeline-edit"
+                  onClick={() => onOpenEvent(entry.eventId!)}
+                >
+                  Modifier le fait
+                </button>
+              )}
             </div>
           </li>
         );

@@ -154,7 +154,6 @@ export function findDefaultField(data: FamilyData, eventId: Id):
 }
 
 export function addEvent(data: FamilyData, input: LifeEventInput): FamilyData {
-  if (input.participants.length === 0) return data;
   return touch({
     ...data,
     events: [...data.events, createLifeEvent(data.familyId, input)],

@@ -12,6 +12,7 @@ import {
   updateMedia,
 } from '../domain/directories';
 import { mediaStore } from '../domain/mediaStore';
+import { personChoiceLabel } from '../domain/personChoices';
 import { importFiles, prepareFiles } from '../domain/mediaInbox';
 import {
   DEFAULT_PORTRAIT_CROP,
@@ -267,6 +268,19 @@ export default function MediaGallery({ data, personId, onChange, uploadSignal }:
                 <strong>{medium.title || medium.fileName}</strong>
                 <span className="panel-note">{medium.fileName}</span>
                 <span className="gallery-shared">{medium.personIds.length} personne(s)</span>
+                <DirectorySelect
+                  label="Rattacher aussi à"
+                  options={data.persons
+                    .filter((candidate) => !medium.personIds.includes(candidate.id))
+                    .map((candidate) => ({
+                      id: candidate.id,
+                      label: personChoiceLabel(data, candidate),
+                    }))}
+                  emptyLabel="Choisir une autre personne…"
+                  onChange={(id) => {
+                    if (id) onChange(linkMedia(data, medium.id, id));
+                  }}
+                />
                 <input
                   value={medium.title ?? ''}
                   placeholder="Titre du média"

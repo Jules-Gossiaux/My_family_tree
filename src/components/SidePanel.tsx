@@ -17,6 +17,7 @@ import {
   type UnionMetaInput,
   type UnionSlot,
 } from '../domain/types';
+import { personChoiceLabel } from '../domain/personChoices';
 import { getPerson, relationsOf, unionsOfPerson } from '../domain/operations';
 import { placeLabelOf, addPlace } from '../domain/directories';
 import { eventsOfPerson } from '../domain/lifeEvents';
@@ -445,6 +446,7 @@ export default function SidePanel({
                         <UnionCard
                           key={union.id}
                           union={union}
+                          data={data}
                           selectedId={person.id}
                           persons={data.persons}
                           nameOf={nameOf}
@@ -614,6 +616,56 @@ export default function SidePanel({
             ses informations, préciser la nature de chaque filiation et ajouter
             un parent, un frère ou une sœur, un enfant ou un conjoint.
           </p>
+          <div className="event-section-head overview-events-head">
+            <h3>Faits de vie</h3>
+            <button
+              type="button"
+              className="btn btn-mini btn-primary"
+              onClick={() => onOpenEvent()}
+            >
+              + Ajouter
+            </button>
+          </div>
+          {data.events.length === 0 ? (
+            <p className="panel-note">
+              Aucun fait pour l’instant. Vous pouvez en créer un sans sélectionner
+              de personne.
+            </p>
+          ) : (
+            <div className="fact-list">
+              {data.events.map((event) => (
+                <article key={event.id} className="fact-card">
+                  <header>
+                    <strong>{event.title || eventLabelFor(event.type)}</strong>
+                    <span>{event.date || 'Sans date'}</span>
+                  </header>
+                  <p>
+                    {event.participants.length === 0
+                      ? 'Fait non rattaché à une personne'
+                      : event.participants
+                          .map((participant) => nameOf(participant.personId))
+                          .join(', ')}
+                  </p>
+                  <div className="gallery-actions">
+                    <button
+                      type="button"
+                      className="btn btn-mini"
+                      onClick={() => onOpenEvent(event.id)}
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-mini btn-mini-danger"
+                      onClick={() => onDeleteEvent(event.id)}
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
           <button
             type="button"
             className="btn btn-secondary"
@@ -661,6 +713,7 @@ export default function SidePanel({
 
 interface UnionCardProps {
   union: Union;
+  data: FamilyData;
   selectedId: Id;
   persons: Person[];
   nameOf: (id: Id | null) => string;
@@ -683,6 +736,7 @@ interface UnionCardProps {
 
 function UnionCard({
   union,
+  data,
   selectedId,
   persons,
   nameOf,
@@ -783,7 +837,7 @@ function UnionCard({
                           )
                           .map((candidate) => (
                             <option key={candidate.id} value={candidate.id}>
-                              {personLabel(candidate)}
+                              {personChoiceLabel(data, candidate)}
                             </option>
                           ))}
                       </select>

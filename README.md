@@ -17,17 +17,17 @@ Arbre généalogique familial : visualisation, faits de vie, lieux, sources et m
 
 - Ajout d'une personne, d'un parent, d'un frère/sœur, d'un enfant ou d'un conjoint ; édition et suppression des fiches. En cas d'erreur, un parent ou un conjoint peut être **remplacé ou retiré** sans supprimer la personne ni détacher les enfants.
 - Placement automatique déterministe (`balanced` par défaut, `siblings`, `couples`, `off`), pan/zoom, vues **classique / ascendants / sablier / éventail** et mise en page d'impression.
-- Recherche insensible aux accents et aux variantes de noms (`Ctrl/Cmd+K`), surlignage et recentrage.
+- Recherche insensible aux accents et aux variantes de noms (`Ctrl/Cmd+K`), surlignage de la seule personne choisie et recentrage. Les homonymes sont distingués dans tous les sélecteurs par date de naissance, puis par parents, conjoints ou enfants.
 - Menu contextuel sur chaque carte : ouvrir la fiche, ajouter un lien, rattacher une personne existante, définir « Moi », créer une branche, calculer un lien de parenté, supprimer.
 - Dates **en texte libre** (`vers 1890`, `avant 1914`, `12 mars 1890`) décomposées en interne en quatre colonnes, jamais affichées telles quelles.
 - Fiche personne : identité et variantes de noms, portrait avec cadrage, dates de vie, notes libres, coordonnées, galerie de photos et documents.
 
 ### Données familiales
 
-- **Faits de vie** : un événement peut concerner une ou plusieurs personnes avec un rôle ; date floue, lieu, notes, sources et médias. La naissance et le décès restent sur la fiche pour l'arbre et créent un événement par défaut synchronisé. Une **frise chronologique** classifie les faits et les unions.
+- **Faits de vie** : un événement peut concerner une ou plusieurs personnes avec un rôle, ou rester **non rattaché** ; date floue, lieu, notes, sources et médias. La naissance et le décès restent sur la fiche pour l'arbre et créent un événement par défaut synchronisé. Une **frise chronologique** classifie les faits et les unions ; chaque fait peut être modifié depuis la frise ou la liste.
 - **Lieux** nommés (type, parent optionnel) : renommage par identifiant, suppression refusée tant qu'une citation existe.
 - **Sources** à cote unique (accents et casse ignorés) : plusieurs citations par fait, suppression refusée tant que la source est utilisée.
-- **Médias partagés** : une photo peut illustrer plusieurs personnes ; chaque personne choisit son portrait et son propre cadrage. Boîte à médias avec glisser-déposer, lots, vignettes, déduplication par empreinte SHA-256, visionneuse plein écran et rattachement multiple.
+- **Médias partagés** : une photo peut illustrer plusieurs personnes ; elle peut être rattachée à une autre personne directement depuis sa fiche, sans perdre les liaisons existantes. Chaque personne choisit son portrait et son propre cadrage. Boîte à médias avec glisser-déposer, lots, vignettes, déduplication par empreinte SHA-256, visionneuse plein écran et rattachement multiple.
 - Export/import JSON complet (document + fichiers en data URLs), compatible avec les versions v1, v2 et v3. Export **GEDCOM 5.5.1** (`ABT`, `BEF`, `AFT` pour les dates floues).
 - **Sauvegardes automatiques** tournantes et restauration, avec bandeau visible en cas d'échec d'enregistrement.
 
@@ -113,6 +113,7 @@ Importer le dépôt dans Vercel, framework **Vite**, commande de build `npm run 
 
 - L'interface n'a pas encore de gestionnaire d'invitations ni d'écran d'administration des rôles : la table `invitations` et `family_members` se gèrent côté Supabase.
 - Un membre `viewer` peut ouvrir l'arbre mais ses modifications sont refusées par RLS ; le bandeau d'erreur affiche le refus. Une désactivation préventive des boutons reste à faire.
+- Une frise chronologique est disponible pour chaque personne dans l’onglet « Faits de vie » (bouton « Frise »). Une frise **multi-personnes / familiale** reste à prévoir dans une version future.
 - Les réglages personnels (Moi, branches) sont dans le `localStorage` du navigateur, clés par compte : ils ne suivent pas encore d'un appareil à l'autre.
 
 ## Organisation du code

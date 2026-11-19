@@ -4,6 +4,7 @@
   --surface: #1b1e25;
   --surface-2: #22262f;
   --surface-3: #2c313c;
+  --surface-soft: #232731;
   --border: #343a46;
   --border-soft: #282d37;
   --text: #e9ecf1;
@@ -666,6 +667,12 @@ textarea {
 .field input::placeholder,
 .field textarea::placeholder {
   color: var(--text-dim);
+}
+
+.field select option,
+.grouping-control option {
+  background: var(--surface);
+  color: var(--text);
 }
 
 .action-list {
@@ -1461,9 +1468,16 @@ textarea {
 }
 
 .search-result span,
-.search-empty {
-  color: var(--text-dim);
+.search-empty,
+.search-help {
+  color: var(--text-muted);
   font-size: 11px;
+}
+
+.search-help {
+  margin: 0;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .search-empty {
@@ -1872,6 +1886,10 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.overview-events-head {
+  margin: 18px 0 8px;
 }
 
 .event-participant,
@@ -2550,22 +2568,22 @@ textarea {
 .life-timeline {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 6px;
+  padding: 0;
 }
 
 .timeline-entry {
   position: relative;
   display: grid;
-  grid-template-columns: 44px 22px 1fr;
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: start;
-  gap: 6px;
-  padding: 0 0 14px 0;
+  gap: 10px;
+  padding: 0 0 16px 0;
 }
 
 .timeline-entry::before {
   content: '';
   position: absolute;
-  left: 61px;
+  left: 10px;
   top: 22px;
   bottom: -2px;
   width: 1px;
@@ -2577,34 +2595,42 @@ textarea {
 }
 
 .timeline-year {
-  font-size: 11px;
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10.5px;
   font-weight: 700;
-  color: var(--text-dim);
-  padding-top: 1px;
+  letter-spacing: 0.02em;
 }
 
 .timeline-marker {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--accent, #b5793b);
+  width: 21px;
+  height: 21px;
+  border: 1px solid var(--accent);
   border-radius: 50%;
-  background: var(--surface, #fff);
-  color: var(--accent, #b5793b);
+  background: var(--surface);
+  color: var(--accent);
   font-size: 11px;
 }
 
 .timeline-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 3px;
   min-width: 0;
 }
 
 .timeline-body strong {
-  font-size: 12px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .timeline-body strong button {
@@ -2619,12 +2645,27 @@ textarea {
 
 .timeline-date {
   font-size: 10.5px;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 .timeline-detail {
   font-size: 11px;
-  color: var(--text-dim);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.timeline-edit {
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.timeline-edit:hover {
+  text-decoration: underline;
 }
 
 /* Menu contextuel sur les cartes */
@@ -2699,17 +2740,31 @@ textarea {
 
 /* Impression : arbre et fiche, sans chrome d'application */
 @media print {
-  body {
-    background: #fff;
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+
+  html,
+  body,
+  #root,
+  .app {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #111 !important;
   }
 
   .topbar,
   .side-panel,
   .canvas-controls,
+  .canvas-hint,
   .quick-toolbar,
   .context-menu,
   .toast,
   .save-error,
+  .empty-actions,
   .modal-overlay,
   .modal-backdrop {
     display: none !important;
@@ -2719,20 +2774,30 @@ textarea {
   .canvas {
     display: block;
     width: 100%;
-    height: auto;
-    overflow: visible;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
   }
 
   .tree-svg {
+    display: block;
     width: 100%;
-    height: auto;
+    height: auto !important;
     max-width: none;
+    max-height: none;
+    overflow: visible;
   }
 
   .person-card-bg,
   .union-node circle {
     fill: #fff !important;
     stroke: #222 !important;
+  }
+
+  .person-card text,
+  .person-card tspan {
+    fill: #111 !important;
   }
 
   .tree-edge {

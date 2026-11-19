@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { personChoiceLabel } from '../domain/personChoices';
 import { personLabel, type FamilyData, type Id } from '../domain/types';
 import { relationshipBetween } from '../domain/relationship';
 
@@ -57,7 +58,7 @@ export default function RelationshipDialog({
               <option value="">— Choisir —</option>
               {options.map((person) => (
                 <option key={person.id} value={person.id}>
-                  {personLabel(person)}
+                  {personChoiceLabel(data, person)}
                 </option>
               ))}
             </select>
@@ -68,7 +69,7 @@ export default function RelationshipDialog({
               <option value="">— Choisir —</option>
               {options.map((person) => (
                 <option key={person.id} value={person.id}>
-                  {personLabel(person)}
+                  {personChoiceLabel(data, person)}
                 </option>
               ))}
             </select>
@@ -80,7 +81,7 @@ export default function RelationshipDialog({
                 <>
                   <strong>{result.label}</strong>
                   <p className="panel-note">
-                    {name(from)} → {result.steps.join(' → ')} → {name(to)}
+                    {name(from)} → {result.steps.join(' → ')}
                   </p>
                 </>
               ) : (

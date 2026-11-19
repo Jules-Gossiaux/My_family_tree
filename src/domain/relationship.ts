@@ -1,6 +1,7 @@
 import {
   isFiliationLink,
   linkOfPartner,
+  personLabel,
   unionPartnerIds,
   type FamilyData,
   type Id,
@@ -87,7 +88,12 @@ export function describePath(
       child: gender === 'female' ? 'Fille' : 'Fils',
       spouse: 'Conjoint',
     };
-    return { label: singular[kind], steps: [stepLabel(kind, gender)] };
+    return {
+      label: singular[kind],
+      steps: [
+        `${stepLabel(kind, gender)} : ${target ? personLabel(target) : 'personne inconnue'}`,
+      ],
+    };
   }
 
   const upward = steps.filter((step) => step.kind === 'parent').length;
@@ -120,7 +126,8 @@ export function describePath(
   const detail = steps.map((step) => {
     const target = data.persons.find((person) => person.id === step.to);
     const gender = target?.gender === 'female' ? 'female' : 'male';
-    return stepLabel(step.kind, gender);
+    const name = target ? personLabel(target) : 'personne inconnue';
+    return `${stepLabel(step.kind, gender)} : ${name}`;
   });
   return { label, steps: detail };
 }

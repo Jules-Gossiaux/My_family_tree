@@ -7,12 +7,12 @@ import {
   duplicateSource,
 } from '../domain/directories';
 import { addEvent, updateEvent } from '../domain/lifeEvents';
+import { personChoiceLabel } from '../domain/personChoices';
 import {
   EVENT_LABELS,
   EVENT_TYPES,
   PARTICIPANT_ROLES,
   PARTICIPANT_ROLE_LABELS,
-  personLabel,
   unionPartnerIds,
   type EventType,
   type FamilyData,
@@ -34,7 +34,7 @@ function labelOfUnion(data: FamilyData, unionId: Id): string {
   if (!union) return 'Union inconnue';
   const names = unionPartnerIds(union).map((id) => {
     const person = data.persons.find((candidate) => candidate.id === id);
-    return person ? personLabel(person) : '?';
+    return person ? personChoiceLabel(data, person) : '?';
   });
   return names.length > 0 ? names.join(' & ') : 'Parents non renseignés';
 }
@@ -88,8 +88,8 @@ export default function EventDialog({
   };
 
   const save = () => {
-    if (participants.length === 0 || participants.some((p) => !p.personId)) {
-      setError('Un fait de vie doit être rattaché à au moins une personne.');
+    if (participants.some((p) => !p.personId)) {
+      setError('Retirez les lignes incomplètes avant d’enregistrer.');
       return;
     }
     const input: LifeEventInput = {
@@ -186,9 +186,11 @@ export default function EventDialog({
               </button>
             </div>
             {participants.length === 0 && (
-              <p className="panel-note">
-                Ajoutez la personne ou les personnes concernées par ce fait.
-              </p>
+            <p className="panel-note">
+              Ce fait peut rester sans participant : il apparaîtra alors dans la
+              liste générale des faits. Ajoutez une ou plusieurs personnes
+              seulement si elles sont concernées.
+            </p>
             )}
             {participants.map((participant, index) => (
               <div key={index} className="event-participant">
@@ -207,7 +209,7 @@ export default function EventDialog({
                     <option value="">Choisir…</option>
                     {data.persons.map((person) => (
                       <option key={person.id} value={person.id}>
-                        {personLabel(person)}
+                        {personChoiceLabel(data, person)}
                       </option>
                     ))}
                   </select>

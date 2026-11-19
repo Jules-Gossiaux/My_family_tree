@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { personChoiceLabel } from '../domain/personChoices';
 import { personLabel, type FamilyData, type Id } from '../domain/types';
 import {
   createBranch,
@@ -109,7 +110,7 @@ export default function SettingsDialog({
                   <option value="">Aucun</option>
                   {persons.map((person) => (
                     <option key={person.id} value={person.id}>
-                      {personLabel(person)}
+                      {personChoiceLabel(data, person)}
                     </option>
                   ))}
                 </select>
@@ -128,7 +129,7 @@ export default function SettingsDialog({
                   <option value="">Aucune</option>
                   {persons.map((person) => (
                     <option key={person.id} value={person.id}>
-                      {personLabel(person)}
+                      {personChoiceLabel(data, person)}
                     </option>
                   ))}
                 </select>
@@ -239,7 +240,7 @@ export default function SettingsDialog({
                         <option value="">Aucune</option>
                         {persons.map((person) => (
                           <option key={person.id} value={person.id}>
-                            {personLabel(person)}
+                            {personChoiceLabel(data, person)}
                           </option>
                         ))}
                       </select>
@@ -255,7 +256,7 @@ export default function SettingsDialog({
                               checked={branch.memberIds.includes(person.id)}
                               onChange={() => toggleMember(branch, person.id)}
                             />
-                            <span>{personLabel(person)}</span>
+                            <span>{personChoiceLabel(data, person)}</span>
                           </label>
                         ))
                       )}

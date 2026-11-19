@@ -15,6 +15,9 @@ describe('calcul de parenté', () => {
       }],
     };
     expect(relationshipBetween(data, child.id, mother.id)?.label).toBe('Mère');
+    expect(relationshipBetween(data, child.id, mother.id)?.steps).toEqual([
+      'mère : Mère Test',
+    ]);
     expect(relationshipBetween(data, mother.id, child.id)?.label).toBe('Fils');
   });
 

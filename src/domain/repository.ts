@@ -370,8 +370,11 @@ export function validateFamilyData(value: unknown): FamilyData {
   const unionIds = new Set(unions.map((union) => union.id));
 
   const events = readEvents(obj.events, familyId).filter((event) => {
+    const hadParticipants = event.participants.length > 0;
     const participants = event.participants.filter((p) => personIds.has(p.personId));
-    if (participants.length === 0) return false;
+    // Un fait volontairement sans participant est valide. En revanche, un fait
+    // dont tous les participants ont disparu est une donnée orpheline.
+    if (hadParticipants && participants.length === 0) return false;
     event.participants = participants;
     if (event.placeId && !placeIds.has(event.placeId)) event.placeId = undefined;
     event.citations = event.citations.filter((c) => sourceIds.has(c.sourceId));

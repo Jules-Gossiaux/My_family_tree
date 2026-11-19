@@ -7,8 +7,9 @@ import {
   type PreparedFile,
 } from '../domain/mediaInbox';
 import { mediaStore } from '../domain/mediaStore';
+import { personChoiceLabel } from '../domain/personChoices';
 import { linkMedia, mediaUsageLabel } from '../domain/directories';
-import { personLabel, type FamilyData, type Id, type Media } from '../domain/types';
+import { type FamilyData, type Id, type Media } from '../domain/types';
 
 interface MediaInboxProps {
   data: FamilyData;
@@ -187,7 +188,7 @@ export default function MediaInbox({ data, onChange }: MediaInboxProps) {
           <optgroup label="Personnes">
             {personTargets.map((person) => (
               <option key={person.id} value={`person:${person.id}`}>
-                {personLabel(person)}
+                {personChoiceLabel(data, person)}
               </option>
             ))}
           </optgroup>
@@ -259,7 +260,7 @@ export default function MediaInbox({ data, onChange }: MediaInboxProps) {
                 <option value="">Rattacher à…</option>
                 {personTargets.map((person) => (
                   <option key={person.id} value={`person:${person.id}`}>
-                    {personLabel(person)}
+                    {personChoiceLabel(data, person)}
                   </option>
                 ))}
                 {eventTargets.map((event) => (

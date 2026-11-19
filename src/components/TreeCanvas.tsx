@@ -118,6 +118,10 @@ export default function TreeCanvas({
   onImport,
 }: TreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const contentRef = useRef<SVGGElement>(null);
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
   const [size, setSize] = useState({ width: 0, height: 0 });
   const sizeRef = useRef(size);
   sizeRef.current = size;
@@ -139,6 +143,36 @@ export default function TreeCanvas({
     x: number;
     y: number;
   } | null>(null);
+  // L'impression doit être synchronisée avant que le navigateur ne figxe la
+  // page : on modifie donc directement les attributs SVG, sans attendre React.
+  useEffect(() => {
+    let originalTransform: string | null = null;
+    const enter = () => {
+      const current = layoutRef.current;
+      originalTransform = contentRef.current?.getAttribute('transform') ?? null;
+      if (current.width > 0 && current.height > 0) {
+        svgRef.current?.setAttribute(
+          'viewBox',
+          `0 0 ${current.width} ${current.height}`,
+        );
+      }
+      contentRef.current?.removeAttribute('transform');
+      svgRef.current?.classList.add('is-printing');
+    };
+    const leave = () => {
+      svgRef.current?.removeAttribute('viewBox');
+      if (originalTransform !== null) {
+        contentRef.current?.setAttribute('transform', originalTransform);
+      }
+      svgRef.current?.classList.remove('is-printing');
+    };
+    window.addEventListener('beforeprint', enter);
+    window.addEventListener('afterprint', leave);
+    return () => {
+      window.removeEventListener('beforeprint', enter);
+      window.removeEventListener('afterprint', leave);
+    };
+  }, []);
 
   const fittedRef = useRef(false);
   const lastFitSignal = useRef(fitSignal);
@@ -321,13 +355,15 @@ export default function TreeCanvas({
   return (
     <div className="canvas" ref={containerRef} onClick={() => setContextMenu(null)}>
       <svg
+        ref={svgRef}
         className={`tree-svg${dragging ? ' is-dragging' : ''}`}
+        preserveAspectRatio="xMidYMid meet"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
-        <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+        <g ref={contentRef} transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
           {layout.edges.map((edge) => (
             <path
               key={edge.id}
