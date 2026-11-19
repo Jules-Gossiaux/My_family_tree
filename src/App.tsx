@@ -210,7 +210,6 @@ export default function App() {
   const [fitSignal, setFitSignal] = useState(0);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [highlightedId, setHighlightedId] = useState<Id | null>(null);
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const focusToken = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -436,14 +435,13 @@ export default function App() {
   }, [data, search]);
 
   const matchedIds = useMemo(
-    () => new Set(highlightedId ? [highlightedId] : []),
-    [highlightedId],
+    () => new Set(searchResults.map((person) => person.id)),
+    [searchResults],
   );
 
   const chooseSearchResult = (person: Person) => {
     setSelectedId(person.id);
     setSearch(personLabel(person));
-    setHighlightedId(person.id);
     setSearchOpen(false);
     focusToken.current += 1;
     setFocusRequest({ id: person.id, token: focusToken.current });
@@ -953,7 +951,6 @@ export default function App() {
               aria-label="Rechercher une personne dans l’arbre"
               onChange={(event) => {
                 setSearch(event.target.value);
-                setHighlightedId(null);
                 setSearchOpen(true);
               }}
               onFocus={() => setSearchOpen(true)}
@@ -968,7 +965,6 @@ export default function App() {
                 }
                 if (event.key === 'Escape') {
                   setSearch('');
-                  setHighlightedId(null);
                   setSearchOpen(false);
                   searchInputRef.current?.blur();
                 }
@@ -981,7 +977,6 @@ export default function App() {
                 aria-label="Effacer la recherche"
                 onClick={() => {
                   setSearch('');
-                  setHighlightedId(null);
                   setSearchOpen(false);
                   searchInputRef.current?.focus();
                 }}
@@ -996,7 +991,8 @@ export default function App() {
                 ) : (
                   <>
                     <p className="search-help">
-                      Seule la personne choisie sera surlignée dans l’arbre.
+                      Tous les résultats sont surlignés dans l’arbre ; Entrée
+                      recentre sur le premier.
                     </p>
                     {searchResults.map((person) => (
                       <button
