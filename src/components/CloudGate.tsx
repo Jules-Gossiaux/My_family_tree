@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   acceptInvitation,
   createFamily,
+  createInvitation,
   currentUser,
   listFamilies,
   signIn,
@@ -33,6 +34,7 @@ export default function CloudGate({
   const [selected, setSelected] = useState<Id | null>(null);
   const [newFamily, setNewFamily] = useState('');
   const [invite, setInvite] = useState('');
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [user, setUser] = useState<CloudUser | null>(null);
   const [busy, setBusy] = useState(false);
@@ -205,7 +207,7 @@ export default function CloudGate({
                 <div className="cloud-new">
                   <input
                     value={invite}
-                    placeholder="Jeton d’invitation"
+                    placeholder="Jeton d’accès"
                     onChange={(event) => setInvite(event.target.value)}
                   />
                   <button
@@ -225,6 +227,37 @@ export default function CloudGate({
                   </button>
                 </div>
               </section>
+
+              {selected && families.find((family) => family.id === selected)?.role === 'admin' && (
+                <section className="cloud-section">
+                  <h3>Jeton à transmettre</h3>
+                  <p className="panel-note">
+                    Vous êtes le seul à pouvoir en générer. La personne crée son compte,
+                    saisit ce jeton et accède à cet arbre — sans attendre d’e-mail.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-mini"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        setAccessToken(await createInvitation(selected));
+                      })
+                    }
+                  >
+                    Générer un jeton
+                  </button>
+                  {accessToken && (
+                    <input
+                      className="cloud-token"
+                      readOnly
+                      value={accessToken}
+                      onFocus={(event) => event.target.select()}
+                      aria-label="Jeton d’accès généré"
+                    />
+                  )}
+                </section>
+              )}
 
               <p className="panel-note">
                 Votre arbre local ({localData.persons.length} personne

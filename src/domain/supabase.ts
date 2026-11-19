@@ -94,6 +94,20 @@ export async function acceptInvitation(token: string): Promise<Id> {
   return data as Id;
 }
 
+/** Un admin génère un jeton d'accès à son arbre ; n'importe quel compte peut ensuite l'utiliser. */
+export async function createInvitation(
+  familyId: Id,
+  role: 'admin' | 'editor' | 'viewer' = 'viewer',
+): Promise<string> {
+  if (!supabase) throw new Error('Supabase non configuré.');
+  const { data, error } = await supabase.rpc('create_invitation', {
+    p_family: familyId,
+    p_role: role,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
 /** Répertoire de familles : remplace localStorage dès que le cloud est actif. */
 export class SupabaseFamilyRepository implements FamilyRepository {
   constructor(

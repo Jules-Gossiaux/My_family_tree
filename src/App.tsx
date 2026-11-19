@@ -244,6 +244,16 @@ export default function App() {
 
   const enterCloud = async (familyId: Id) => {
     if (!data) return;
+    const online = new SupabaseFamilyRepository(familyId);
+    // Un arbre déjà en ligne est la source de vérité : l'ouvrir depuis un autre
+    // poste ne doit jamais écraser les noms et les photos avec un arbre local vide.
+    const remote = await online.load();
+    if (remote.persons.length > 0) {
+      setCloudFamilyId(familyId);
+      setCloudGateOpen(false);
+      setToast('Arbre en ligne ouvert. Les données du cloud sont conservées ; votre arbre local reste intact.');
+      return;
+    }
     let mediaNote = '';
     // Les octets sont copiés avant le document : même si l'interface recharge
     // immédiatement après le basculement, aucun portrait ne manque.
@@ -257,7 +267,7 @@ export default function App() {
         mediaNote += ` · ${report.failed.length} envoi(s) refusé(s)`;
       }
     }
-    await new SupabaseFamilyRepository(familyId).save(data);
+    await online.save(data);
     setCloudFamilyId(familyId);
     setCloudGateOpen(false);
     setToast(

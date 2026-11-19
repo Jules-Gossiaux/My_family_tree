@@ -41,7 +41,7 @@ create table if not exists public.family_documents (
 create table if not exists public.invitations (
   id          uuid primary key default gen_random_uuid(),
   family_id   uuid not null references public.families(id) on delete cascade,
-  email       text not null,
+  email       text,
   role        text not null check (role in ('admin', 'editor', 'viewer')),
   token       text not null unique default encode(gen_random_bytes(24), 'hex'),
   invited_by  uuid not null references auth.users(id) on delete cascade,
@@ -107,7 +107,8 @@ begin
 end;
 $$;
 
--- Accepter une invitation : contrôle de l'email et de l'expiration côté base.
+-- Accepter un jeton : le jeton est la seule porte. N'importe quel compte connecté
+-- peut l'utiliser, mais seul un admin peut en créer un (voir create_invitation).
 create or replace function public.accept_invitation(invite_token text)
 returns uuid
 language plpgsql
@@ -118,17 +119,43 @@ declare
   invitation public.invitations;
 begin
   select * into invitation from public.invitations where token = invite_token;
-  if not found then raise exception 'Invitation introuvable.'; end if;
-  if invitation.accepted_at is not null then raise exception 'Invitation déjà utilisée.'; end if;
-  if invitation.expires_at < now() then raise exception 'Invitation expirée.'; end if;
-  if lower(invitation.email) <> lower(coalesce(auth.jwt() ->> 'email', '')) then
-    raise exception 'Cette invitation est adressée à une autre personne.';
-  end if;
+  if not found then raise exception 'Jeton introuvable.'; end if;
+  if invitation.accepted_at is not null then raise exception 'Jeton déjà utilisé.'; end if;
+  if invitation.expires_at < now() then raise exception 'Jeton expiré.'; end if;
   insert into public.family_members(family_id, user_id, role)
   values (invitation.family_id, auth.uid(), invitation.role)
   on conflict (family_id, user_id) do update set role = excluded.role;
   update public.invitations set accepted_at = now() where id = invitation.id;
   return invitation.family_id;
+end;
+$$;
+
+-- Créer un jeton : réservé aux admins de l'arbre. Le jeton est généré côté base,
+-- jamais devinable côté navigateur. `p_email` reste facultatif, à titre de mémo.
+create or replace function public.create_invitation(
+  p_family uuid,
+  p_role text default 'viewer',
+  p_email text default null
+)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_token text;
+begin
+  if not public.can_admin(p_family) then
+    raise exception 'Seul un administrateur peut créer un jeton.';
+  end if;
+  if p_role not in ('admin', 'editor', 'viewer') then
+    raise exception 'Rôle inconnu.';
+  end if;
+  insert into public.invitations(family_id, email, role, invited_by, expires_at)
+  values (p_family, nullif(lower(trim(coalesce(p_email, ''))), ''), p_role,
+          auth.uid(), now() + interval '90 days')
+  returning token into new_token;
+  return new_token;
 end;
 $$;
 
@@ -150,7 +177,7 @@ drop policy if exists "un admin gère les membres" on public.family_members;
 drop policy if exists "document visible aux membres" on public.family_documents;
 drop policy if exists "écriture réservée aux éditeurs" on public.family_documents;
 drop policy if exists "modification réservée aux éditeurs" on public.family_documents;
-drop policy if exists "invitations lisibles par les admins et le destinataire" on public.invitations;
+drop policy if exists "jetons lisibles par les admins" on public.invitations;
 drop policy if exists "invitation créée par un admin" on public.invitations;
 drop policy if exists "invitation retirée par un admin" on public.invitations;
 drop policy if exists "lecture des médias de sa famille" on storage.objects;
@@ -194,11 +221,9 @@ create policy "modification réservée aux éditeurs"
   using (public.can_write(family_id))
   with check (public.can_write(family_id));
 
-create policy "invitations lisibles par les admins et le destinataire"
+create policy "jetons lisibles par les admins"
   on public.invitations for select to authenticated
-  using (
-    public.can_admin(family_id) or lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-  );
+  using (public.can_admin(family_id));
 
 create policy "invitation créée par un admin"
   on public.invitations for insert to authenticated

@@ -67,7 +67,7 @@ Le mode local reste le comportement par défaut. Le cloud s'active uniquement si
 Dans le projet Supabase, ouvrir **SQL Editor** et exécuter [`supabase/migrations/20261118210000_v3.sql`](supabase/migrations/20261118210000_v3.sql). Le script crée :
 
 - `families`, `family_members`, `family_documents`, `invitations` ;
-- les fonctions `family_role()`, `can_write()`, `can_admin()`, `create_family()`, `accept_invitation()` ;
+- les fonctions `family_role()`, `can_write()`, `can_admin()`, `create_family()`, `accept_invitation()` et `create_invitation()` ;
 - les politiques RLS : lecture réservée aux membres, écriture aux rôles `admin` et `editor` ;
 - le bucket Storage privé `family-media` (60 Mo par fichier) avec ses politiques de lecture, création, **modification** et suppression.
 
@@ -89,21 +89,17 @@ Le bouton **Passer au cloud** apparaît dans la barre supérieure. Il faut ensui
 2. créer un arbre (le créateur en devient admin) ou saisir un jeton d'invitation ;
 3. cliquer sur **Ouvrir cet arbre en ligne**.
 
-À cette étape, l'application copie **d'abord les octets des médias** d'IndexedDB vers Storage, **puis le document JSON**. Les clés restent inchangées : `SupabaseMediaStore` préfixe chaque clé par l'identifiant de l'arbre cloud, ce qui satisfait les politiques RLS. L'arbre local n'est pas effacé.
+À cette étape, l'application lit **d'abord l'arbre en ligne** : s'il contient déjà des personnes, elles sont conservées et l'arbre local n'est pas écrasé — c'est le cas quand on ouvre le même arbre depuis un autre ordinateur. Sinon, l'application copie **d'abord les octets des médias** d'IndexedDB vers Storage, **puis le document JSON**. Les clés restent inchangées : `SupabaseMediaStore` préfixe chaque clé par l'identifiant de l'arbre cloud, ce qui satisfait les politiques RLS. L'arbre local n'est jamais effacé.
 
 Si certains médias sont absents en local ou refusés par Storage, un message précise le nombre concerné ; l'arbre reste utilisable et ces fichiers peuvent être réimportés depuis un export JSON.
 
 ### 4. Inviter quelqu'un
 
-La création d'invitations n'a pas encore d'interface. Un admin peut insérer une ligne depuis le SQL Editor, puis transmettre le jeton généré :
+Un admin génère le jeton depuis **Passer au cloud → Jeton à transmettre** (ou via la fonction SQL `create_invitation`). La personne crée son compte avec son e-mail et son mot de passe, puis saisit le jeton dans **Invitation reçue** : aucune adresse n'est imposée, le jeton expire après 90 jours et ne sert qu'une fois.
 
 ```sql
-insert into public.invitations (family_id, email, role)
-values ('UUID_DE_L_ARBRE', 'personne@exemple.fr', 'editor')
-returning token;
+select public.create_invitation('UUID_DE_L_ARBRE', 'editor');
 ```
-
-La personne invitée saisit ce jeton dans **Passer au cloud → Invitation reçue**. L'adresse doit correspondre à son e-mail de connexion ; le jeton expire après 14 jours.
 
 ### 5. Déployer sur Vercel
 
@@ -111,7 +107,7 @@ Importer le dépôt dans Vercel, framework **Vite**, commande de build `npm run 
 
 ### Limites actuelles
 
-- L'interface n'a pas encore de gestionnaire d'invitations ni d'écran d'administration des rôles : la table `invitations` et `family_members` se gèrent côté Supabase.
+- La création de jetons est réservée aux admins depuis l'interface ; l'attribution fine des rôles se fait encore côté Supabase (`family_members`).
 - Un membre `viewer` peut ouvrir l'arbre mais ses modifications sont refusées par RLS ; le bandeau d'erreur affiche le refus. Une désactivation préventive des boutons reste à faire.
 - Une frise chronologique est disponible pour chaque personne dans l’onglet « Faits de vie » (bouton « Frise »). Une frise **multi-personnes / familiale** reste à prévoir dans une version future.
 - Les réglages personnels (Moi, branches) sont dans le `localStorage` du navigateur, clés par compte : ils ne suivent pas encore d'un appareil à l'autre.
@@ -126,4 +122,4 @@ Importer le dépôt dans Vercel, framework **Vite**, commande de build `npm run 
 
 ## Statut
 
-Version v3 : mode local complet et testé, mode Supabase opérationnel avec invitations via SQL. Les rôles et la synchronisation multi-appareils des réglages personnels restent à finaliser.
+Version v3 : mode local complet et testé, mode Supabase opérationnel avec connexion e-mail/mot de passe et jetons d'accès générés par l'admin. Les rôles et la synchronisation multi-appareils des réglages personnels restent à finaliser.
