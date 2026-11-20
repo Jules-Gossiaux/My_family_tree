@@ -1,5 +1,6 @@
 import { isGhostUnion, type FamilyData, type Id } from '../domain/types';
 import { computeClassicLayout } from './classic';
+import type { OrderHint } from './model';
 import type { GroupingMode } from './grouping';
 
 export {
@@ -10,6 +11,7 @@ export {
   type Point,
   type LaidOutNode,
   type LaidOutEdge,
+  type OrderHint,
   type TreeLayout,
 } from './model';
 
@@ -51,6 +53,7 @@ export function structureKey(data: FamilyData): string {
 export async function computeLayout(
   data: FamilyData,
   mode: GroupingMode = 'balanced',
+  hints: OrderHint[] = [],
 ): Promise<import('./model').TreeLayout> {
-  return computeClassicLayout(data, mode);
+  return computeClassicLayout(data, mode, hints);
 }

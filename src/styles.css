@@ -510,6 +510,13 @@ textarea {
   margin-left: 4px;
 }
 
+.canvas-controls .reset-order-button {
+  font-size: 12px;
+  border-right: 1px solid var(--border);
+  border-radius: 6px 0 0 6px;
+  margin-right: 4px;
+}
+
 .zoom-value {
   min-width: 48px;
   text-align: center;
@@ -1554,6 +1561,11 @@ textarea {
 .quick-action span {
   font-size: 10.5px;
   white-space: nowrap;
+}
+
+.quick-action .quick-arrow {
+  font-size: 20px;
+  line-height: 16px;
 }
 
 .quick-separator {

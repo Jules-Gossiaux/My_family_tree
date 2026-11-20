@@ -34,6 +34,9 @@ interface TreeCanvasProps {
   onStartBranch: (id: Id) => void;
   onAttachExisting: () => void;
   onOpenRelationship: (id: Id) => void;
+  onOrderMove: (id: Id, direction: 'left' | 'right') => void;
+  onResetOrder: () => void;
+  hasManualOrder: boolean;
   onAddFirst: () => void;
   onImport: () => void;
 }
@@ -114,6 +117,9 @@ export default function TreeCanvas({
   onStartBranch,
   onAttachExisting,
   onOpenRelationship,
+  onOrderMove,
+  onResetOrder,
+  hasManualOrder,
   onAddFirst,
   onImport,
 }: TreeCanvasProps) {
@@ -456,6 +462,25 @@ export default function TreeCanvas({
           <span className="quick-separator" aria-hidden="true" />
           <button
             type="button"
+            className="quick-action"
+            onClick={() => onOrderMove(selectedNode.refId, 'left')}
+            title="Placer cette personne à gauche de son voisin"
+          >
+            <span className="quick-arrow" aria-hidden="true">←</span>
+            <span>À gauche</span>
+          </button>
+          <button
+            type="button"
+            className="quick-action"
+            onClick={() => onOrderMove(selectedNode.refId, 'right')}
+            title="Placer cette personne à droite de son voisin"
+          >
+            <span className="quick-arrow" aria-hidden="true">→</span>
+            <span>À droite</span>
+          </button>
+          <span className="quick-separator" aria-hidden="true" />
+          <button
+            type="button"
             className="quick-action quick-delete"
             onClick={() => onDelete(selectedNode.refId)}
             title="Supprimer cette personne (touche Suppr)"
@@ -597,6 +622,16 @@ export default function TreeCanvas({
       )}
 
       <div className="canvas-controls">
+        {hasManualOrder && (
+          <button
+            type="button"
+            className="reset-order-button"
+            onClick={onResetOrder}
+            title="Revenir au placement automatique"
+          >
+            Ordre auto
+          </button>
+        )}
         <button type="button" onClick={() => zoomBy(1.2)} aria-label="Zoomer">
           +
         </button>

@@ -24,9 +24,11 @@ import {
   UNION_SIZE,
   type LaidOutEdge,
   type LaidOutNode,
+  type OrderHint,
   type Point,
   type TreeLayout,
 } from './model';
+import { swapOrder } from './orderHints';
 
 /**
  * Dessin généalogique classique, calculé sans ELK.
@@ -230,6 +232,8 @@ function buildLayout(
   data: FamilyData,
   mode: GroupingMode,
   rootOrder: Id[],
+  unionOrder: Id[],
+  hints: OrderHint[],
   mergeByParentSide: boolean,
 ): TreeLayout {
   const persons = data.persons;
@@ -254,7 +258,15 @@ function buildLayout(
     if (rank !== undefined) return rank;
     return personIndex.get(id) ?? 0;
   };
-  const unions = data.unions.filter((union) => !isGhostUnion(union));
+  const unionRank = new Map<Id, number>(
+    unionOrder.map((id, index) => [id, index]),
+  );
+  const unions = data.unions
+    .filter((union) => !isGhostUnion(union))
+    .slice()
+    .sort(
+      (a, b) => (unionRank.get(a.id) ?? 0) - (unionRank.get(b.id) ?? 0),
+    );
 
   const infos: UnionInfo[] = unions.map((union, index) => {
     const partners = unionPartnerIds(union).filter((id) => personIndex.has(id));
@@ -683,6 +695,48 @@ function buildLayout(
     };
   };
 
+  /**
+   * Applique les contraintes d'ordre à l'intérieur d'un segment. On reconstruit
+   * le segment avec `makeSegment` pour recalculer les écarts (couple ou
+   * fratrie), sa largeur et son point d'ancrage : sinon, après avoir inversé
+   * deux conjoints, la barre du couple doit partir du bon milieu.
+   */
+  const applyIdHints = (segment: Segment): Segment => {
+    if (hints.length === 0) return segment;
+    const ids = [...segment.ids];
+    for (let pass = 0; pass < hints.length * 2 + 2; pass += 1) {
+      let changed = false;
+      for (const hint of hints) {
+        const first = ids.indexOf(hint.first);
+        const second = ids.indexOf(hint.second);
+        if (first >= 0 && second >= 0 && first > second) {
+          ids.splice(first, 1);
+          ids.splice(second, 0, hint.first);
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+    if (ids.every((id, index) => id === segment.ids[index])) return segment;
+    const rebuilt = makeSegment(
+      ids,
+      segment.siblingIds,
+      segment.birthUnions,
+      segment.generation,
+    );
+    rebuilt.key = segment.key;
+    return rebuilt;
+  };
+
+  /** Ordre imposé entre deux segments distincts d'une même génération. */
+  const hintSegmentOrder = (a: Segment, b: Segment): number => {
+    for (const hint of hints) {
+      if (a.ids.includes(hint.first) && b.ids.includes(hint.second)) return -1;
+      if (a.ids.includes(hint.second) && b.ids.includes(hint.first)) return 1;
+    }
+    return 0;
+  };
+
   const rows = new Map<number, Segment[]>();
   for (const [generation, rowIds] of byGeneration) {
     const used = new Set<Id>();
@@ -983,7 +1037,12 @@ function buildLayout(
       }
     }
 
-    segments.sort((a, b) => compareKeys(a.key, b.key));
+    for (let index = 0; index < segments.length; index += 1) {
+      segments[index] = applyIdHints(segments[index]);
+    }
+    segments.sort(
+      (a, b) => hintSegmentOrder(a, b) || compareKeys(a.key, b.key),
+    );
     let cursor = 0;
     for (const segment of segments) {
       segment.left = cursor;
@@ -1051,6 +1110,7 @@ function buildLayout(
           }
           segments.sort(
             (a, b) =>
+              hintSegmentOrder(a, b) ||
               barycenter.get(a)! - barycenter.get(b)! ||
               compareKeys(a.key, b.key),
           );
@@ -1618,10 +1678,11 @@ function comparePenalties(a: number[], b: number[]): number {
  * la première variante gagne.
  */
 
-/** Nombre maximal d'ordres racines explorés (× 2 côtés de fusion). */
+/** Nombre maximal d'ordres explorés pour chaque famille de permutations. */
 const MAX_ROOT_ORDERS = 60;
+const MAX_UNION_ORDERS = 8;
 
-function rootOrderCandidates(ids: Id[]): Id[][] {
+function orderCandidates(ids: Id[], limit: number): Id[][] {
   if (ids.length <= 1) return [[...ids]];
   const result: Id[][] = [];
   const seen = new Set<string>();
@@ -1636,7 +1697,7 @@ function rootOrderCandidates(ids: Id[]): Id[][] {
   const current: Id[] = [];
   const used = new Set<Id>();
   const walk = (): void => {
-    if (result.length >= MAX_ROOT_ORDERS) return;
+    if (result.length >= limit) return;
     if (current.length === ids.length) {
       push([...current]);
       return;
@@ -1648,16 +1709,54 @@ function rootOrderCandidates(ids: Id[]): Id[][] {
       walk();
       used.delete(id);
       current.pop();
-      if (result.length >= MAX_ROOT_ORDERS) return;
+      if (result.length >= limit) return;
     }
   };
   walk();
   return result;
 }
 
+/** Paires de cartes voisines dans une même rangée, candidates à un échange. */
+function neighborPairs(layout: TreeLayout): Array<[Id, Id]> {
+  const rows = new Map<number, LaidOutNode[]>();
+  for (const node of layout.nodes) {
+    if (node.kind !== 'person') continue;
+    const row = rows.get(node.y) ?? [];
+    row.push(node);
+    rows.set(node.y, row);
+  }
+  const pairs: Array<[Id, Id]> = [];
+  for (const row of rows.values()) {
+    row.sort((a, b) => a.x - b.x);
+    for (let index = 0; index < row.length - 1; index += 1) {
+      const gap = row[index + 1].x - (row[index].x + row[index].width);
+      if (gap >= 0 && gap < 320) {
+        pairs.push([row[index].refId, row[index + 1].refId]);
+      }
+    }
+  }
+  return pairs;
+}
+
+interface Variant {
+  rootOrder: Id[];
+  unionOrder: Id[];
+  mergeByParentSide: boolean;
+}
+
+/**
+ * Deux niveaux de recherche :
+ *  1. on énumère les ordres de familles / d'unions / de fusion (voir plus haut) ;
+ *  2. on part du meilleur dessin et on teste les échanges de DEUX VOISINS dans
+ *     chaque rangée. C'est ce deuxième niveau qui permet l'échange tout simple
+ *     « mettre Christophe à gauche d'Anne-Catherine » que l'énumération ne
+ *     savait pas produire. Chaque échange accepté fait baisser strictement le
+ *     score lexicographique, donc la boucle se termine toujours.
+ */
 export function computeClassicLayout(
   data: FamilyData,
   mode: GroupingMode = 'balanced',
+  hints: OrderHint[] = [],
 ): TreeLayout {
   const childIds = new Set<Id>();
   for (const union of data.unions) {
@@ -1669,18 +1768,67 @@ export function computeClassicLayout(
   const rootIds = data.persons
     .filter((person) => !childIds.has(person.id))
     .map((person) => person.id);
+  const unionIds = data.unions
+    .filter((union) => !isGhostUnion(union))
+    .map((union) => union.id);
 
   let best: TreeLayout | null = null;
   let bestPenalty: number[] | null = null;
-  for (const rootOrder of rootOrderCandidates(rootIds)) {
-    for (const mergeByParentSide of [false, true]) {
-      const candidate = buildLayout(data, mode, rootOrder, mergeByParentSide);
-      const penalty = layoutPenalty(candidate, data);
-      if (!bestPenalty || comparePenalties(penalty, bestPenalty) < 0) {
-        bestPenalty = penalty;
-        best = candidate;
+  let bestVariant: Variant | null = null;
+  for (const rootOrder of orderCandidates(rootIds, MAX_ROOT_ORDERS)) {
+    for (const unionOrder of orderCandidates(unionIds, MAX_UNION_ORDERS)) {
+      for (const mergeByParentSide of [false, true]) {
+        const candidate = buildLayout(
+          data,
+          mode,
+          rootOrder,
+          unionOrder,
+          hints,
+          mergeByParentSide,
+        );
+        const penalty = layoutPenalty(candidate, data);
+        if (!bestPenalty || comparePenalties(penalty, bestPenalty) < 0) {
+          bestPenalty = penalty;
+          best = candidate;
+          bestVariant = { rootOrder, unionOrder, mergeByParentSide };
+        }
       }
     }
   }
-  return best!;
+  if (!best || !bestPenalty || !bestVariant) return EMPTY_LAYOUT;
+
+  const MAX_LOCAL_PASSES = 8;
+  const MAX_LOCAL_TRIALS = 120;
+  let trials = 0;
+  let workingHints = hints;
+  let working = best;
+  let workingPenalty = bestPenalty;
+
+  for (let pass = 0; pass < MAX_LOCAL_PASSES && trials < MAX_LOCAL_TRIALS; pass += 1) {
+    let improved = false;
+    for (const [left, right] of neighborPairs(working)) {
+      if (trials >= MAX_LOCAL_TRIALS) break;
+      const swapped = swapOrder(workingHints, right, left);
+      if (!swapped) continue;
+      trials += 1;
+      const candidate = buildLayout(
+        data,
+        mode,
+        bestVariant.rootOrder,
+        bestVariant.unionOrder,
+        swapped,
+        bestVariant.mergeByParentSide,
+      );
+      const penalty = layoutPenalty(candidate, data);
+      if (comparePenalties(penalty, workingPenalty) < 0) {
+        workingHints = swapped;
+        working = candidate;
+        workingPenalty = penalty;
+        improved = true;
+        break;
+      }
+    }
+    if (!improved) break;
+  }
+  return working;
 }

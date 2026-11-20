@@ -95,7 +95,12 @@ import {
 } from './domain/operations';
 import { normalizeSearch } from './domain/dates';
 import { personChoiceLabel, personContextLabel } from './domain/personChoices';
-import { computeLayout, structureKey, type TreeLayout } from './layout/layout';
+import { computeLayout, structureKey, type OrderHint, type TreeLayout } from './layout/layout';
+import {
+  loadOrderHints,
+  saveOrderHints,
+  swapOrder,
+} from './layout/orderHints';
 import {
   computeFocusedView,
   isTreeViewMode,
@@ -212,6 +217,24 @@ export default function App() {
   }, [viewMode]);
 
   const [fitSignal, setFitSignal] = useState(0);
+  // Ordre manuel : une préférence « A avant B » par arbre, rangée dans le
+  // navigateur. Les contraintes de la recherche automatique restent internes.
+  const orderStorageKey = cloudFamilyId ?? data?.familyId ?? 'local';
+  const [orderHints, setOrderHints] = useState<OrderHint[]>([]);
+  const skipOrderSave = useRef(false);
+
+  useEffect(() => {
+    skipOrderSave.current = true;
+    setOrderHints(loadOrderHints(orderStorageKey));
+  }, [orderStorageKey]);
+
+  useEffect(() => {
+    if (skipOrderSave.current) {
+      skipOrderSave.current = false;
+      return;
+    }
+    saveOrderHints(orderStorageKey, orderHints);
+  }, [orderHints, orderStorageKey]);
   const [search, setSearch] = useState('');
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const focusToken = useRef(0);
@@ -514,7 +537,7 @@ export default function App() {
       );
       return;
     }
-    void computeLayout(current, grouping)
+    void computeLayout(current, grouping, orderHints)
       .then((result) => {
         if (!cancelled) setLayout(result);
       })
@@ -526,7 +549,38 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [key, grouping, viewMode, selectedId, settings.referenceId, settings.meId]);
+  }, [key, grouping, viewMode, selectedId, settings.referenceId, settings.meId, orderHints]);
+
+  const handleOrderMove = (id: Id, direction: 'left' | 'right') => {
+    if (!layout) return;
+    const card = layout.nodes.find(
+      (node) => node.kind === 'person' && node.refId === id,
+    );
+    if (!card) return;
+    const row = layout.nodes
+      .filter((node) => node.kind === 'person' && Math.abs(node.y - card.y) < 1)
+      .sort((a, b) => a.x - b.x);
+    const index = row.findIndex((node) => node.refId === id);
+    const neighbor = row[index + (direction === 'left' ? -1 : 1)];
+    if (!neighbor) {
+      setToast('Aucun voisin de ce côté sur cette génération.');
+      return;
+    }
+    const next =
+      direction === 'left'
+        ? swapOrder(orderHints, id, neighbor.refId, true)
+        : swapOrder(orderHints, neighbor.refId, id, true);
+    if (!next) {
+      setToast('Cet ordre a déjà été fixé manuellement.');
+      return;
+    }
+    setOrderHints(next);
+  };
+
+  const handleResetOrder = () => {
+    setOrderHints([]);
+    setToast('Placement manuel réinitialisé.');
+  };
 
   useEffect(() => {
     if (!toast) return;
@@ -1201,6 +1255,9 @@ export default function App() {
           }}
           onStartBranch={openBranchFor}
           onOpenRelationship={openRelationship}
+          onOrderMove={handleOrderMove}
+          onResetOrder={handleResetOrder}
+          hasManualOrder={orderHints.length > 0}
           onAttachExisting={() => handleAdd('child', true)}
           onAddFirst={() => handleAdd('first')}
           onImport={() => fileInputRef.current?.click()}
