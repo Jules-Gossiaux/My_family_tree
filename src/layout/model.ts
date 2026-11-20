@@ -55,6 +55,17 @@ export interface TreeLayout {
   height: number;
 }
 
+/**
+ * Contrainte d'ordre dans une rangée : `first` doit être à gauche de `second`.
+ * Les contraintes `locked` viennent de l'utilisateur ; la recherche automatique
+ * ne peut ni les supprimer ni les inverser.
+ */
+export interface OrderHint {
+  first: Id;
+  second: Id;
+  locked?: boolean;
+}
+
 /** Polyligne orthogonale avec coins arrondis, pour des branches nettes. */
 export function roundedPath(points: Point[], radius = 12): string {
   if (points.length < 2) return '';

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { computeClassicLayout } from '../layout/classic';
+import { setManualOrder, swapOrder } from '../layout/orderHints';
 import { structureKey } from '../layout/layout';
-import { PERSON_H, PERSON_W, type LaidOutEdge } from '../layout/model';
+import { PERSON_H, PERSON_W, type LaidOutEdge, type OrderHint } from '../layout/model';
 import { removePerson } from '../domain/operations';
 import { family, couple, person } from '../test/factories';
 import type { FamilyData } from '../domain/types';
@@ -32,8 +33,8 @@ function crosses(
   return withinX && withinY;
 }
 
-function countCrossings(data: FamilyData): number {
-  const layout = computeClassicLayout(data);
+function countCrossings(data: FamilyData, hints: OrderHint[] = []): number {
+  const layout = computeClassicLayout(data, 'balanced', hints);
   const lines = layout.edges.flatMap(segments);
   let total = 0;
   for (let i = 0; i < lines.length; i += 1) {
@@ -384,11 +385,56 @@ describe('moteur de placement classique', () => {
     expect(countOverlaps(withoutHector)).toBe(0);
   });
 
+  it('trouve seule l’inversion de voisins qui réduit les croisements', () => {
+    const p = Array.from({ length: 8 }, (_, index) =>
+      person(`P${index}`, { id: `p${index}` }),
+    );
+    let data = family(...p);
+    data = couple(data, p[2], p[7], [p[6].id, p[7].id]);
+    data = couple(data, p[6], p[4], [p[5].id]);
+    data = couple(data, p[6], p[5], [p[7].id]);
+    data = couple(data, p[3], p[7], [p[4].id]);
+    data = couple(data, p[4], p[5], [p[5].id, p[6].id]);
+
+    const bad: OrderHint[] = [{ first: p[4].id, second: p[5].id, locked: true }];
+    const good: OrderHint[] = [{ first: p[5].id, second: p[4].id, locked: true }];
+    // Sans contrainte, la recherche locale doit retrouver le bon ordre :
+    // imposé à l'envers, le même arbre garde deux croisements de plus.
+    expect(countCrossings(data, bad)).toBeGreaterThan(countCrossings(data));
+    expect(countCrossings(data, good)).toBe(countCrossings(data));
+
+    const laidOut = computeClassicLayout(data, 'balanced', good);
+    const xOf = (id: string) =>
+      laidOut.nodes.find(
+        (node) => node.kind === 'person' && node.refId === id,
+      )!.x;
+    expect(xOf(p[5].id)).toBeLessThan(xOf(p[4].id));
+  });
+
   it('la clé de structure ignore les changements de texte', () => {
     const a = person('A');
     const before = family(a);
     const after = { ...before, persons: [{ ...a, firstName: 'AAA', birthDate: '1900' }] };
     expect(structureKey(before)).toBe(structureKey(after));
+  });
+});
+
+describe('contraintes d’ordre', () => {
+  it('remplace une contrainte automatique mais jamais une contrainte manuelle', () => {
+    const automatic: OrderHint[] = [{ first: 'a', second: 'b' }];
+    expect(swapOrder(automatic, 'b', 'a')).toEqual([
+      { first: 'b', second: 'a', locked: false },
+    ]);
+    const manual: OrderHint[] = [{ first: 'a', second: 'b', locked: true }];
+    expect(swapOrder(manual, 'b', 'a')).toBeNull();
+    expect(swapOrder(manual, 'a', 'c', true)).toEqual([
+      { first: 'a', second: 'b', locked: true },
+      { first: 'a', second: 'c', locked: true },
+    ]);
+    // L'utilisateur peut en revanche changer d'avis sur le même couple.
+    expect(setManualOrder(manual, 'b', 'a')).toEqual([
+      { first: 'b', second: 'a', locked: true },
+    ]);
   });
 });
 

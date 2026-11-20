@@ -12,6 +12,7 @@ interface PersonCardProps {
   node: LaidOutNode;
   person: Person;
   selected: boolean;
+  highlighted?: boolean;
   matched?: boolean;
   portrait?: CardPortrait;
   isMe?: boolean;
@@ -25,6 +26,7 @@ export default function PersonCard({
   node,
   person,
   selected,
+  highlighted = false,
   matched = false,
   portrait,
   isMe = false,
@@ -48,8 +50,8 @@ export default function PersonCard({
     <g
       data-person-card
       className={`person-card${selected ? ' is-selected' : ''}${
-        matched ? ' is-match' : ''
-      }${isMe ? ' is-me' : ''}`}
+        highlighted ? ' is-highlight' : ''
+      }${matched ? ' is-match' : ''}${isMe ? ' is-me' : ''}`}
       transform={`translate(${node.x} ${node.y})`}
       onClick={(event) => {
         event.stopPropagation();

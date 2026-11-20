@@ -6,7 +6,13 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import type { Id, Person } from '../domain/types';
+import {
+  unionHasFiliation,
+  unionPartnerIds,
+  type Id,
+  type Person,
+  type Union,
+} from '../domain/types';
 import { branchColorOf, branchLabelsOf, type ViewSettings } from '../domain/settings';
 import { roundedPath, type TreeLayout } from '../layout/layout';
 import PersonCard, { type CardPortrait } from './PersonCard';
@@ -20,6 +26,7 @@ export interface FocusRequest {
 interface TreeCanvasProps {
   layout: TreeLayout;
   persons: Map<Id, Person>;
+  unions: Union[];
   selectedId: Id | null;
   fitSignal: number;
   focusRequest?: FocusRequest | null;
@@ -34,6 +41,9 @@ interface TreeCanvasProps {
   onStartBranch: (id: Id) => void;
   onAttachExisting: () => void;
   onOpenRelationship: (id: Id) => void;
+  onOrderMove: (id: Id, direction: 'left' | 'right') => void;
+  onResetOrder: () => void;
+  hasManualOrder: boolean;
   onAddFirst: () => void;
   onImport: () => void;
 }
@@ -97,9 +107,26 @@ function QuickIcon({ name }: { name: QuickIconName }) {
   );
 }
 
+/** Union concernée par un trait, déduite de son identifiant. */
+function unionIdOfEdge(edgeId: string): Id | null {
+  const parts = edgeId.split(':');
+  if (parts[0] === 'partner') return parts[1];
+  if (parts[0] === 'child') {
+    return parts[1] === 'trunk' || parts[1] === 'bar' ? parts[2] : parts[1];
+  }
+  return null;
+}
+
+/** Trajet éclairé au survol : traits, pastilles et cartes concernées. */
+interface Highlight {
+  edges: Set<string>;
+  persons: Set<string>;
+}
+
 export default function TreeCanvas({
   layout,
   persons,
+  unions,
   selectedId,
   fitSignal,
   focusRequest,
@@ -114,6 +141,9 @@ export default function TreeCanvas({
   onStartBranch,
   onAttachExisting,
   onOpenRelationship,
+  onOrderMove,
+  onResetOrder,
+  hasManualOrder,
   onAddFirst,
   onImport,
 }: TreeCanvasProps) {
@@ -327,6 +357,47 @@ export default function TreeCanvas({
     [layout],
   );
 
+  // Suivi d'un lien : au survol, on éclaire le trait de couple, la barre de
+  // fratrie, chaque enfant, puis récursivement les unions de ces descendants.
+  const descentOf = useMemo(() => {
+    const unionById = new Map<Id, Union>(unions.map((union) => [union.id, union]));
+    const byPartner = new Map<Id, Id[]>();
+    for (const union of unions) {
+      for (const partner of unionPartnerIds(union)) {
+        const list = byPartner.get(partner) ?? [];
+        list.push(union.id);
+        byPartner.set(partner, list);
+      }
+    }
+    const from = (start: Id): Highlight => {
+      const edges = new Set<string>();
+      const persons = new Set<string>();
+      const visited = new Set<Id>();
+      const queue: Id[] = [start];
+      while (queue.length > 0) {
+        const unionId = queue.pop()!;
+        if (visited.has(unionId)) continue;
+        visited.add(unionId);
+        edges.add(`partner:${unionId}`);
+        edges.add(`child:trunk:${unionId}`);
+        edges.add(`child:bar:${unionId}`);
+        const union = unionById.get(unionId);
+        if (!union) continue;
+        for (const partner of unionPartnerIds(union)) persons.add(partner);
+        for (const child of union.children) {
+          if (!unionHasFiliation(child)) continue;
+          persons.add(child.childId);
+          edges.add(`child:${unionId}:${child.childId}`);
+          for (const next of byPartner.get(child.childId) ?? []) queue.push(next);
+        }
+      }
+      return { edges, persons };
+    };
+    return { from };
+  }, [unions]);
+
+  const [highlight, setHighlight] = useState<Highlight | null>(null);
+
   const selectedNode = useMemo(
     () =>
       personNodes.find((node) => node.refId === selectedId) ?? null,
@@ -356,12 +427,15 @@ export default function TreeCanvas({
     <div className="canvas" ref={containerRef} onClick={() => setContextMenu(null)}>
       <svg
         ref={svgRef}
-        className={`tree-svg${dragging ? ' is-dragging' : ''}`}
+        className={`tree-svg${dragging ? ' is-dragging' : ''}${
+          highlight ? ' has-highlight' : ''
+        }`}
         preserveAspectRatio="xMidYMid meet"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onMouseLeave={() => setHighlight(null)}
       >
         <g ref={contentRef} transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
           {layout.edges.map((edge) => (
@@ -372,10 +446,16 @@ export default function TreeCanvas({
                 `edge-${edge.kind}`,
                 edge.link ? `link-${edge.link}` : '',
                 edge.former ? 'is-former' : '',
+                highlight?.edges.has(edge.id) ? 'is-highlight' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
               d={roundedPath(edge.points)}
+              onMouseEnter={() => {
+                const unionId = unionIdOfEdge(edge.id);
+                if (unionId) setHighlight(descentOf.from(unionId));
+              }}
+              onMouseLeave={() => setHighlight(null)}
             >
               {edge.title && <title>{edge.title}</title>}
             </path>
@@ -383,10 +463,14 @@ export default function TreeCanvas({
           {unionNodes.map((node) => (
             <g
               key={node.key}
-              className={`union-node${node.former ? ' is-former' : ''}`}
+              className={`union-node${node.former ? ' is-former' : ''}${
+                highlight?.edges.has(`partner:${node.refId}`) ? ' is-highlight' : ''
+              }`}
               transform={`translate(${node.x + node.width / 2} ${
                 node.y + node.height / 2
               })`}
+              onMouseEnter={() => setHighlight(descentOf.from(node.refId))}
+              onMouseLeave={() => setHighlight(null)}
             >
               <circle r={node.width / 2} />
               <circle className="union-core" r="3" />
@@ -402,6 +486,7 @@ export default function TreeCanvas({
                 node={node}
                 person={person}
                 selected={selectedId === person.id}
+                highlighted={highlight?.persons.has(person.id) ?? false}
                 matched={matchedIds?.has(person.id) ?? false}
                 portrait={portraits?.get(person.id)}
                 isMe={settings?.meId === person.id}
@@ -453,6 +538,25 @@ export default function TreeCanvas({
               <span>{action.label}</span>
             </button>
           ))}
+          <span className="quick-separator" aria-hidden="true" />
+          <button
+            type="button"
+            className="quick-action"
+            onClick={() => onOrderMove(selectedNode.refId, 'left')}
+            title="Placer cette personne à gauche de son voisin"
+          >
+            <span className="quick-arrow" aria-hidden="true">←</span>
+            <span>À gauche</span>
+          </button>
+          <button
+            type="button"
+            className="quick-action"
+            onClick={() => onOrderMove(selectedNode.refId, 'right')}
+            title="Placer cette personne à droite de son voisin"
+          >
+            <span className="quick-arrow" aria-hidden="true">→</span>
+            <span>À droite</span>
+          </button>
           <span className="quick-separator" aria-hidden="true" />
           <button
             type="button"
@@ -597,6 +701,16 @@ export default function TreeCanvas({
       )}
 
       <div className="canvas-controls">
+        {hasManualOrder && (
+          <button
+            type="button"
+            className="reset-order-button"
+            onClick={onResetOrder}
+            title="Revenir au placement automatique"
+          >
+            Ordre auto
+          </button>
+        )}
         <button type="button" onClick={() => zoomBy(1.2)} aria-label="Zoomer">
           +
         </button>
