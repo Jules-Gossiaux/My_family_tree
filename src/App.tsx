@@ -12,6 +12,7 @@ import SettingsDialog from './components/SettingsDialog';
 import MediaInbox from './components/MediaInbox';
 import RelationshipDialog from './components/RelationshipDialog';
 import CloudGate from './components/CloudGate';
+import ShareDialog from './components/ShareDialog';
 import { resetMediaStore, setMediaStore } from './domain/mediaStore';
 import {
   createFamily,
@@ -156,7 +157,10 @@ function hintFor(kind: AddKind, data: FamilyData, personId?: Id): string {
 
 export default function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [branchStartId, setBranchStartId] = useState<Id | null>(null);
   const [cloudGateOpen, setCloudGateOpen] = useState(true);
@@ -249,7 +253,7 @@ export default function App() {
     // écrire l'ancien document dans le nouveau dépôt.
     setData(null);
     setSelectedId(null);
-    await new SupabaseFamilyRepository(familyId).load();
+    setLoadError(null);
     const families = await listFamilies();
     const family = families.find((item) => item.id === familyId);
     const name = family?.name ?? 'Mon arbre';
@@ -321,6 +325,7 @@ export default function App() {
     void repository
       .load()
       .then((loaded) => {
+        setLoadError(null);
         setData(loaded);
         if (initialFocusApplied.current) return;
         initialFocusApplied.current = true;
@@ -331,9 +336,11 @@ export default function App() {
         setFocusRequest({ id, token: focusToken.current });
       })
       .catch((error: unknown) => {
-        setToast(error instanceof Error ? error.message : 'Chargement impossible.');
+        setLoadError(
+          error instanceof Error ? error.message : 'Chargement impossible.',
+        );
       });
-  }, [repository]);
+  }, [repository, reloadToken]);
 
   // Chaque changement de profil recharge ses réglages avant toute écriture :
   // le garde-fou évite de copier le « Moi » d'un compte sur un autre.
@@ -1041,6 +1048,36 @@ export default function App() {
     );
   }
 
+  if (loadError && !data) {
+    return (
+      <>
+        <div className="app-loading app-loading-error">
+          <div>
+            <strong>Chargement de l’arbre impossible.</strong>
+            <p className="panel-note">{loadError}</p>
+            <div className="app-loading-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-mini"
+                onClick={() => setReloadToken((value) => value + 1)}
+              >
+                Réessayer
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-mini"
+                onClick={() => setCloudGateOpen(true)}
+              >
+                Changer d’arbre
+              </button>
+            </div>
+          </div>
+        </div>
+        {cloudGate}
+      </>
+    );
+  }
+
   if (!data || !layout) {
     return (
       <>
@@ -1073,6 +1110,7 @@ export default function App() {
         onGroupingChange={setGrouping}
         canRecenter={Boolean(settings.meId)}
         onRecenter={recenterOnMe}
+        onOpenShare={() => setShareOpen(true)}
         onAddPerson={() => handleAdd('first')}
         onOpenMedia={() => setMediaOpen(true)}
         onOpenRelationship={() => openRelationship()}
@@ -1189,6 +1227,22 @@ export default function App() {
             <MediaInbox data={data} onChange={setData} />
           </div>
         </div>
+      )}
+
+      {shareOpen && cloudFamilyId && (
+        <ShareDialog
+          familyId={cloudFamilyId}
+          familyName={cloudFamilyName}
+          canInvite={cloudRole === 'admin'}
+          onClose={() => setShareOpen(false)}
+          onExport={() => void handleExport()}
+          onGedcom={() => downloadGedcom(data)}
+          onPrint={() => window.print()}
+          onOpenCloud={() => {
+            setShareOpen(false);
+            setCloudGateOpen(true);
+          }}
+        />
       )}
 
       {cloudGate}

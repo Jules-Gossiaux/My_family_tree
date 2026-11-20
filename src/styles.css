@@ -58,6 +58,27 @@ textarea {
   color: var(--text-muted);
 }
 
+.app-loading-error > div {
+  max-width: 460px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.app-loading-error strong {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.app-loading-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -2868,6 +2889,22 @@ textarea {
   transform: translateY(-1px);
 }
 
+.share-toggle {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+}
+
+.share-toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
 .drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -3154,6 +3191,21 @@ button.drawer-item:disabled {
   border: 1px solid var(--accent);
   border-radius: 10px;
   background: var(--accent-soft);
+}
+
+.share-modal {
+  width: min(460px, 100%);
+}
+
+.share-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.share-actions .drawer-item {
+  margin-bottom: 0;
 }
 
 @media (max-width: 900px) {

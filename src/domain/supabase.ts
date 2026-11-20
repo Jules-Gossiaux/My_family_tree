@@ -67,15 +67,25 @@ export async function listFamilies(): Promise<CloudFamily[]> {
     .from('family_members')
     .select('role, families(id, name)');
   if (error) throw new Error(error.message);
-  return (data ?? []).flatMap((entry) => {
+
+  const rank: Record<CloudFamily['role'], number> = {
+    viewer: 0,
+    editor: 1,
+    admin: 2,
+  };
+  const byId = new Map<Id, CloudFamily>();
+
+  for (const entry of data ?? []) {
     const family = entry.families as unknown as { id: string; name: string } | null;
-    if (!family) return [];
-    return [{
-      id: family.id,
-      name: family.name,
-      role: (entry.role as CloudFamily['role']) ?? 'viewer',
-    }];
-  });
+    if (!family) continue;
+    const role = (entry.role as CloudFamily['role']) ?? 'viewer';
+    const current = byId.get(family.id);
+    if (!current || rank[role] > rank[current.role]) {
+      byId.set(family.id, { id: family.id, name: family.name, role });
+    }
+  }
+
+  return [...byId.values()];
 }
 
 export async function createFamily(name: string): Promise<Id> {
@@ -94,10 +104,10 @@ export async function acceptInvitation(token: string): Promise<Id> {
   return data as Id;
 }
 
-/** Un admin génère un jeton d'accès à son arbre ; n'importe quel compte peut ensuite l'utiliser. */
+/** Un admin génère un jeton d'accès en modification à son arbre (rôle editor par défaut). */
 export async function createInvitation(
   familyId: Id,
-  role: 'admin' | 'editor' | 'viewer' = 'viewer',
+  role: 'admin' | 'editor' | 'viewer' = 'editor',
 ): Promise<string> {
   if (!supabase) throw new Error('Supabase non configuré.');
   const { data, error } = await supabase.rpc('create_invitation', {

@@ -64,7 +64,7 @@ Il n'y a plus de mode local : le document vit dans `family_documents` et les mé
 
 ### 1. Créer le schéma
 
-Dans le projet Supabase, ouvrir **SQL Editor** et exécuter [`supabase/migrations/20261118210000_v3.sql`](supabase/migrations/20261118210000_v3.sql). Le script crée :
+Dans le projet Supabase, ouvrir **SQL Editor** et exécuter [`supabase/migrations/20261118210000_v3.sql`](supabase/migrations/20261118210000_v3.sql), puis [`supabase/migrations/20261120142000_jeton_editeur.sql`](supabase/migrations/20261120142000_jeton_editeur.sql). Le premier script crée :
 
 - `families`, `family_members`, `family_documents`, `invitations` ;
 - les fonctions `family_role()`, `can_write()`, `can_admin()`, `create_family()`, `accept_invitation()` et `create_invitation()` ;
@@ -95,7 +95,7 @@ Si certains médias sont absents en local ou refusés par Storage, un message pr
 
 ### 4. Inviter quelqu'un
 
-Un admin génère le jeton depuis la modale, section **Inviter un proche** (ou via la fonction SQL `create_invitation`). La personne crée son compte avec son e-mail et son mot de passe, puis choisit **Rejoindre un arbre** et saisit le jeton : aucune adresse n'est imposée, le jeton expire après 90 jours et ne sert qu'une fois.
+Un admin génère le jeton depuis l'icône **Partager** de la barre supérieure (ou via la fonction SQL `create_invitation`). La personne crée son compte avec son e-mail et son mot de passe, puis choisit **Rejoindre un arbre** et saisit le jeton : aucune adresse n'est imposée, le jeton expire après 90 jours et ne sert qu'une fois. Depuis la migration `20261120142000_jeton_editeur.sql`, un jeton donne le rôle `editor` par défaut, donc le droit de modifier l'arbre. Les jetons créés avant cette migration gardent leur rôle d'origine.
 
 ```sql
 select public.create_invitation('UUID_DE_L_ARBRE', 'editor');
@@ -116,10 +116,10 @@ Importer le dépôt dans Vercel, framework **Vite**, commande de build `npm run 
 
 - `src/domain/` : modèle v3 (`types.ts`), opérations métier (`operations.ts`), événements de vie (`lifeEvents.ts`), répertoires lieux/sources (`directories.ts`), migrations et validation (`repository.ts`), stockage des médias (`mediaStore.ts`), dates floues (`dates.ts`), pont Supabase (`supabase.ts`).
 - `src/layout/` : moteur de placement généalogique maison (`classic.ts`), façade (`layout.ts`), types partagés (`model.ts`), vues (`views.ts`), arbitrage des modes (`grouping.ts`).
-- `src/components/` : canevas SVG, fiche personne, panneau latéral à onglets, dialogues de création/édition, galerie, boîte à médias, frise, réglages, tiroir d'outils et modale de compte.
+- `src/components/` : canevas SVG, fiche personne, panneau latéral à onglets, dialogues de création/édition, galerie, boîte à médias, frise, réglages, tiroir d'outils, modale de compte et dialogue Partager.
 - `src/test/` : tests Vitest du modèle, des opérations, du placement, des vues et des migrations.
 - `supabase/migrations/` : schéma SQL, rôles, RLS et Storage.
 
 ## Statut
 
-Version v3 : application 100 % en ligne, connexion/création de compte, arbres partagés et jetons d'accès générés par l'admin. Header allégé avec tiroir d'outils sur desktop et burger sur mobile. Les rôles fins et la synchronisation multi-appareils des réglages personnels restent à finaliser.
+Version v3 : application 100 % en ligne, connexion/création de compte, arbres partagés et jetons d'accès en modification générés par l'admin. Header allégé avec icône Partager, Me recentrer, tiroir d'outils sur desktop et burger sur mobile. Un workflow de propositions à valider par l'admin reste à étudier ; la synchronisation multi-appareils des réglages personnels reste à finaliser.

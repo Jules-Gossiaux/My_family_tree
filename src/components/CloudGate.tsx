@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   acceptInvitation,
   createFamily,
-  createInvitation,
   currentUser,
   listFamilies,
   signIn,
@@ -39,11 +38,9 @@ export default function CloudGate({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [families, setFamilies] = useState<CloudFamily[]>([]);
-  const [tokenFamily, setTokenFamily] = useState<Id | null>(null);
   const [newFamily, setNewFamily] = useState('');
   const [invite, setInvite] = useState('');
   const [importName, setImportName] = useState('');
-  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [user, setUser] = useState<CloudUser | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,15 +59,6 @@ export default function CloudGate({
     if (!user) return;
     void listFamilies().then(setFamilies);
   }, [user]);
-
-  useEffect(() => {
-    const admins = families.filter((family) => family.role === 'admin');
-    setTokenFamily((current) =>
-      admins.some((family) => family.id === current)
-        ? current
-        : (admins[0]?.id ?? null),
-    );
-  }, [families]);
 
   if (!supabaseConfigured) {
     return (
@@ -145,14 +133,6 @@ export default function CloudGate({
     run(async () => {
       await onImportLocal(importName.trim() || 'Arbre importé');
     });
-
-  const generateToken = () =>
-    run(async () => {
-      if (!tokenFamily) return;
-      setAccessToken(await createInvitation(tokenFamily));
-    });
-
-  const adminFamilies = families.filter((family) => family.role === 'admin');
 
   return (
     <div className="modal-overlay">
@@ -370,49 +350,6 @@ export default function CloudGate({
                   </button>
                 </div>
               </section>
-
-              {adminFamilies.length > 0 && (
-                <section className="cloud-section">
-                  <h3>Inviter un proche</h3>
-                  <p className="panel-note">
-                    Seul un administrateur peut générer un jeton. La personne
-                    crée son compte, saisit ce jeton et accède à l’arbre.
-                  </p>
-                  <div className="cloud-inline">
-                    <select
-                      value={tokenFamily ?? ''}
-                      onChange={(event) => {
-                        setTokenFamily(event.target.value as Id);
-                        setAccessToken(null);
-                      }}
-                      aria-label="Arbre pour lequel générer un jeton"
-                    >
-                      {adminFamilies.map((family) => (
-                        <option key={family.id} value={family.id}>
-                          {family.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="btn btn-mini"
-                      disabled={busy || !tokenFamily}
-                      onClick={() => void generateToken()}
-                    >
-                      Générer un jeton
-                    </button>
-                  </div>
-                  {accessToken && (
-                    <input
-                      className="cloud-token"
-                      readOnly
-                      value={accessToken}
-                      onFocus={(event) => event.target.select()}
-                      aria-label="Jeton d’accès généré"
-                    />
-                  )}
-                </section>
-              )}
             </>
           )}
         </div>

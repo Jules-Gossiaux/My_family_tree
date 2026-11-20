@@ -27,6 +27,7 @@ interface TopBarProps {
   onGroupingChange: (mode: GroupingMode) => void;
   canRecenter: boolean;
   onRecenter: () => void;
+  onOpenShare: () => void;
   onAddPerson: () => void;
   onOpenMedia: () => void;
   onOpenRelationship: () => void;
@@ -60,6 +61,7 @@ export default function TopBar({
   onGroupingChange,
   canRecenter,
   onRecenter,
+  onOpenShare,
   onAddPerson,
   onOpenMedia,
   onOpenRelationship,
@@ -205,11 +207,25 @@ export default function TopBar({
               type="button"
               className="btn btn-secondary topbar-recenter"
               onClick={onRecenter}
-              title="Recentrer sur mon marqueur"
+              title="Me recentrer sur mon marqueur"
             >
-              Moi
+              Me recentrer
             </button>
           )}
+          <button
+            type="button"
+            className="icon-button share-toggle"
+            aria-label="Partager et exporter l’arbre"
+            title="Partager et exporter"
+            onClick={onOpenShare}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="18" cy="5" r="2.5" />
+              <circle cx="6" cy="12" r="2.5" />
+              <circle cx="18" cy="19" r="2.5" />
+              <path d="M8.2 10.8 15.8 6.2M8.2 13.2l7.6 4.6" />
+            </svg>
+          </button>
           <button
             type="button"
             className="btn btn-primary topbar-add"
