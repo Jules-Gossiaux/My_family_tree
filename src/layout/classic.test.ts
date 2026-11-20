@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeClassicLayout } from '../layout/classic';
-import { swapOrder } from '../layout/orderHints';
+import { setManualOrder, swapOrder } from '../layout/orderHints';
 import { structureKey } from '../layout/layout';
 import { PERSON_H, PERSON_W, type LaidOutEdge, type OrderHint } from '../layout/model';
 import { removePerson } from '../domain/operations';
@@ -430,6 +430,10 @@ describe('contraintes d’ordre', () => {
     expect(swapOrder(manual, 'a', 'c', true)).toEqual([
       { first: 'a', second: 'b', locked: true },
       { first: 'a', second: 'c', locked: true },
+    ]);
+    // L'utilisateur peut en revanche changer d'avis sur le même couple.
+    expect(setManualOrder(manual, 'b', 'a')).toEqual([
+      { first: 'b', second: 'a', locked: true },
     ]);
   });
 });

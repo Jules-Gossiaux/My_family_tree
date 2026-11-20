@@ -99,7 +99,7 @@ import { computeLayout, structureKey, type OrderHint, type TreeLayout } from './
 import {
   loadOrderHints,
   saveOrderHints,
-  swapOrder,
+  setManualOrder,
 } from './layout/orderHints';
 import {
   computeFocusedView,
@@ -566,15 +566,11 @@ export default function App() {
       setToast('Aucun voisin de ce côté sur cette génération.');
       return;
     }
-    const next =
+    setOrderHints(
       direction === 'left'
-        ? swapOrder(orderHints, id, neighbor.refId, true)
-        : swapOrder(orderHints, neighbor.refId, id, true);
-    if (!next) {
-      setToast('Cet ordre a déjà été fixé manuellement.');
-      return;
-    }
-    setOrderHints(next);
+        ? setManualOrder(orderHints, id, neighbor.refId)
+        : setManualOrder(orderHints, neighbor.refId, id),
+    );
   };
 
   const handleResetOrder = () => {

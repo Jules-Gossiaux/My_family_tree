@@ -407,6 +407,14 @@ function buildLayout(
    */
   const groupGeneration = new Array<number>(groupCount).fill(0);
   const displayRow = new Map<Id, number>(persons.map((p) => [p.id, 0]));
+  /**
+   * Rang individualisé d'une personne mariée dans une branche plus profonde.
+   * On ne modifie PAS `groupGeneration` (la rangée de toute sa fratrie) :
+   * sinon les frères et sœurs, puis les enfants des frères et sœurs, puis
+   * leurs conjoints... repoussent la rangée sans fin (cas observé sur un
+   * mariage entre deux branches éloignées).
+   */
+  const alignedRow = new Map<Id, number>();
   const maxPasses = Math.min(64, groupCount + 2);
   for (let pass = 0; pass < maxPasses; pass += 1) {
     let changed = false;
@@ -427,7 +435,10 @@ function buildLayout(
     }
 
     for (const person of persons) {
-      const row = groupGeneration[groupOf(person.id)];
+      const row = Math.max(
+        groupGeneration[groupOf(person.id)],
+        alignedRow.get(person.id) ?? 0,
+      );
       if ((displayRow.get(person.id) ?? 0) < row) {
         displayRow.set(person.id, row);
         changed = true;
@@ -500,11 +511,8 @@ function buildLayout(
       for (const partner of info.partners) {
         if ((displayRow.get(partner) ?? 0) >= lowest) continue;
         displayRow.set(partner, lowest);
-        const group = groupOf(partner);
-        if (groupGeneration[group] < lowest) {
-          groupGeneration[group] = lowest;
-          changed = true;
-        }
+        alignedRow.set(partner, Math.max(alignedRow.get(partner) ?? 0, lowest));
+        changed = true;
       }
     }
 
@@ -525,7 +533,10 @@ function buildLayout(
     }
 
     for (const person of persons) {
-      const row = groupGeneration[groupOf(person.id)];
+      const row = Math.max(
+        groupGeneration[groupOf(person.id)],
+        alignedRow.get(person.id) ?? 0,
+      );
       if ((displayRow.get(person.id) ?? 0) < row) {
         displayRow.set(person.id, row);
         changed = true;
@@ -545,16 +556,16 @@ function buildLayout(
       for (const partner of info.partners) {
         if ((displayRow.get(partner) ?? 0) >= target) continue;
         displayRow.set(partner, target);
-        const group = groupOf(partner);
-        if (groupGeneration[group] < target) {
-          groupGeneration[group] = target;
-          changed = true;
-        }
+        alignedRow.set(partner, Math.max(alignedRow.get(partner) ?? 0, target));
+        changed = true;
       }
     }
 
     for (const person of persons) {
-      const row = groupGeneration[groupOf(person.id)];
+      const row = Math.max(
+        groupGeneration[groupOf(person.id)],
+        alignedRow.get(person.id) ?? 0,
+      );
       if ((displayRow.get(person.id) ?? 0) < row) {
         displayRow.set(person.id, row);
         changed = true;
@@ -1678,9 +1689,17 @@ function comparePenalties(a: number[], b: number[]): number {
  * la première variante gagne.
  */
 
-/** Nombre maximal d'ordres explorés pour chaque famille de permutations. */
-const MAX_ROOT_ORDERS = 60;
-const MAX_UNION_ORDERS = 8;
+/**
+ * Budget de recherche adapté à la taille de l'arbre : au-delà de quelques
+ * dizaines de personnes, 60×8 variantes coûtent plusieurs secondes. On garde
+ * la même méthode, avec moins de candidats, pour que le dessin reste
+ * interactif. Les petits arbres gardent le budget complet.
+ */
+function searchCaps(size: number): { roots: number; unions: number; trials: number } {
+  if (size > 60) return { roots: 24, unions: 2, trials: 40 };
+  if (size > 35) return { roots: 32, unions: 4, trials: 80 };
+  return { roots: 60, unions: 8, trials: 120 };
+}
 
 function orderCandidates(ids: Id[], limit: number): Id[][] {
   if (ids.length <= 1) return [[...ids]];
@@ -1772,11 +1791,13 @@ export function computeClassicLayout(
     .filter((union) => !isGhostUnion(union))
     .map((union) => union.id);
 
+  const caps = searchCaps(data.persons.length);
+
   let best: TreeLayout | null = null;
   let bestPenalty: number[] | null = null;
   let bestVariant: Variant | null = null;
-  for (const rootOrder of orderCandidates(rootIds, MAX_ROOT_ORDERS)) {
-    for (const unionOrder of orderCandidates(unionIds, MAX_UNION_ORDERS)) {
+  for (const rootOrder of orderCandidates(rootIds, caps.roots)) {
+    for (const unionOrder of orderCandidates(unionIds, caps.unions)) {
       for (const mergeByParentSide of [false, true]) {
         const candidate = buildLayout(
           data,
@@ -1798,16 +1819,15 @@ export function computeClassicLayout(
   if (!best || !bestPenalty || !bestVariant) return EMPTY_LAYOUT;
 
   const MAX_LOCAL_PASSES = 8;
-  const MAX_LOCAL_TRIALS = 120;
   let trials = 0;
   let workingHints = hints;
   let working = best;
   let workingPenalty = bestPenalty;
 
-  for (let pass = 0; pass < MAX_LOCAL_PASSES && trials < MAX_LOCAL_TRIALS; pass += 1) {
+  for (let pass = 0; pass < MAX_LOCAL_PASSES && trials < caps.trials; pass += 1) {
     let improved = false;
     for (const [left, right] of neighborPairs(working)) {
-      if (trials >= MAX_LOCAL_TRIALS) break;
+      if (trials >= caps.trials) break;
       const swapped = swapOrder(workingHints, right, left);
       if (!swapped) continue;
       trials += 1;

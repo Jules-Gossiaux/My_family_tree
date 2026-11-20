@@ -29,6 +29,22 @@ export function swapOrder(
   ];
 }
 
+/**
+ * Contrainte posée par l'utilisateur : elle REMPLACE toujours la précédente
+ * entre ces deux personnes, même si elle était verrouillée. C'est ce qui
+ * permet de changer d'avis autant de fois que nécessaire.
+ */
+export function setManualOrder(
+  hints: OrderHint[],
+  first: Id,
+  second: Id,
+): OrderHint[] {
+  return [
+    ...hints.filter((hint) => !involves(hint, first, second)),
+    { first, second, locked: true },
+  ];
+}
+
 export function loadOrderHints(familyId: string): OrderHint[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_PREFIX + familyId);
