@@ -301,6 +301,8 @@ textarea {
   stroke-width: 1.4;
   stroke-linecap: round;
   stroke-linejoin: round;
+  /* Le trait lui-même est une cible de survol, malgré sa finesse. */
+  pointer-events: stroke;
 }
 
 /* Le trait entre les deux conjoints garde une pointe de chaleur. */
@@ -981,6 +983,34 @@ textarea {
   opacity: 0.55;
 }
 
+/* Survol d'un lien : le trajet complet passe en blanc franc, le reste s'efface. */
+.tree-edge.is-highlight {
+  stroke: #f6f8fb;
+  stroke-width: 2.6;
+  opacity: 1;
+}
+
+.tree-svg.has-highlight .tree-edge:not(.is-highlight) {
+  opacity: 0.28;
+}
+
+.tree-svg.has-highlight .person-card:not(.is-highlight) {
+  opacity: 0.35;
+}
+
+.tree-svg.has-highlight .union-node:not(.is-highlight) {
+  opacity: 0.3;
+}
+
+.union-node.is-highlight circle {
+  stroke: #f6f8fb;
+  stroke-width: 2.4;
+}
+
+.union-node.is-highlight .union-core {
+  fill: #f6f8fb;
+}
+
 /* --- Champs supplémentaires du formulaire ------------------------------ */
 .extra-fields {
   margin-top: 16px;
@@ -1516,6 +1546,16 @@ textarea {
 .person-card.is-match .person-card-bg {
   stroke: var(--accent);
   stroke-width: 2.4;
+}
+
+.person-card.is-highlight .person-card-bg {
+  stroke: #f6f8fb;
+  stroke-width: 1.8;
+}
+
+.person-card.is-highlight .person-name,
+.person-card.is-highlight .person-dates {
+  fill: #f6f8fb;
 }
 
 /* --- Barre d'actions flottante sur la carte sélectionnée ---------------- */

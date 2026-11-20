@@ -1232,6 +1232,7 @@ export default function App() {
         <TreeCanvas
           layout={layout}
           persons={personMap}
+          unions={data.unions}
           selectedId={selectedId}
           fitSignal={fitSignal}
           focusRequest={focusRequest}
