@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeClassicLayout } from '../layout/classic';
 import { structureKey } from '../layout/layout';
 import { PERSON_H, PERSON_W, type LaidOutEdge } from '../layout/model';
+import { removePerson } from '../domain/operations';
 import { family, couple, person } from '../test/factories';
 import type { FamilyData } from '../domain/types';
 
@@ -311,6 +312,78 @@ describe('moteur de placement classique', () => {
     expect(countCrossings(data)).toBe(0);
   });
 
+  it('garde une lecture sans ambiguïté après la suppression du seul parent d’une fratrie', () => {
+    const j0 = person('Jules', { id: 'j0' });
+    const elisabeth = person('Elizabeth', { id: 'el' });
+    const maurice = person('Maurice', { id: 'ma' });
+    const hector = person('Hector', { id: 'he' });
+    const mireille = person('Mireille', { id: 'mi' });
+    const jules = person('Jules', { id: 'j1' });
+    const michel = person('Michel', { id: 'mic' });
+    const willy = person('Willy', { id: 'wi' });
+    const francoise = person('Françoise', { id: 'fr' });
+    const philippe = person('Philippe', { id: 'ph' });
+    const marc = person('Marc', { id: 'mar' });
+    const marieAgnes = person('Marie-Agnès', { id: 'mag' });
+    const christophe = person('Christophe', { id: 'ch' });
+    const anne = person('Anne-Catherine', { id: 'ac' });
+    const emmanuel = person('Emmanuel', { id: 'em' });
+    const julesChild = person('Jules', { id: 'j2' });
+    const ninon = person('Ninon', { id: 'ni' });
+
+    const u1 = { ...createUnionFor(j0.id, null), children: [jules.id].map((id) => link(id)) };
+    const u2 = {
+      ...createUnionFor(elisabeth.id, maurice.id),
+      children: [michel.id, willy.id].map(link),
+    };
+    const u3 = {
+      ...createUnionFor(hector.id, null),
+      children: [francoise.id, philippe.id, marc.id, marieAgnes.id].map(link),
+    };
+    const u4 = { ...createUnionFor(mireille.id, jules.id), children: [christophe.id].map(link) };
+    const u5 = { ...createUnionFor(willy.id, francoise.id), children: [anne.id, emmanuel.id].map(link) };
+    const u6 = {
+      ...createUnionFor(christophe.id, anne.id),
+      children: [julesChild.id, ninon.id].map(link),
+    };
+    const data: FamilyData = {
+      ...family(
+        j0, elisabeth, maurice, hector, mireille, jules, michel, willy,
+        francoise, philippe, marc, marieAgnes, christophe, anne, emmanuel,
+        julesChild, ninon,
+      ),
+      unions: [u1, u2, u3, u4, u5, u6],
+    };
+
+    const withoutHector = removePerson(data, hector.id);
+    const layout = computeClassicLayout(withoutHector);
+    const xOf = (id: string): number =>
+      layout.nodes.find((node) => node.kind === 'person' && node.refId === id)!.x;
+    const leftToRight = (ids: string[]): string[] =>
+      [...ids].sort((a, b) => xOf(a) - xOf(b));
+
+    // La famille de Jules reste à gauche, la fratrie d'Hector reste à droite,
+    // et ses enfants gardent leur ordre de naissance malgré l'union orpheline.
+    expect(leftToRight([mireille.id, michel.id, francoise.id])).toEqual([
+      mireille.id, michel.id, francoise.id,
+    ]);
+    expect(leftToRight([francoise.id, philippe.id, marc.id, marieAgnes.id])).toEqual([
+      francoise.id, philippe.id, marc.id, marieAgnes.id,
+    ]);
+    expect(leftToRight([christophe.id, anne.id, emmanuel.id])).toEqual([
+      christophe.id, anne.id, emmanuel.id,
+    ]);
+
+    // La barre Mireille + Jules → Christophe reste courte : elle ne traverse
+    // plus la famille Willy + Françoise.
+    const bar = layout.edges.find((edge) => edge.id === `child:bar:${u4.id}`)!;
+    const barLength = Math.abs(bar.points[0].x - bar.points[bar.points.length - 1].x);
+    expect(barLength).toBeLessThan(500);
+    expect(countCrossings(withoutHector)).toBe(0);
+    expect(countEdgeCardHits(withoutHector)).toBe(0);
+    expect(countOverlaps(withoutHector)).toBe(0);
+  });
+
   it('la clé de structure ignore les changements de texte', () => {
     const a = person('A');
     const before = family(a);
@@ -318,6 +391,14 @@ describe('moteur de placement classique', () => {
     expect(structureKey(before)).toBe(structureKey(after));
   });
 });
+
+function link(childId: string) {
+  return {
+    childId,
+    linkA: 'biological' as const,
+    linkB: 'unknown' as const,
+  };
+}
 
 function parentalUnion(parentId: string, childIds: string[]) {
   return {

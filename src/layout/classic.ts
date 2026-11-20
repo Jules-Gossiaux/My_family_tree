@@ -71,6 +71,9 @@ const COUPLE_GAP = 26;
 const SIBLING_GAP = 46;
 /** Écart entre deux segments (familles distinctes). */
 const SEGMENT_GAP = 86;
+/** Au-delà, une zone vide sépare deux familles : on la resserre. */
+const MAX_EMPTY_GAP = 170;
+const COMPACT_GAP = 110;
 /** Barre de fratrie, juste au-dessus des cartes des enfants. */
 const BAR_OFFSET = 46;
 /** Écart vertical entre deux niveaux de barres qui se chevauchent. */
@@ -178,10 +181,55 @@ function solveRow(segments: Segment[], desired: number[]): number[] {
   return solved.map((value, index) => value + prefix[index]);
 }
 
+/**
+ * Resserre les grandes zones vides entre deux familles déconnectées. On ne
+ * modifie aucun ordre ni aucune distance interne : tout ce qui est à droite
+ * d'un vide trop large glisse vers la gauche de la même valeur.
+ */
+function compactEmptyColumns(nodes: LaidOutNode[], edges: LaidOutEdge[]): void {
+  const occupied: Array<[number, number]> = [];
+  for (const node of nodes) {
+    occupied.push([node.x - 4, node.x + node.width + 4]);
+  }
+  for (const edge of edges) {
+    for (let index = 1; index < edge.points.length; index += 1) {
+      const a = edge.points[index - 1];
+      const b = edge.points[index];
+      occupied.push([Math.min(a.x, b.x) - 2, Math.max(a.x, b.x) + 2]);
+    }
+  }
+  if (occupied.length === 0) return;
+
+  occupied.sort((a, b) => a[0] - b[0]);
+  const merged: Array<[number, number]> = [];
+  for (const range of occupied) {
+    const last = merged[merged.length - 1];
+    if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]);
+    else merged.push([...range]);
+  }
+
+  const gaps: Array<{ end: number; delta: number }> = [];
+  for (let index = 1; index < merged.length; index += 1) {
+    const start = merged[index - 1][1];
+    const end = merged[index][0];
+    if (end - start > MAX_EMPTY_GAP) {
+      gaps.push({ end, delta: end - start - COMPACT_GAP });
+    }
+  }
+  if (gaps.length === 0) return;
+
+  const shiftFor = (x: number): number =>
+    gaps.reduce((sum, gap) => sum + (x >= gap.end ? gap.delta : 0), 0);
+  for (const node of nodes) node.x -= shiftFor(node.x);
+  for (const edge of edges) {
+    for (const point of edge.points) point.x -= shiftFor(point.x);
+  }
+}
+
 function buildLayout(
   data: FamilyData,
   mode: GroupingMode,
-  flipRoots: boolean,
+  rootOrder: Id[],
   mergeByParentSide: boolean,
 ): TreeLayout {
   const persons = data.persons;
@@ -191,17 +239,20 @@ function buildLayout(
   const personIndex = new Map<Id, number>(
     persons.map((person, index) => [person.id, index]),
   );
+  const rootRank = new Map<Id, number>(
+    rootOrder.map((id, index) => [id, index]),
+  );
 
   /**
    * Graine d'ordre des personnes « racines » (sans union de naissance connue).
-   * Le miroir sert à la passe de comparaison finale : quand un mariage relie
-   * deux familles placées aux deux bouts de l'arbre, inverser simplement
-   * l'ordre des familles fondatrices peut diviser la longueur des traits par
-   * deux. On calcule les deux et on garde le moins cher.
+   * L'ordre vient d'une permutation générée côté appelant : au lieu de tester
+   * seulement l'ordre naturel et son miroir, on explore toutes les familles
+   * fondatrices possibles et on garde le dessin le plus lisible.
    */
   const keySeed = (id: Id): number => {
-    const index = personIndex.get(id) ?? 0;
-    return flipRoots ? persons.length - 1 - index : index;
+    const rank = rootRank.get(id);
+    if (rank !== undefined) return rank;
+    return personIndex.get(id) ?? 0;
   };
   const unions = data.unions.filter((union) => !isGhostUnion(union));
 
@@ -533,7 +584,12 @@ function buildLayout(
     } else {
       const anchors = birth.partners.map(keyOf);
       anchors.sort(compareKeys);
-      const base = anchors.length ? anchors[0] : [-(birth.index + 1)];
+      // Une union sans parent reste une fratrie comme les autres : elle prend
+      // la place de son ordre de création, PAS une clé négative qui la ferait
+      // passer avant toutes les vraies racines. Quand on supprimait l'unique
+      // parent d'une famille, ses enfants sautaient brutalement à l'extrême
+      // gauche de la génération et poussaient la famille voisine à droite.
+      const base = anchors.length ? anchors[0] : [birth.index];
       const rank = birth.children.findIndex((child) => child.id === id);
       result = [...base, birth.index, Math.max(0, rank)];
     }
@@ -579,6 +635,16 @@ function buildLayout(
       if (info.partners.some((partner) => ids.includes(partner))) {
         result.push(info);
       }
+    }
+    return result;
+  };
+
+  /** Un segment doit connaître TOUTES les familles dont il porte des enfants. */
+  const birthUnionsOf = (ids: Id[], initial: UnionInfo[] = []): UnionInfo[] => {
+    const result = [...initial];
+    for (const id of ids) {
+      const birth = birthUnion.get(id);
+      if (birth && !result.includes(birth)) result.push(birth);
     }
     return result;
   };
@@ -696,7 +762,8 @@ function buildLayout(
      * côté EXTÉRIEUR du bloc de fratrie : jamais entre deux époux, jamais au
      * milieu des frères et sœurs.
      */
-    const insertIncomingExtras = (ids: Id[], core: Id[]): void => {
+    const insertIncomingExtras = (ids: Id[], core: Id[]): Id[] => {
+      const added: Id[] = [];
       for (const extra of rowIds) {
         if (used.has(extra) || ids.includes(extra)) continue;
         const target = incoming.get(extra);
@@ -709,7 +776,9 @@ function buildLayout(
         const at = ids.indexOf(target);
         const position = at <= first ? at : at >= last ? at + 1 : last + 1;
         ids.splice(position, 0, extra);
+        added.push(extra);
       }
+      return added;
     };
 
     // Un « entrant » est retiré de sa fratrie d'origine : il sera placé dans
@@ -769,11 +838,15 @@ function buildLayout(
       }
 
       // Un « entrant » peut être rattaché à un conjoint déjà présent dans le
-      // segment (remariage) et non à un membre de la fratrie.
-      insertIncomingExtras(ids, members);
+      // segment (remariage) et non à un membre de la fratrie. Il garde sa
+      // propre famille d'origine : sans elle, le recentrage ignorait ses
+      // parents et la barre qui les relie traversait tout l'arbre.
+      const extras = insertIncomingExtras(ids, members);
 
       ids.forEach((id) => used.add(id));
-      segments.push(makeSegment(ids, members, [bucket.birth], generation));
+      segments.push(
+        makeSegment(ids, members, birthUnionsOf(extras, [bucket.birth]), generation),
+      );
     }
 
     // Racines et conjoints externes : chaque ancrage récupère ses « entrants ».
@@ -797,15 +870,17 @@ function buildLayout(
         }
       }
       ids.sort((a, b) => compareKeys(keyOf(a), keyOf(b)));
+      const extras: Id[] = [];
       for (const extra of rowIds) {
         if (used.has(extra) || ids.includes(extra)) continue;
         const target = incoming.get(extra);
         if (target && ids.includes(target)) {
           ids.splice(ids.indexOf(target) + 1, 0, extra);
+          extras.push(extra);
         }
       }
       ids.forEach((member) => used.add(member));
-      segments.push(makeSegment(ids, ids, [], generation));
+      segments.push(makeSegment(ids, ids, birthUnionsOf(extras), generation));
     }
 
     // Filet de sécurité : aucune personne ne doit disparaître du dessin.
@@ -1345,6 +1420,7 @@ function buildLayout(
   }
 
   nodes.push(...dots);
+  compactEmptyColumns(nodes, edges);
 
   // --- 5. Cadrage ---------------------------------------------------------
   let minX = Number.POSITIVE_INFINITY;
@@ -1376,10 +1452,10 @@ function buildLayout(
 }
 
 /**
- * Coût de lisibilité : longueur horizontale totale des traits. C'est le
- * résumé chiffré de ce que l'œil perçoit comme « lignes qui traversent
- * l'arbre » : une barre de fratrie longue signifie des enfants placés loin
- * de leurs parents.
+ * Coût géométrique d'un dessin. On ne regarde plus seulement la longueur des
+ * traits : un arbre court mais dont les barres se chevauchent ou passent au-
+ * dessus d'une famille étrangère est illisible. Les défauts sont comptés dans
+ * un tuple lexicographique ; la longueur ne sert qu'à départager.
  */
 function branchCost(layout: TreeLayout): number {
   let total = 0;
@@ -1391,33 +1467,219 @@ function branchCost(layout: TreeLayout): number {
   return total;
 }
 
+interface LineSegment {
+  a: Point;
+  b: Point;
+}
+
+function edgeLines(edge: LaidOutEdge): LineSegment[] {
+  const parts: LineSegment[] = [];
+  for (let index = 1; index < edge.points.length; index += 1) {
+    parts.push({ a: edge.points[index - 1], b: edge.points[index] });
+  }
+  return parts;
+}
+
+function isHorizontal(line: LineSegment): boolean {
+  return Math.abs(line.a.y - line.b.y) < 0.1;
+}
+
+function strictlyCrosses(one: LineSegment, two: LineSegment): boolean {
+  if (isHorizontal(one) === isHorizontal(two)) return false;
+  const horizontal = isHorizontal(one) ? one : two;
+  const vertical = isHorizontal(one) ? two : one;
+  const x = vertical.a.x;
+  const y = horizontal.a.y;
+  return (
+    x > Math.min(horizontal.a.x, horizontal.b.x) + 0.5 &&
+    x < Math.max(horizontal.a.x, horizontal.b.x) - 0.5 &&
+    y > Math.min(vertical.a.y, vertical.b.y) + 0.5 &&
+    y < Math.max(vertical.a.y, vertical.b.y) - 0.5
+  );
+}
+
+function countCrossings(layout: TreeLayout): number {
+  const lines = layout.edges.flatMap(edgeLines);
+  let total = 0;
+  for (let i = 0; i < lines.length; i += 1) {
+    for (let j = i + 1; j < lines.length; j += 1) {
+      if (strictlyCrosses(lines[i], lines[j])) total += 1;
+    }
+  }
+  return total;
+}
+
+function countEdgeCardHits(layout: TreeLayout): number {
+  const cards = layout.nodes.filter((node) => node.kind === 'person');
+  let total = 0;
+  for (const edge of layout.edges) {
+    for (const line of edgeLines(edge)) {
+      const x1 = Math.min(line.a.x, line.b.x);
+      const x2 = Math.max(line.a.x, line.b.x);
+      const y1 = Math.min(line.a.y, line.b.y);
+      const y2 = Math.max(line.a.y, line.b.y);
+      for (const card of cards) {
+        const hitX =
+          Math.min(x2, card.x + card.width - 2) - Math.max(x1, card.x + 2);
+        const hitY =
+          Math.min(y2, card.y + card.height - 2) - Math.max(y1, card.y + 2);
+        if (hitX > 0.5 && hitY > 0.5) total += 1;
+      }
+    }
+  }
+  return total;
+}
+
+function countCardOverlaps(layout: TreeLayout): number {
+  const cards = layout.nodes.filter((node) => node.kind === 'person');
+  let total = 0;
+  for (let i = 0; i < cards.length; i += 1) {
+    for (let j = i + 1; j < cards.length; j += 1) {
+      const a = cards[i];
+      const b = cards[j];
+      if (
+        a.x < b.x + b.width - 1 &&
+        b.x < a.x + a.width - 1 &&
+        a.y < b.y + b.height - 1 &&
+        b.y < a.y + a.height - 1
+      ) {
+        total += 1;
+      }
+    }
+  }
+  return total;
+}
+
+/** Barres de fratrie qui se superposent ou surplombent une autre famille. */
+function countBarAmbiguity(layout: TreeLayout, data: FamilyData): number {
+  const bars = layout.edges.filter((edge) => edge.id.startsWith('child:bar:'));
+  const cards = layout.nodes.filter((node) => node.kind === 'person');
+  const childrenByUnion = new Map(
+    data.unions.map((union) => [
+      union.id,
+      new Set(union.children.map((child) => child.childId)),
+    ]),
+  );
+  const unionIdOf = (edge: LaidOutEdge): string =>
+    edge.id.slice('child:bar:'.length);
+  const rangeOf = (edge: LaidOutEdge): [number, number, number] => [
+    Math.min(edge.points[0].x, edge.points[edge.points.length - 1].x),
+    Math.max(edge.points[0].x, edge.points[edge.points.length - 1].x),
+    edge.points[0].y,
+  ];
+
+  let total = 0;
+  for (let i = 0; i < bars.length; i += 1) {
+    const [aStart, aEnd, aY] = rangeOf(bars[i]);
+    for (let j = i + 1; j < bars.length; j += 1) {
+      if (unionIdOf(bars[i]) === unionIdOf(bars[j])) continue;
+      const [bStart, bEnd, bY] = rangeOf(bars[j]);
+      if (Math.abs(aY - bY) > LANE_GAP) continue;
+      total += Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
+    }
+    const ownChildren = childrenByUnion.get(unionIdOf(bars[i])) ?? new Set<Id>();
+    for (const card of cards) {
+      if (ownChildren.has(card.refId)) continue;
+      const centerX = card.x + card.width / 2;
+      if (centerX <= aStart + 1 || centerX >= aEnd - 1) continue;
+      if (card.y <= aY || card.y - aY > ROW_STEP) continue;
+      total += PERSON_W;
+    }
+  }
+  return Math.round(total);
+}
+
+function layoutPenalty(layout: TreeLayout, data: FamilyData): number[] {
+  return [
+    countCrossings(layout),
+    countEdgeCardHits(layout),
+    countCardOverlaps(layout),
+    countBarAmbiguity(layout, data),
+    Math.round(branchCost(layout)),
+  ];
+}
+
+function comparePenalties(a: number[], b: number[]): number {
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) return a[index] - b[index];
+  }
+  return 0;
+}
+
 /**
  * Un arbre n'a pas de gauche ni de droite « naturelle » : l'ordre des familles
  * fondatrices vient de l'ordre de saisie, or un mariage entre deux familles
  * opposées produit des barres qui traversent tout le dessin si les familles
- * sont dans le mauvais sens. On calcule quelques VARIANTES (miroir des racines
- * × côté des familles dans les segments fusionnés) et on garde celle dont les
- * traits sont les plus courts — c'est ce qui rapproche une fratrie de ses
- * parents sans toucher à aucune règle de contiguïté. Déterministe : en cas
- * d'égalité, la première variante gagne.
+ * sont dans le mauvais sens. Au lieu de se limiter au miroir des racines, on
+ * explore de nombreuses PERMUTATIONS des familles fondatrices × le côté des
+ * familles dans les segments fusionnés, et on garde celle dont le dessin est
+ * le plus lisible : aucun croisement, aucun trait sur une carte, aucune barre
+ * ambiguë, puis seulement des traits courts. Déterministe : en cas d'égalité,
+ * la première variante gagne.
  */
+
+/** Nombre maximal d'ordres racines explorés (× 2 côtés de fusion). */
+const MAX_ROOT_ORDERS = 60;
+
+function rootOrderCandidates(ids: Id[]): Id[][] {
+  if (ids.length <= 1) return [[...ids]];
+  const result: Id[][] = [];
+  const seen = new Set<string>();
+  const push = (order: Id[]) => {
+    const key = order.join('\u0000');
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(order);
+  };
+  push([...ids]);
+  push([...ids].reverse());
+  const current: Id[] = [];
+  const used = new Set<Id>();
+  const walk = (): void => {
+    if (result.length >= MAX_ROOT_ORDERS) return;
+    if (current.length === ids.length) {
+      push([...current]);
+      return;
+    }
+    for (const id of ids) {
+      if (used.has(id)) continue;
+      used.add(id);
+      current.push(id);
+      walk();
+      used.delete(id);
+      current.pop();
+      if (result.length >= MAX_ROOT_ORDERS) return;
+    }
+  };
+  walk();
+  return result;
+}
+
 export function computeClassicLayout(
   data: FamilyData,
   mode: GroupingMode = 'balanced',
 ): TreeLayout {
+  const childIds = new Set<Id>();
+  for (const union of data.unions) {
+    if (isGhostUnion(union)) continue;
+    for (const child of union.children) {
+      if (unionHasFiliation(child)) childIds.add(child.childId);
+    }
+  }
+  const rootIds = data.persons
+    .filter((person) => !childIds.has(person.id))
+    .map((person) => person.id);
+
   let best: TreeLayout | null = null;
-  let bestCost = Number.POSITIVE_INFINITY;
-  for (const [flipRoots, mergeByParentSide] of [
-    [false, false],
-    [true, false],
-    [false, true],
-    [true, true],
-  ]) {
-    const candidate = buildLayout(data, mode, flipRoots, mergeByParentSide);
-    const cost = branchCost(candidate);
-    if (cost < bestCost - 1e-9) {
-      bestCost = cost;
-      best = candidate;
+  let bestPenalty: number[] | null = null;
+  for (const rootOrder of rootOrderCandidates(rootIds)) {
+    for (const mergeByParentSide of [false, true]) {
+      const candidate = buildLayout(data, mode, rootOrder, mergeByParentSide);
+      const penalty = layoutPenalty(candidate, data);
+      if (!bestPenalty || comparePenalties(penalty, bestPenalty) < 0) {
+        bestPenalty = penalty;
+        best = candidate;
+      }
     }
   }
   return best!;
