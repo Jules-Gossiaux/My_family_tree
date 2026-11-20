@@ -5,6 +5,7 @@ import {
   LINK_LABELS,
   UNION_STATUSES,
   UNION_STATUS_LABELS,
+  isDeceased,
   type Id,
   type LinkType,
   type NewPersonInput,
@@ -162,6 +163,7 @@ export default function PersonFormDialog({
         gender: form.gender,
         birthDate: form.birthDate || undefined,
         deathDate: form.deathDate || undefined,
+        deceased: form.deceased === true || undefined,
         address: form.address?.trim() || undefined,
         phone: form.phone?.trim() || undefined,
         email: form.email?.trim() || undefined,
@@ -345,8 +347,36 @@ export default function PersonFormDialog({
             <FuzzyDateField
               label="Décès"
               value={form.deathDate}
-              onChange={(deathDate) => setForm({ ...form, deathDate })}
+              onChange={(deathDate) =>
+                setForm({
+                  ...form,
+                  deathDate,
+                  deceased: deathDate?.trim() ? true : form.deceased,
+                })
+              }
             />
+            <div className="field">
+              <span>Décédé(e) ?</span>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={isDeceased(form)}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setForm({
+                      ...form,
+                      deceased: checked || undefined,
+                      deathDate: checked ? form.deathDate : undefined,
+                    });
+                  }}
+                />
+                <span>Décédé(e)</span>
+              </label>
+            </div>
+            <p className="field-help field-full">
+              Cochez la case si la personne est morte même sans date connue : la
+              date de décès reste facultative.
+            </p>
             <label className="field">
               <span>Téléphone</span>
               <input
@@ -378,7 +408,7 @@ export default function PersonFormDialog({
                 }
               />
             </label>
-            {form.deathDate?.trim() ? (
+            {isDeceased(form) ? (
               <label className="field field-full">
                 <span>Cimetière</span>
                 <input

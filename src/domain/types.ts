@@ -281,7 +281,10 @@ export interface Person {
   gender: Gender;
   /** Texte libre : « vers 1890 », « avant 1914 », ISO historique… */
   birthDate?: string;
+  /** Date de décès, facultative : la case `deceased` suffit si elle est inconnue. */
   deathDate?: string;
+  /** Décès certain, même sans date connue. */
+  deceased?: boolean;
   /** Coordonnées (cimetière uniquement affiché si décès renseigné). */
   address?: string;
   phone?: string;
@@ -348,6 +351,7 @@ export interface NewPersonInput {
   gender: Gender;
   birthDate?: string;
   deathDate?: string;
+  deceased?: boolean;
   address?: string;
   phone?: string;
   email?: string;
@@ -395,6 +399,7 @@ export function createPerson(familyId: Id, input: NewPersonInput): Person {
     gender: input.gender,
     birthDate: input.birthDate?.trim() || undefined,
     deathDate: input.deathDate?.trim() || undefined,
+    deceased: input.deceased === true || Boolean(input.deathDate?.trim()) || undefined,
     address: input.address?.trim() || undefined,
     phone: input.phone?.trim() || undefined,
     email: input.email?.trim() || undefined,
@@ -547,6 +552,15 @@ export function touch(data: FamilyData): FamilyData {
 export function personLabel(person: Person): string {
   const full = `${person.firstName} ${person.lastName}`.trim();
   return full || 'Sans nom';
+}
+
+/**
+ * Une date de décès implique le décès, mais l'inverse n'est pas vrai : on peut
+ * savoir qu'une personne est morte sans connaître la date. Les documents
+ * anciens n'ont que la date, ils restent donc décédés sans migration.
+ */
+export function isDeceased(person: Pick<Person, 'deceased' | 'deathDate'>): boolean {
+  return person.deceased === true || Boolean(person.deathDate?.trim());
 }
 
 /** Toutes les graphies utiles à la recherche (nom principal + variantes). */

@@ -331,6 +331,7 @@ export function validateFamilyData(value: unknown): FamilyData {
       gender: asGender(p.gender),
       birthDate: asOptionalString(p.birthDate),
       deathDate: asOptionalString(p.deathDate),
+      deceased: p.deceased === true || undefined,
       address: asOptionalString(p.address),
       phone: asOptionalString(p.phone),
       email: asOptionalString(p.email),

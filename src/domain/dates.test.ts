@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compareFuzzyDates,
   composeFuzzyDate,
   fuzzyDateShort,
   normalizeSearch,
@@ -67,6 +68,37 @@ describe('analyse des dates floues', () => {
 
 import { personSearchText } from '../domain/types';
 import { person as makePerson } from '../test/factories';
+
+describe('tri chronologique des dates floues', () => {
+  it('trie par année, mois puis jour et repousse les dates absentes en fin', () => {
+    const dates = [
+      '20 novembre 2026',
+      '',
+      '9 septembre 1948',
+      '11 janvier 1974',
+      '18 avril 1975',
+      '28 février 2005',
+      '7 novembre 1949',
+      '1998',
+    ];
+
+    expect([...dates].sort(compareFuzzyDates)).toEqual([
+      '9 septembre 1948',
+      '7 novembre 1949',
+      '11 janvier 1974',
+      '18 avril 1975',
+      '1998',
+      '28 février 2005',
+      '20 novembre 2026',
+      '',
+    ]);
+  });
+
+  it('comprend les dates ISO et les intervalles', () => {
+    expect(compareFuzzyDates('1890-05-04', '12 mars 1890')).toBeGreaterThan(0);
+    expect(compareFuzzyDates('entre 1890 et 1895', '1891')).toBeLessThan(0);
+  });
+});
 
 describe('recherche par variantes de nom', () => {
   it('inclut toutes les graphies dans le texte cherchable', () => {

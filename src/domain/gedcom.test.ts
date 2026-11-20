@@ -29,6 +29,16 @@ describe('export GEDCOM', () => {
     expect(output).toContain('1 FAMC @F1@');
   });
 
+  it('exporte le décès même sans date connue', () => {
+    const unknown = person('Sans date', { deceased: true });
+    const dated = person('Avec date', { deathDate: 'vers 1980' });
+    const output = exportGedcom(family(unknown, dated));
+
+    expect(output).toContain('1 DEAT\r\n');
+    expect(output).toContain('2 DATE ABT 1980');
+    expect(output).not.toContain('2 DATE undefined');
+  });
+
   it('ne produit aucune référence vide', () => {
     const data = family(person('Seul'));
     const output = exportGedcom(data);

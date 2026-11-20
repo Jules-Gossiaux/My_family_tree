@@ -724,6 +724,12 @@ export function updatePerson(
             ...(has('gender') && patch.gender ? { gender: patch.gender } : {}),
             ...(has('birthDate') ? { birthDate: patch.birthDate || undefined } : {}),
             ...(has('deathDate') ? { deathDate: patch.deathDate || undefined } : {}),
+            ...(has('deceased')
+              ? {
+                  deceased: patch.deceased === true || undefined,
+                  ...(patch.deceased === false ? { deathDate: undefined } : {}),
+                }
+              : {}),
             ...(has('address')
               ? { address: patch.address?.trim() || undefined }
               : {}),

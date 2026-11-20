@@ -1,4 +1,4 @@
-import { parseFuzzyDate } from './dates';
+import { compareFuzzyDates, parseFuzzyDate } from './dates';
 import { eventLabelFor, personLabel, type FamilyData, type Id, type LifeEvent } from './types';
 
 export interface TimelineEntry {
@@ -76,10 +76,5 @@ export function buildTimeline(data: FamilyData, personId: Id): TimelineEntry[] {
     });
   }
 
-  return entries.sort((a, b) => {
-    if (a.year === undefined && b.year === undefined) return 0;
-    if (a.year === undefined) return 1;
-    if (b.year === undefined) return -1;
-    return a.year - b.year;
-  });
+  return entries.sort((a, b) => compareFuzzyDates(a.yearLabel, b.yearLabel));
 }

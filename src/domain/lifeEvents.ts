@@ -1,3 +1,4 @@
+import { compareFuzzyDates } from './dates';
 import { now } from './id';
 import {
   createLifeEvent,
@@ -133,9 +134,16 @@ export function syncDefaultLifeEvents(data: FamilyData): FamilyData {
   return touch({ ...data, persons: state.persons, events: state.events });
 }
 
+/** Tri chronologique stable : du plus ancien au plus récent, sans-date en fin. */
+export function sortByEventDate<T extends { date?: string }>(events: readonly T[]): T[] {
+  return [...events].sort((a, b) => compareFuzzyDates(a.date, b.date));
+}
+
 export function eventsOfPerson(data: FamilyData, personId: Id): LifeEvent[] {
-  return data.events.filter((event) =>
-    event.participants.some((participant) => participant.personId === personId),
+  return sortByEventDate(
+    data.events.filter((event) =>
+      event.participants.some((participant) => participant.personId === personId),
+    ),
   );
 }
 

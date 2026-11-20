@@ -43,6 +43,21 @@ describe('validation et migration des documents', () => {
     expect(data.media).toEqual([]);
   });
 
+  it('conserve la case « décédé » sans date et ignore les valeurs invalides', () => {
+    const data = validateFamilyData({
+      version: 3,
+      familyId: 'family-test',
+      persons: [
+        { id: 'a', firstName: 'A', lastName: 'T', deceased: true, createdAt: 'x' },
+        { id: 'b', firstName: 'B', lastName: 'T', deceased: 'oui', createdAt: 'x' },
+      ],
+      updatedAt: 'x',
+    });
+    expect(data.persons[0].deceased).toBe(true);
+    expect(data.persons[0].deathDate).toBeUndefined();
+    expect(data.persons[1].deceased).toBeUndefined();
+  });
+
   it('rejette les références pendantes sans perdre les personnes', () => {
     const data = validateFamilyData({
       version: 3,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createUnion,
+  isDeceased,
   isGhostUnion,
   pruneGhostUnions,
   unionHasBiological,
@@ -13,8 +14,10 @@ import {
   removePerson,
   replaceUnionPartner,
   updateChildLink,
+  updatePerson,
 } from '../domain/operations';
 import { findFiliationConflicts } from '../domain/conflicts';
+import { formatDates } from '../utils/format';
 import { family, couple, person } from '../test/factories';
 
 function parentalUnion(familyId: string, motherId: string, childId: string) {
@@ -185,5 +188,38 @@ describe('ajout de la première personne', () => {
           event.participants[0]?.personId === born.id,
       ),
     ).toBe(true);
+  });
+});
+
+describe('décès sans date connue', () => {
+  it('marque une personne décédée dès que la case est cochée', () => {
+    const unknown = person('Inconnu', { deceased: true });
+    expect(unknown.deceased).toBe(true);
+    expect(unknown.deathDate).toBeUndefined();
+    expect(isDeceased(unknown)).toBe(true);
+    expect(formatDates(unknown)).toBe('† date inconnue');
+  });
+
+  it('considère encore les anciens documents avec une date comme décédés', () => {
+    const old = person('Ancien', { deathDate: '12 mai 1900' });
+    expect(old.deceased).toBe(true);
+    expect(isDeceased(old)).toBe(true);
+    expect(formatDates(old)).toBe('† 1900');
+  });
+
+  it('décoche la case et efface la date quand on indique que la personne est vivante', () => {
+    const deceased = person('Jean', { deathDate: '12 mai 1900', deceased: true });
+    const next = updatePerson(family(deceased), deceased.id, { deceased: false });
+    expect(next.persons[0].deceased).toBeUndefined();
+    expect(next.persons[0].deathDate).toBeUndefined();
+    expect(isDeceased(next.persons[0])).toBe(false);
+  });
+
+  it('garde la case cochée si on efface seulement la date', () => {
+    const deceased = person('Jean', { deathDate: '12 mai 1900', deceased: true });
+    const next = updatePerson(family(deceased), deceased.id, { deathDate: undefined });
+    expect(next.persons[0].deceased).toBe(true);
+    expect(next.persons[0].deathDate).toBeUndefined();
+    expect(formatDates(next.persons[0])).toBe('† date inconnue');
   });
 });

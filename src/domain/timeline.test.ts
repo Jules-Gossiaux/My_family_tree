@@ -36,6 +36,23 @@ describe('frise chronologique', () => {
     ]);
   });
 
+  it('trie aussi les faits d’une même année par date complète', () => {
+    const p = person('Jean', { id: 'p1' });
+    const data = {
+      ...family(p),
+      events: [
+        event('late', 'décembre 1890'),
+        event('unknown', ''),
+        event('early', '12 janvier 1890'),
+      ],
+    };
+    expect(buildTimeline(data, p.id).map((entry) => entry.eventId)).toEqual([
+      'early',
+      'late',
+      'unknown',
+    ]);
+  });
+
   it('inclut les unions dans la frise', () => {
     const p = person('Jean', { id: 'p1' });
     const spouse = person('Marie', { id: 'p2' });

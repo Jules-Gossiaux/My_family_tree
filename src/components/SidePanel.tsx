@@ -5,6 +5,7 @@ import {
   UNION_STATUSES,
   UNION_STATUS_LABELS,
   eventLabelFor,
+  isDeceased,
   personLabel,
   slotOfPartner,
   unionPartnerIds,
@@ -20,7 +21,7 @@ import {
 import { personChoiceLabel } from '../domain/personChoices';
 import { getPerson, relationsOf, unionsOfPerson } from '../domain/operations';
 import { placeLabelOf, addPlace } from '../domain/directories';
-import { eventsOfPerson } from '../domain/lifeEvents';
+import { eventsOfPerson, sortByEventDate } from '../domain/lifeEvents';
 import { now } from '../domain/id';
 import type { FiliationConflict } from '../domain/conflicts';
 import { GENDER_LABELS } from '../utils/format';
@@ -97,6 +98,7 @@ export default function SidePanel({
   const relations = selectedId ? relationsOf(data, selectedId) : undefined;
   const unions = selectedId ? unionsOfPerson(data, selectedId) : [];
   const events = person ? eventsOfPerson(data, person.id) : [];
+  const overviewEvents = sortByEventDate(data.events);
 
   const nameOf = (id: Id | null): string => {
     if (!id) return 'Non renseigné';
@@ -278,12 +280,34 @@ export default function SidePanel({
                     <FuzzyDateField
                       label="Décès"
                       value={person.deathDate}
-                      onChange={(deathDate) => onUpdate({ deathDate })}
+                      onChange={(deathDate) =>
+                        onUpdate({
+                          deathDate,
+                          ...(deathDate?.trim() ? { deceased: true } : {}),
+                        })
+                      }
                     />
+                    <div className="field">
+                      <span>Décédé(e) ?</span>
+                      <label className="checkbox-field">
+                        <input
+                          type="checkbox"
+                          checked={isDeceased(person)}
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            onUpdate({
+                              deceased: checked || undefined,
+                              deathDate: checked ? person.deathDate : undefined,
+                            });
+                          }}
+                        />
+                        <span>Décédé(e)</span>
+                      </label>
+                    </div>
                     <p className="panel-note field-full">
-                      Ces dates restent sur la fiche et créent aussi un fait de
-                      vie par défaut, que vous pouvez enrichir dans l’onglet
-                      « Faits de vie ».
+                      Cochez la case si la personne est morte même sans date
+                      connue. Les dates créent aussi un fait de vie par défaut,
+                      que vous pouvez enrichir dans l’onglet « Faits de vie ».
                     </p>
                     <label className="field field-full">
                       <span>Notes libres</span>
@@ -382,7 +406,7 @@ export default function SidePanel({
                         onChange={(event) => onUpdate({ email: event.target.value })}
                       />
                     </label>
-                    {person.deathDate?.trim() ? (
+                    {isDeceased(person) ? (
                       <>
                         <label className="field field-full">
                           <span>Cimetière</span>
@@ -603,7 +627,7 @@ export default function SidePanel({
               <span>unions</span>
             </div>
             <div>
-              <strong>{data.events.length}</strong>
+              <strong>{overviewEvents.length}</strong>
               <span>faits de vie</span>
             </div>
             <div>
@@ -626,14 +650,14 @@ export default function SidePanel({
               + Ajouter
             </button>
           </div>
-          {data.events.length === 0 ? (
+          {overviewEvents.length === 0 ? (
             <p className="panel-note">
               Aucun fait pour l’instant. Vous pouvez en créer un sans sélectionner
               de personne.
             </p>
           ) : (
             <div className="fact-list">
-              {data.events.map((event) => (
+              {overviewEvents.map((event) => (
                 <article key={event.id} className="fact-card">
                   <header>
                     <strong>{event.title || eventLabelFor(event.type)}</strong>

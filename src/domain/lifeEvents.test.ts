@@ -1,7 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { addEvent, updateEvent } from './lifeEvents';
+import {
+  addEvent,
+  eventsOfPerson,
+  sortByEventDate,
+  updateEvent,
+} from './lifeEvents';
 import { validateFamilyData } from './repository';
-import { emptyFamily } from './types';
+import { emptyFamily, type LifeEventInput } from './types';
+import { family, person as makePerson } from '../test/factories';
+
+describe('tri des faits de vie', () => {
+  it('renvoie les faits du plus ancien au plus récent', () => {
+    const subject = makePerson('Jean', { id: 'p1' });
+    let data = family(subject);
+    for (const date of ['20 novembre 2026', '9 septembre 1948', '11 janvier 1974']) {
+      const input: LifeEventInput = {
+        type: 'other',
+        date,
+        participants: [{ personId: subject.id, role: 'principal' }],
+        citations: [],
+        mediaIds: [],
+      };
+      data = addEvent(data, input);
+    }
+
+    const sorted = ['9 septembre 1948', '11 janvier 1974', '20 novembre 2026'];
+    expect(sortByEventDate(data.events).map((event) => event.date)).toEqual(sorted);
+    expect(eventsOfPerson(data, subject.id).map((event) => event.date)).toEqual(sorted);
+  });
+});
 
 describe('faits sans participant', () => {
   it('peut créer, modifier et conserver un fait non rattaché', () => {

@@ -1,5 +1,6 @@
 import { parseFuzzyDate } from './dates';
 import {
+  isDeceased,
   personLabel,
   unionPartnerIds,
   type FamilyData,
@@ -120,6 +121,7 @@ export function exportGedcom(data: FamilyData): string {
     if (birth) insertBeforeTrailer('1 BIRT', `2 DATE ${birth}`);
     const death = gedcomDate(person.deathDate);
     if (death) insertBeforeTrailer('1 DEAT', `2 DATE ${death}`);
+    else if (isDeceased(person)) insertBeforeTrailer('1 DEAT');
     if (person.birthSurname) {
       insertBeforeTrailer(`1 NAME ${escapeGedcom(person.birthSurname)} /${surname}/`, '2 TYPE birth');
     }

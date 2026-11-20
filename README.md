@@ -21,6 +21,7 @@ Arbre généalogique familial : visualisation, faits de vie, lieux, sources et m
 - Menu contextuel sur chaque carte : ouvrir la fiche, ajouter un lien, rattacher une personne existante, définir « Moi », créer une branche, calculer un lien de parenté, supprimer.
 - Dates **en texte libre** (`vers 1890`, `avant 1914`, `12 mars 1890`) décomposées en interne en quatre colonnes, jamais affichées telles quelles.
 - Fiche personne : identité et variantes de noms, portrait avec cadrage, dates de vie, notes libres, coordonnées, galerie de photos et documents.
+- **Décès sans date** : la case « Décédé(e) » permet de marquer une personne comme morte même quand la date est inconnue ; la date reste facultative et le décès apparaît sur la carte et dans l'export GEDCOM.
 
 ### Données familiales
 

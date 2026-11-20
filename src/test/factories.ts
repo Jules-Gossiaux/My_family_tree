@@ -21,6 +21,7 @@ export function person(
     gender: (overrides.gender ?? 'unspecified') as Gender,
     birthDate: overrides.birthDate,
     deathDate: overrides.deathDate,
+    deceased: overrides.deceased,
     birthSurname: overrides.birthSurname,
     usageSurname: overrides.usageSurname,
     additionalGivenNames: overrides.additionalGivenNames,

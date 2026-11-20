@@ -53,6 +53,10 @@ function normalize(value: string): string {
     .trim();
 }
 
+const MONTH_NUMBERS: Record<string, number> = Object.fromEntries(
+  MONTHS.map((month, index) => [normalize(month), index + 1]),
+);
+
 /** Extrait le qualificatif en tête de chaîne, sous toutes ses orthographes. */
 function readQualifier(text: string): { qualifier: string; rest: string } {
   const patterns: Array<[RegExp, string]> = [
@@ -205,6 +209,36 @@ export function fuzzyDateShort(raw?: string): string {
   const { qualifier, year } = parseFuzzyDate(raw);
   if (year) return [qualifier, year].filter(Boolean).join(' ');
   return raw;
+}
+
+/**
+ * Clé numérique de tri : année, puis mois, puis jour. Les dates partielles
+ * passent avant les dates complètes de la même année ; les dates sans année
+ * n'ont pas de clé et sont renvoyées en fin de liste.
+ */
+export function fuzzyDateSortKey(raw?: string): number | undefined {
+  const text = raw?.trim();
+  if (!text) return undefined;
+
+  const { year, month, day } = parseFuzzyDate(text);
+  const yearMatch = year.match(/\d{4}/);
+  if (!yearMatch) return undefined;
+
+  const monthNumber = /^\d{1,2}$/.test(month)
+    ? Number(month)
+    : (MONTH_NUMBERS[normalize(month)] ?? 0);
+  const dayNumber = /^\d{1,2}$/.test(day) ? Number(day) : 0;
+  return Number(yearMatch[0]) * 10000 + monthNumber * 100 + dayNumber;
+}
+
+/** Compare deux dates floues du plus ancien au plus récent. */
+export function compareFuzzyDates(a?: string, b?: string): number {
+  const keyA = fuzzyDateSortKey(a);
+  const keyB = fuzzyDateSortKey(b);
+  if (keyA === undefined && keyB === undefined) return 0;
+  if (keyA === undefined) return 1;
+  if (keyB === undefined) return -1;
+  return keyA - keyB;
 }
 
 export function normalizeSearch(value: string): string {
