@@ -23,6 +23,7 @@ import {
   SupabaseMediaStore,
   supabase,
   supabaseConfigured,
+  type CloudFamily,
 } from './domain/supabase';
 import {
   LocalSettingsStore,
@@ -161,6 +162,7 @@ export default function App() {
   const [cloudGateOpen, setCloudGateOpen] = useState(true);
   const [cloudFamilyId, setCloudFamilyId] = useState<Id | null>(null);
   const [cloudFamilyName, setCloudFamilyName] = useState('Mon arbre');
+  const [cloudRole, setCloudRole] = useState<CloudFamily['role'] | null>(null);
   const [cloudUser, setCloudUser] = useState<string | null>(null);
   const [localSeed, setLocalSeed] = useState<FamilyData | null>(null);
   const [relationOpen, setRelationOpen] = useState(false);
@@ -249,10 +251,12 @@ export default function App() {
     setSelectedId(null);
     await new SupabaseFamilyRepository(familyId).load();
     const families = await listFamilies();
-    const name =
-      families.find((family) => family.id === familyId)?.name ?? 'Mon arbre';
+    const family = families.find((item) => item.id === familyId);
+    const name = family?.name ?? 'Mon arbre';
+    const role = family?.role ?? null;
     const user = await currentUser();
     setCloudFamilyName(name);
+    setCloudRole(role);
     setCloudFamilyId(familyId);
     setCloudUser(user?.email ?? null);
     if (user) {
@@ -260,7 +264,11 @@ export default function App() {
       rememberFamily(user.id, familyId);
     }
     setCloudGateOpen(false);
-    setToast(`Arbre « ${name} » ouvert.`);
+    setToast(
+      role === 'viewer'
+        ? `Arbre « ${name} » ouvert en lecture seule.`
+        : `Arbre « ${name} » ouvert.`,
+    );
   };
 
   const importLocalTree = async (name: string) => {
@@ -291,6 +299,7 @@ export default function App() {
   const handleSignOut = async () => {
     await signOut();
     setCloudFamilyId(null);
+    setCloudRole(null);
     setData(null);
     setSelectedId(null);
     setCloudUser(null);
@@ -408,6 +417,7 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) return;
       setCloudFamilyId(null);
+      setCloudRole(null);
       setData(null);
       setSelectedId(null);
       setCloudUser(null);
@@ -418,11 +428,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!repository || !data) return;
+    // Un invité « viewer » peut lire l'arbre mais la RLS refuse toute écriture :
+    // on ne tente donc aucune sauvegarde automatique pour ce rôle.
+    if (!repository || !data || cloudRole === 'viewer') return;
     void repository.save(data).catch(() => {
       // L'erreur est déjà remontée à l'interface via onSaveError.
     });
-  }, [data, repository]);
+  }, [data, repository, cloudRole]);
 
   useEffect(() => {
     try {

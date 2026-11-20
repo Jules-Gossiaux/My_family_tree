@@ -1765,8 +1765,13 @@ textarea {
 
 .btn-mini.btn-primary {
   border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--accent);
+  color: #201a12;
+}
+
+.btn-mini.btn-primary:hover:not(:disabled) {
+  background: #eeb570;
+  color: #201a12;
 }
 
 .directory-row {
