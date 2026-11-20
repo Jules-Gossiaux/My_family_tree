@@ -22,7 +22,12 @@ begin
 end;
 $$;
 
+-- « from public » ne retire que le privilège accordé au rôle PUBLIC. Supabase
+-- donne execute aux rôles nommés anon et authenticated sur tout le schéma
+-- public : sans cette deuxième ligne, n'importe quel visiteur pourrait vider
+-- un arbre par /rest/v1/rpc/_remove_family_data.
 revoke all on function public._remove_family_data(uuid) from public;
+revoke all on function public._remove_family_data(uuid) from anon, authenticated;
 
 -- Suppression définitive : réservée à l'admin. Personne ne devient admin,
 -- l'arbre disparaît avec toutes ses données.
