@@ -249,6 +249,21 @@ export default function App() {
   };
 
   const openFamily = async (familyId: Id) => {
+    // Cliquer sur l'arbre déjà ouvert ne doit pas vider les données : le dépôt
+    // ne change pas, donc aucun effet ne déclencherait un nouveau chargement.
+    if (familyId === cloudFamilyId) {
+      setCloudGateOpen(false);
+      if (data && !loadError) {
+        setToast(`Vous êtes déjà dans « ${cloudFamilyName} ».`);
+        return;
+      }
+      // Chargement précédent en échec ou jamais terminé : on force une tentative.
+      setData(null);
+      setLoadError(null);
+      setReloadToken((value) => value + 1);
+      return;
+    }
+
     // On vide d'abord les données : un changement d'arbre ne doit jamais
     // écrire l'ancien document dans le nouveau dépôt.
     setData(null);
