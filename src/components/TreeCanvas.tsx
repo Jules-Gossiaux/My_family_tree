@@ -455,6 +455,7 @@ export default function TreeCanvas({
                 const unionId = unionIdOfEdge(edge.id);
                 if (unionId) setHighlight(descentOf.from(unionId));
               }}
+              onMouseLeave={() => setHighlight(null)}
             >
               {edge.title && <title>{edge.title}</title>}
             </path>
@@ -469,6 +470,7 @@ export default function TreeCanvas({
                 node.y + node.height / 2
               })`}
               onMouseEnter={() => setHighlight(descentOf.from(node.refId))}
+              onMouseLeave={() => setHighlight(null)}
             >
               <circle r={node.width / 2} />
               <circle className="union-core" r="3" />
