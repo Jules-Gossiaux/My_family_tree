@@ -11,13 +11,17 @@ import {
   type CloudFamily,
 } from '../domain/supabase';
 import type { Id } from '../domain/types';
+import FamilyActionDialog from './FamilyActionDialog';
 
 interface CloudGateProps {
   currentFamilyId: Id | null;
+  currentUserId: Id;
   localImport: { persons: number } | null;
   onReady: (familyId: Id) => Promise<void>;
   onImportLocal: (name: string) => Promise<void>;
   onDismissImport: () => void;
+  onExport: () => void;
+  onFamilyRemoved: (familyId: Id, action: 'deleted' | 'left') => void;
   onUserChange: (user: { id: Id; email: string } | null) => void;
   onClose?: () => void;
 }
@@ -27,10 +31,13 @@ type AuthMode = 'signin' | 'signup';
 
 export default function CloudGate({
   currentFamilyId,
+  currentUserId,
   localImport,
   onReady,
   onImportLocal,
   onDismissImport,
+  onExport,
+  onFamilyRemoved,
   onUserChange,
   onClose,
 }: CloudGateProps) {
@@ -43,6 +50,7 @@ export default function CloudGate({
   const [importName, setImportName] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [user, setUser] = useState<CloudUser | null>(null);
+  const [actionFamily, setActionFamily] = useState<CloudFamily | null>(null);
   const [busy, setBusy] = useState(false);
   const notifyUser = useRef(onUserChange);
   notifyUser.current = onUserChange;
@@ -133,6 +141,12 @@ export default function CloudGate({
     run(async () => {
       await onImportLocal(importName.trim() || 'Arbre importé');
     });
+
+  const handleFamilyRemoved = (familyId: Id, action: 'deleted' | 'left') => {
+    setActionFamily(null);
+    void listFamilies().then(setFamilies);
+    onFamilyRemoved(familyId, action);
+  };
 
   return (
     <div className="modal-overlay">
@@ -277,20 +291,30 @@ export default function CloudGate({
                 ) : (
                   <div className="cloud-family-list">
                     {families.map((family) => (
-                      <button
-                        key={family.id}
-                        type="button"
-                        className="cloud-family-choice"
-                        disabled={busy}
-                        onClick={() => openFamily(family.id)}
-                      >
-                        <span>
-                          <strong>{family.name}</strong>
-                          {family.id === currentFamilyId && <em>actuel</em>}
-                        </span>
-                        <small>{family.role}</small>
-                        <span aria-hidden="true">→</span>
-                      </button>
+                      <div className="cloud-family-row" key={family.id}>
+                        <button
+                          type="button"
+                          className="cloud-family-choice"
+                          disabled={busy}
+                          onClick={() => openFamily(family.id)}
+                        >
+                          <span>
+                            <strong>{family.name}</strong>
+                            {family.id === currentFamilyId && <em>actuel</em>}
+                          </span>
+                          <small>{family.role}</small>
+                          <span aria-hidden="true">→</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button family-action-button"
+                          aria-label={`Supprimer ou quitter l’arbre ${family.name}`}
+                          title="Supprimer ou quitter cet arbre"
+                          onClick={() => setActionFamily(family)}
+                        >
+                          ⋯
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -362,6 +386,16 @@ export default function CloudGate({
           </footer>
         )}
       </div>
+
+      {actionFamily && (
+        <FamilyActionDialog
+          family={actionFamily}
+          currentUserId={currentUserId}
+          onClose={() => setActionFamily(null)}
+          onExport={onExport}
+          onDone={handleFamilyRemoved}
+        />
+      )}
     </div>
   );
 }

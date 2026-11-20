@@ -30,6 +30,13 @@ export interface CloudFamily {
   role: 'admin' | 'editor' | 'viewer';
 }
 
+export interface CloudFamilyMember {
+  id: Id;
+  email: string;
+  role: CloudFamily['role'];
+  joinedAt: string;
+}
+
 export function isOnlineMode(): boolean {
   return supabase !== null;
 }
@@ -116,6 +123,60 @@ export async function createInvitation(
   });
   if (error) throw new Error(error.message);
   return data as string;
+}
+
+/** Membres d'un arbre, accessibles seulement à un admin. */
+export async function listFamilyMembers(
+  familyId: Id,
+): Promise<CloudFamilyMember[]> {
+  if (!supabase) throw new Error('Supabase non configuré.');
+  const { data, error } = await supabase.rpc('list_family_members', {
+    p_family: familyId,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((member: {
+    id: string;
+    email: string | null;
+    role: string;
+    joined_at: string;
+  }) => ({
+    id: member.id as Id,
+    email: member.email ?? '',
+    role: (member.role as CloudFamily['role']) ?? 'viewer',
+    joinedAt: member.joined_at as string,
+  }));
+}
+
+/** Nombre de membres d'un arbre auquel on appartient. */
+export async function familyMemberCount(familyId: Id): Promise<number> {
+  if (!supabase) throw new Error('Supabase non configuré.');
+  const { data, error } = await supabase.rpc('family_member_count', {
+    p_family: familyId,
+  });
+  if (error) throw new Error(error.message);
+  return Number(data ?? 0);
+}
+
+/** Suppression définitive d'un arbre, réservée à l'admin. */
+export async function deleteFamily(familyId: Id): Promise<void> {
+  if (!supabase) throw new Error('Supabase non configuré.');
+  const { error } = await supabase.rpc('delete_family', {
+    p_family: familyId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Quitter un arbre ; un admin doit désigner son successeur. */
+export async function leaveFamily(
+  familyId: Id,
+  newAdminId?: Id,
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase non configuré.');
+  const { error } = await supabase.rpc('leave_family', {
+    p_family: familyId,
+    p_new_admin: newAdminId ?? null,
+  });
+  if (error) throw new Error(error.message);
 }
 
 /** Répertoire de familles : remplace localStorage dès que le cloud est actif. */

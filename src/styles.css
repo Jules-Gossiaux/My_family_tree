@@ -3111,6 +3111,23 @@ button.drawer-item:disabled {
   margin-top: 10px;
 }
 
+.cloud-family-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cloud-family-row .cloud-family-choice {
+  flex: 1;
+  min-width: 0;
+}
+
+.family-action-button {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+}
+
 .cloud-family-choice {
   display: flex;
   align-items: center;
@@ -3206,6 +3223,37 @@ button.drawer-item:disabled {
 
 .share-actions .drawer-item {
   margin-bottom: 0;
+}
+
+.family-action-modal {
+  width: min(500px, 100%);
+}
+
+.family-action-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.drawer-item.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.family-confirm {
+  margin-top: 14px;
+}
+
+.btn-danger-confirm {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #201a12;
+}
+
+.btn-danger-confirm:hover:not(:disabled) {
+  background: #e88a82;
+  color: #201a12;
 }
 
 @media (max-width: 900px) {

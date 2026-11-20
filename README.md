@@ -64,7 +64,7 @@ Il n'y a plus de mode local : le document vit dans `family_documents` et les mé
 
 ### 1. Créer le schéma
 
-Dans le projet Supabase, ouvrir **SQL Editor** et exécuter [`supabase/migrations/20261118210000_v3.sql`](supabase/migrations/20261118210000_v3.sql), puis [`supabase/migrations/20261120142000_jeton_editeur.sql`](supabase/migrations/20261120142000_jeton_editeur.sql). Le premier script crée :
+Dans le projet Supabase, ouvrir **SQL Editor** et exécuter, dans cet ordre : [`20261118210000_v3.sql`](supabase/migrations/20261118210000_v3.sql), [`20261120142000_jeton_editeur.sql`](supabase/migrations/20261120142000_jeton_editeur.sql), puis [`20261120143500_gestion_arbres.sql`](supabase/migrations/20261120143500_gestion_arbres.sql). Le premier script crée :
 
 - `families`, `family_members`, `family_documents`, `invitations` ;
 - les fonctions `family_role()`, `can_write()`, `can_admin()`, `create_family()`, `accept_invitation()` et `create_invitation()` ;
@@ -101,7 +101,16 @@ Un admin génère le jeton depuis l'icône **Partager** de la barre supérieure 
 select public.create_invitation('UUID_DE_L_ARBRE', 'editor');
 ```
 
-### 5. Déployer sur Vercel
+### 5. Supprimer ou quitter un arbre
+
+Depuis la modale des arbres, le bouton **⋯** de chaque ligne ouvre une action distincte :
+
+- **Supprimer définitivement** : réservé à l'admin, avec confirmation par le nom de l'arbre et export possible avant suppression. L'arbre, ses médias, ses invitations et ses membres sont supprimés ; personne ne devient admin.
+- **Quitter l'arbre** : retire seulement sa propre adhésion. Si la personne est la dernière, l'arbre est supprimé. Si elle est admin et que d'autres membres restent, elle choisit explicitement le nouveau admin dans la liste des membres.
+
+Ces opérations passent par les fonctions RPC `delete_family()` et `leave_family()` de la migration `20261120143500_gestion_arbres.sql`, car la RLS n'autorise pas de suppression directe côté navigateur.
+
+### 6. Déployer sur Vercel
 
 Importer le dépôt dans Vercel, framework **Vite**, commande de build `npm run build`, répertoire de sortie `dist`. Déclarer les deux variables `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` dans les variables d'environnement du projet.
 
@@ -122,4 +131,4 @@ Importer le dépôt dans Vercel, framework **Vite**, commande de build `npm run 
 
 ## Statut
 
-Version v3 : application 100 % en ligne, connexion/création de compte, arbres partagés et jetons d'accès en modification générés par l'admin. Header allégé avec icône Partager, Me recentrer, tiroir d'outils sur desktop et burger sur mobile. Un workflow de propositions à valider par l'admin reste à étudier ; la synchronisation multi-appareils des réglages personnels reste à finaliser.
+Version v3 : application 100 % en ligne, connexion/création de compte, arbres partagés et jetons d'accès en modification générés par l'admin. Suppression et départ d'un arbre avec transfert explicite de l'administration. Header allégé avec icône Partager, Me recentrer, tiroir d'outils sur desktop et burger sur mobile.

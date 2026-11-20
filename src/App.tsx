@@ -326,6 +326,39 @@ export default function App() {
     setCloudGateOpen(true);
   };
 
+  const handleFamilyRemoved = async (
+    familyId: Id,
+    action: 'deleted' | 'left',
+  ) => {
+    const word = action === 'deleted' ? 'supprimé' : 'quitté';
+    if (familyId !== cloudFamilyId) {
+      setToast(`Arbre ${word}.`);
+      return;
+    }
+
+    try {
+      window.localStorage.removeItem(
+        `simple-family-tree:family:${profileId}`,
+      );
+    } catch {
+      // Préférence non critique.
+    }
+    setCloudFamilyId(null);
+    setCloudRole(null);
+    setData(null);
+    setSelectedId(null);
+    setLoadError(null);
+
+    const remaining = await listFamilies();
+    if (remaining.length > 0) {
+      await openFamily(remaining[0].id);
+      setToast(`Arbre ${word}. Un autre arbre a été ouvert.`);
+    } else {
+      setCloudGateOpen(true);
+      setToast(`Arbre ${word}. Créez ou rejoignez un arbre pour continuer.`);
+    }
+  };
+
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [eventDialog, setEventDialog] = useState<{ eventId?: Id } | null>(null);
   const [portraits, setPortraits] = useState<Map<Id, CardPortrait>>(new Map());
@@ -1046,10 +1079,15 @@ export default function App() {
   const cloudGate = cloudGateOpen ? (
     <CloudGate
       currentFamilyId={cloudFamilyId}
+      currentUserId={profileId}
       localImport={localSeed ? { persons: localSeed.persons.length } : null}
       onReady={openFamily}
       onImportLocal={importLocalTree}
       onDismissImport={dismissLocalImport}
+      onExport={() => void handleExport()}
+      onFamilyRemoved={(familyId, action) =>
+        void handleFamilyRemoved(familyId, action)
+      }
       onUserChange={(user) => setProfileId(user?.id ?? ANONYMOUS_PROFILE_ID)}
       onClose={cloudFamilyId ? () => setCloudGateOpen(false) : undefined}
     />
