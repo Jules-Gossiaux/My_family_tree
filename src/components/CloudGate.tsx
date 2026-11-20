@@ -11,29 +11,38 @@ import {
   supabaseConfigured,
   type CloudFamily,
 } from '../domain/supabase';
-import type { FamilyData, Id } from '../domain/types';
+import type { Id } from '../domain/types';
 
 interface CloudGateProps {
-  localData: FamilyData;
+  currentFamilyId: Id | null;
+  localImport: { persons: number } | null;
   onReady: (familyId: Id) => Promise<void>;
-  onCancel: () => void;
-  onUserChange?: (user: { id: Id; email: string } | null) => void;
+  onImportLocal: (name: string) => Promise<void>;
+  onDismissImport: () => void;
+  onUserChange: (user: { id: Id; email: string } | null) => void;
+  onClose?: () => void;
 }
 
 type CloudUser = { id: Id; email: string };
+type AuthMode = 'signin' | 'signup';
 
 export default function CloudGate({
-  localData,
+  currentFamilyId,
+  localImport,
   onReady,
-  onCancel,
+  onImportLocal,
+  onDismissImport,
   onUserChange,
+  onClose,
 }: CloudGateProps) {
+  const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [families, setFamilies] = useState<CloudFamily[]>([]);
-  const [selected, setSelected] = useState<Id | null>(null);
+  const [tokenFamily, setTokenFamily] = useState<Id | null>(null);
   const [newFamily, setNewFamily] = useState('');
   const [invite, setInvite] = useState('');
+  const [importName, setImportName] = useState('');
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [user, setUser] = useState<CloudUser | null>(null);
@@ -51,31 +60,32 @@ export default function CloudGate({
 
   useEffect(() => {
     if (!user) return;
-    void listFamilies().then((items) => {
-      setFamilies(items);
-      setSelected((current) => current ?? items[0]?.id ?? null);
-    });
+    void listFamilies().then(setFamilies);
   }, [user]);
+
+  useEffect(() => {
+    const admins = families.filter((family) => family.role === 'admin');
+    setTokenFamily((current) =>
+      admins.some((family) => family.id === current)
+        ? current
+        : (admins[0]?.id ?? null),
+    );
+  }, [families]);
 
   if (!supabaseConfigured) {
     return (
       <div className="modal-overlay">
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modal-header">
-            <h2>Cloud non configuré</h2>
+            <h2>Configuration en ligne requise</h2>
           </div>
           <div className="modal-body">
             <p className="panel-note">
-              Définissez <code>VITE_SUPABASE_URL</code> et{' '}
-              <code>VITE_SUPABASE_ANON_KEY</code>, puis relancez l’application
-              pour activer les comptes et le stockage en ligne.
+              Cet arbre fonctionne uniquement en ligne. Définissez{' '}
+              <code>VITE_SUPABASE_URL</code> et{' '}
+              <code>VITE_SUPABASE_ANON_KEY</code>, puis relancez l’application.
             </p>
           </div>
-          <footer className="modal-actions">
-            <button type="button" className="btn btn-primary" onClick={onCancel}>
-              Rester en local
-            </button>
-          </footer>
         </div>
       </div>
     );
@@ -93,25 +103,122 @@ export default function CloudGate({
     }
   };
 
+  const authenticate = () =>
+    run(async () => {
+      if (mode === 'signin') {
+        await signIn(email, password);
+        setUser(await currentUser());
+        return;
+      }
+      await signUp(email, password);
+      const created = await currentUser();
+      if (created) {
+        setUser(created);
+        setNotice('Compte créé. Choisissez maintenant votre arbre.');
+      } else {
+        setNotice(
+          'Compte créé. Vérifiez votre e-mail si nécessaire, puis connectez-vous.',
+        );
+      }
+    });
+
+  const openFamily = (familyId: Id) =>
+    run(async () => {
+      await onReady(familyId);
+    });
+
+  const createAndOpen = () =>
+    run(async () => {
+      const familyId = await createFamily(newFamily.trim());
+      setNewFamily('');
+      await onReady(familyId);
+    });
+
+  const joinWithToken = () =>
+    run(async () => {
+      const familyId = await acceptInvitation(invite);
+      setInvite('');
+      await onReady(familyId);
+    });
+
+  const importLocalTree = () =>
+    run(async () => {
+      await onImportLocal(importName.trim() || 'Arbre importé');
+    });
+
+  const generateToken = () =>
+    run(async () => {
+      if (!tokenFamily) return;
+      setAccessToken(await createInvitation(tokenFamily));
+    });
+
+  const adminFamilies = families.filter((family) => family.role === 'admin');
+
   return (
     <div className="modal-overlay">
       <div className="modal cloud-modal" role="dialog" aria-modal="true">
         <div className="modal-header">
-          <h2>Arbre en ligne</h2>
-          <p className="modal-subtitle">
-            Chaque personne connectée aura son propre marqueur « Moi ». Les
-            données familiales restent partagées selon les rôles.
-          </p>
+          <div>
+            <h2>{user ? 'Quel arbre ouvrir ?' : 'Accéder à votre arbre'}</h2>
+            <p>
+              {user
+                ? `Connecté en tant que ${user.email}`
+                : 'Connectez-vous ou créez un compte pour retrouver votre arbre partagé.'}
+            </p>
+          </div>
+          {user && (
+            <button
+              type="button"
+              className="btn btn-mini"
+              disabled={busy}
+              onClick={() => {
+                void signOut().then(() => {
+                  setUser(null);
+                  notifyUser.current?.(null);
+                });
+              }}
+            >
+              Se déconnecter
+            </button>
+          )}
         </div>
+
         <div className="modal-body cloud-body">
-          {notice && <div className="dialog-notice is-error">{notice}</div>}
+          {notice && <div className="dialog-notice is-info">{notice}</div>}
 
           {!user ? (
             <div className="cloud-auth">
+              <div className="cloud-tabs" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'signin'}
+                  className={mode === 'signin' ? 'is-active' : ''}
+                  onClick={() => {
+                    setMode('signin');
+                    setNotice(null);
+                  }}
+                >
+                  Se connecter
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'signup'}
+                  className={mode === 'signup' ? 'is-active' : ''}
+                  onClick={() => {
+                    setMode('signup');
+                    setNotice(null);
+                  }}
+                >
+                  Créer un compte
+                </button>
+              </div>
               <label className="field">
                 <span>E-mail</span>
                 <input
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                 />
@@ -120,133 +227,181 @@ export default function CloudGate({
                 <span>Mot de passe</span>
                 <input
                   type="password"
+                  autoComplete={
+                    mode === 'signin' ? 'current-password' : 'new-password'
+                  }
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') void authenticate();
+                  }}
                 />
               </label>
-              <div className="cloud-actions">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={busy || !email || password.length < 6}
-                  onClick={() =>
-                    void run(async () => {
-                      await signIn(email, password);
-                      setUser(await currentUser());
-                    })
-                  }
-                >
-                  Se connecter
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={busy || !email || password.length < 6}
-                  onClick={() =>
-                    void run(async () => {
-                      await signUp(email, password);
-                      setNotice('Compte créé. Vérifiez votre e-mail si nécessaire.');
-                    })
-                  }
-                >
-                  Créer un compte
-                </button>
-              </div>
+              <button
+                type="button"
+                className="btn btn-primary cloud-primary"
+                disabled={busy || !email || password.length < 6}
+                onClick={() => void authenticate()}
+              >
+                {mode === 'signin' ? 'Se connecter' : 'Créer un compte'}
+              </button>
+              <p className="panel-note cloud-privacy">
+                Vos données sont enregistrées en ligne et visibles uniquement
+                par les personnes que vous invitez.
+              </p>
             </div>
           ) : (
             <>
-              <p className="panel-note">Connecté : {user.email}</p>
+              {localImport && (
+                <section className="cloud-section cloud-import">
+                  <h3>Ancien arbre sur cet appareil</h3>
+                  <p className="panel-note">
+                    {localImport.persons} personne
+                    {localImport.persons > 1 ? 's' : ''} trouvée
+                    {localImport.persons > 1 ? 's' : ''}. Importez-le une seule
+                    fois dans un nouvel arbre en ligne.
+                  </p>
+                  <div className="cloud-inline">
+                    <input
+                      value={importName}
+                      placeholder="Nom de l’arbre importé"
+                      onChange={(event) => setImportName(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-mini btn-primary"
+                      disabled={busy}
+                      onClick={() => void importLocalTree()}
+                    >
+                      Importer et ouvrir
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-mini"
+                      disabled={busy}
+                      onClick={onDismissImport}
+                    >
+                      Ignorer
+                    </button>
+                  </div>
+                </section>
+              )}
+
               <section className="cloud-section">
-                <h3>Votre arbre</h3>
+                <h3>Vos arbres</h3>
                 {families.length === 0 ? (
                   <p className="panel-note">
-                    Aucun arbre partagé. Créez-en un pour commencer.
+                    Aucun arbre pour le moment. Créez-en un ou rejoignez un
+                    proche avec un jeton.
                   </p>
                 ) : (
                   <div className="cloud-family-list">
                     {families.map((family) => (
-                      <label key={family.id} className="cloud-family">
-                        <input
-                          type="radio"
-                          name="family"
-                          checked={selected === family.id}
-                          onChange={() => setSelected(family.id)}
-                        />
-                        <span>{family.name}</span>
+                      <button
+                        key={family.id}
+                        type="button"
+                        className="cloud-family-choice"
+                        disabled={busy}
+                        onClick={() => openFamily(family.id)}
+                      >
+                        <span>
+                          <strong>{family.name}</strong>
+                          {family.id === currentFamilyId && <em>actuel</em>}
+                        </span>
                         <small>{family.role}</small>
-                      </label>
+                        <span aria-hidden="true">→</span>
+                      </button>
                     ))}
                   </div>
                 )}
-                <div className="cloud-new">
+              </section>
+
+              <section className="cloud-section">
+                <h3>Créer un nouvel arbre</h3>
+                <p className="panel-note">
+                  Vous en devenez l’administrateur et pourrez inviter vos
+                  proches.
+                </p>
+                <div className="cloud-inline">
                   <input
                     value={newFamily}
                     placeholder="Nom du nouvel arbre"
                     onChange={(event) => setNewFamily(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && newFamily.trim()) {
+                        void createAndOpen();
+                      }
+                    }}
                   />
                   <button
                     type="button"
                     className="btn btn-mini btn-primary"
                     disabled={busy || !newFamily.trim()}
-                    onClick={() =>
-                      void run(async () => {
-                        const id = await createFamily(newFamily.trim());
-                        setFamilies(await listFamilies());
-                        setSelected(id);
-                        setNewFamily('');
-                      })
-                    }
+                    onClick={() => void createAndOpen()}
                   >
-                    Créer
+                    Créer et ouvrir
                   </button>
                 </div>
               </section>
 
               <section className="cloud-section">
-                <h3>Invitation reçue</h3>
-                <div className="cloud-new">
+                <h3>Rejoindre un arbre</h3>
+                <p className="panel-note">
+                  Un proche vous a donné un jeton ? Saisissez-le ci-dessous.
+                </p>
+                <div className="cloud-inline">
                   <input
                     value={invite}
-                    placeholder="Jeton d’accès"
+                    placeholder="Jeton d’invitation"
                     onChange={(event) => setInvite(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && invite.trim()) {
+                        void joinWithToken();
+                      }
+                    }}
                   />
                   <button
                     type="button"
                     className="btn btn-mini"
                     disabled={busy || !invite.trim()}
-                    onClick={() =>
-                      void run(async () => {
-                        const id = await acceptInvitation(invite);
-                        setFamilies(await listFamilies());
-                        setSelected(id);
-                        setInvite('');
-                      })
-                    }
+                    onClick={() => void joinWithToken()}
                   >
                     Rejoindre
                   </button>
                 </div>
               </section>
 
-              {selected && families.find((family) => family.id === selected)?.role === 'admin' && (
+              {adminFamilies.length > 0 && (
                 <section className="cloud-section">
-                  <h3>Jeton à transmettre</h3>
+                  <h3>Inviter un proche</h3>
                   <p className="panel-note">
-                    Vous êtes le seul à pouvoir en générer. La personne crée son compte,
-                    saisit ce jeton et accède à cet arbre — sans attendre d’e-mail.
+                    Seul un administrateur peut générer un jeton. La personne
+                    crée son compte, saisit ce jeton et accède à l’arbre.
                   </p>
-                  <button
-                    type="button"
-                    className="btn btn-mini"
-                    disabled={busy}
-                    onClick={() =>
-                      void run(async () => {
-                        setAccessToken(await createInvitation(selected));
-                      })
-                    }
-                  >
-                    Générer un jeton
-                  </button>
+                  <div className="cloud-inline">
+                    <select
+                      value={tokenFamily ?? ''}
+                      onChange={(event) => {
+                        setTokenFamily(event.target.value as Id);
+                        setAccessToken(null);
+                      }}
+                      aria-label="Arbre pour lequel générer un jeton"
+                    >
+                      {adminFamilies.map((family) => (
+                        <option key={family.id} value={family.id}>
+                          {family.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-mini"
+                      disabled={busy || !tokenFamily}
+                      onClick={() => void generateToken()}
+                    >
+                      Générer un jeton
+                    </button>
+                  </div>
                   {accessToken && (
                     <input
                       className="cloud-token"
@@ -258,45 +413,17 @@ export default function CloudGate({
                   )}
                 </section>
               )}
-
-              <p className="panel-note">
-                Votre arbre local ({localData.persons.length} personne
-                {localData.persons.length > 1 ? 's' : ''}) reste intact. La
-                première synchronisation écrira ce document dans l’arbre choisi
-                ; assurez-vous d’avoir exporté une sauvegarde si un arbre existe
-                déjà en ligne.
-              </p>
             </>
           )}
         </div>
-        <footer className="modal-actions">
-          <button type="button" className="btn" onClick={onCancel}>
-            Rester en local
-          </button>
-          {user && (
-            <button
-              type="button"
-              className="btn"
-              onClick={() => void signOut().then(() => setUser(null))}
-            >
-              Se déconnecter
+
+        {onClose && user && (
+          <footer className="modal-actions">
+            <button type="button" className="btn" onClick={onClose}>
+              Retour à l’arbre
             </button>
-          )}
-          {user && selected && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  await onReady(selected);
-                })
-              }
-            >
-              Ouvrir cet arbre en ligne
-            </button>
-          )}
-        </footer>
+          </footer>
+        )}
       </div>
     </div>
   );

@@ -9,9 +9,9 @@ import type {
 import { localMediaStore, type MediaStore } from './mediaStore';
 
 /**
- * Pont Supabase. Le client n'est créé que si les deux variables publiques sont
- * présentes ; sans elles, l'application reste en local. Aucune clé secrète ne
- * doit jamais apparaître ici : seule la clé anon, destinée au navigateur.
+ * Pont Supabase. L'application est 100 % en ligne : ces deux variables
+ * publiques sont nécessaires au démarrage. Aucune clé secrète ne doit jamais
+ * apparaître ici : seule la clé anon, destinée au navigateur.
  */
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;

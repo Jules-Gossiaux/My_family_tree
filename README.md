@@ -42,7 +42,7 @@ npm install
 npm run dev
 ```
 
-Le projet démarre sur un arbre vide. Sans configuration Supabase, **tout reste local** : `localStorage` pour le document JSON versionné `simple-family-tree:v3`, IndexedDB pour les fichiers. Aucun compte, aucun backend, aucune donnée envoyée sur le réseau.
+Le projet fonctionne uniquement en ligne : au premier lancement, la modale **Accéder à votre arbre** s'ouvre pour se connecter ou créer un compte. Les deux variables Supabase sont obligatoires ; sans elles, l'application affiche un message de configuration et n'enregistre rien localement.
 
 Build de production :
 
@@ -58,9 +58,9 @@ npm test
 npm run typecheck
 ```
 
-## Mode en ligne (Supabase)
+## Fonctionnement en ligne (Supabase)
 
-Le mode local reste le comportement par défaut. Le cloud s'active uniquement si les deux variables d'environnement sont présentes au démarrage.
+Il n'y a plus de mode local : le document vit dans `family_documents` et les médias dans le bucket Storage. Le `localStorage` ne sert plus qu'aux réglages personnels et à mémoriser le dernier arbre ouvert.
 
 ### 1. Créer le schéma
 
@@ -81,21 +81,21 @@ cp .env.example .env.local
 
 Renseigner `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` avec les valeurs du projet (**clé anon publique uniquement — jamais la clé `service_role` dans le navigateur**), puis relancer `npm run dev`.
 
-### 3. Première synchronisation
+### 3. Première ouverture
 
-Le bouton **Passer au cloud** apparaît dans la barre supérieure. Il faut ensuite :
+La modale s'ouvre dès que l'utilisateur n'a pas de session :
 
-1. créer un compte ou se connecter ;
-2. créer un arbre (le créateur en devient admin) ou saisir un jeton d'invitation ;
-3. cliquer sur **Ouvrir cet arbre en ligne**.
+1. se connecter ou créer un compte ;
+2. ouvrir un arbre existant, en créer un, ou saisir un jeton d'invitation ;
+3. si un ancien arbre local est détecté, choisir **Importer et ouvrir** une seule fois ou **Ignorer**.
 
-À cette étape, l'application lit **d'abord l'arbre en ligne** : s'il contient déjà des personnes, elles sont conservées et l'arbre local n'est pas écrasé — c'est le cas quand on ouvre le même arbre depuis un autre ordinateur. Sinon, l'application copie **d'abord les octets des médias** d'IndexedDB vers Storage, **puis le document JSON**. Les clés restent inchangées : `SupabaseMediaStore` préfixe chaque clé par l'identifiant de l'arbre cloud, ce qui satisfait les politiques RLS. L'arbre local n'est jamais effacé.
+Ouvrir un arbre existant ne l'écrase jamais avec un document vide : le contenu du cloud fait foi. Le cas échéant, la migration locale copie d'abord les octets des médias d'IndexedDB vers Storage, puis le document JSON. Les clés restent inchangées : `SupabaseMediaStore` préfixe chaque clé par l'identifiant de l'arbre, ce qui satisfait les RLS. Les sauvegardes du navigateur sont supprimées après un import réussi.
 
 Si certains médias sont absents en local ou refusés par Storage, un message précise le nombre concerné ; l'arbre reste utilisable et ces fichiers peuvent être réimportés depuis un export JSON.
 
 ### 4. Inviter quelqu'un
 
-Un admin génère le jeton depuis **Passer au cloud → Jeton à transmettre** (ou via la fonction SQL `create_invitation`). La personne crée son compte avec son e-mail et son mot de passe, puis saisit le jeton dans **Invitation reçue** : aucune adresse n'est imposée, le jeton expire après 90 jours et ne sert qu'une fois.
+Un admin génère le jeton depuis la modale, section **Inviter un proche** (ou via la fonction SQL `create_invitation`). La personne crée son compte avec son e-mail et son mot de passe, puis choisit **Rejoindre un arbre** et saisit le jeton : aucune adresse n'est imposée, le jeton expire après 90 jours et ne sert qu'une fois.
 
 ```sql
 select public.create_invitation('UUID_DE_L_ARBRE', 'editor');
@@ -116,10 +116,10 @@ Importer le dépôt dans Vercel, framework **Vite**, commande de build `npm run 
 
 - `src/domain/` : modèle v3 (`types.ts`), opérations métier (`operations.ts`), événements de vie (`lifeEvents.ts`), répertoires lieux/sources (`directories.ts`), migrations et validation (`repository.ts`), stockage des médias (`mediaStore.ts`), dates floues (`dates.ts`), pont Supabase (`supabase.ts`).
 - `src/layout/` : moteur de placement généalogique maison (`classic.ts`), façade (`layout.ts`), types partagés (`model.ts`), vues (`views.ts`), arbitrage des modes (`grouping.ts`).
-- `src/components/` : canevas SVG, fiche personne, panneau latéral à onglets, dialogues de création/édition, galerie, boîte à médias, frise, réglages, sauvegardes et accès au cloud.
+- `src/components/` : canevas SVG, fiche personne, panneau latéral à onglets, dialogues de création/édition, galerie, boîte à médias, frise, réglages, tiroir d'outils et modale de compte.
 - `src/test/` : tests Vitest du modèle, des opérations, du placement, des vues et des migrations.
 - `supabase/migrations/` : schéma SQL, rôles, RLS et Storage.
 
 ## Statut
 
-Version v3 : mode local complet et testé, mode Supabase opérationnel avec connexion e-mail/mot de passe et jetons d'accès générés par l'admin. Les rôles et la synchronisation multi-appareils des réglages personnels restent à finaliser.
+Version v3 : application 100 % en ligne, connexion/création de compte, arbres partagés et jetons d'accès générés par l'admin. Header allégé avec tiroir d'outils sur desktop et burger sur mobile. Les rôles fins et la synchronisation multi-appareils des réglages personnels restent à finaliser.

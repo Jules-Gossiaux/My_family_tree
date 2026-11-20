@@ -7,22 +7,26 @@ import {
 } from 'react';
 import TreeCanvas, { type FocusRequest } from './components/TreeCanvas';
 import type { CardPortrait } from './components/PersonCard';
-import BackupDialog from './components/BackupDialog';
+import TopBar from './components/TopBar';
 import SettingsDialog from './components/SettingsDialog';
 import MediaInbox from './components/MediaInbox';
 import RelationshipDialog from './components/RelationshipDialog';
 import CloudGate from './components/CloudGate';
 import { resetMediaStore, setMediaStore } from './domain/mediaStore';
 import {
+  createFamily,
   currentUser,
+  listFamilies,
   migrateLocalMediaToCloud,
+  signOut,
   SupabaseFamilyRepository,
   SupabaseMediaStore,
+  supabase,
   supabaseConfigured,
 } from './domain/supabase';
 import {
   LocalSettingsStore,
-  LOCAL_PROFILE_ID,
+  LOCAL_PROFILE_ID as ANONYMOUS_PROFILE_ID,
   type SettingsStore,
   type ViewSettings,
 } from './domain/settings';
@@ -42,7 +46,6 @@ import {
   exportFamilyBundle,
   LocalFamilyRepository,
   parseFamilyDocument,
-  type BackupSummary,
 } from './domain/repository';
 import { mediaStore } from './domain/mediaStore';
 import { downloadGedcom } from './domain/gedcom';
@@ -92,16 +95,11 @@ import { normalizeSearch } from './domain/dates';
 import { personChoiceLabel, personContextLabel } from './domain/personChoices';
 import { computeLayout, structureKey, type TreeLayout } from './layout/layout';
 import {
-  VIEW_LABELS,
-  VIEW_MODES,
   computeFocusedView,
   isTreeViewMode,
   type TreeViewMode,
 } from './layout/views';
 import {
-  GROUPING_HINTS,
-  GROUPING_LABELS,
-  GROUPING_MODES,
   isGroupingMode,
   type GroupingMode,
 } from './layout/grouping';
@@ -157,25 +155,25 @@ function hintFor(kind: AddKind, data: FamilyData, personId?: Id): string {
 
 export default function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [backupOpen, setBackupOpen] = useState(false);
-  const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [branchStartId, setBranchStartId] = useState<Id | null>(null);
-  const [cloudGateOpen, setCloudGateOpen] = useState(false);
+  const [cloudGateOpen, setCloudGateOpen] = useState(true);
   const [cloudFamilyId, setCloudFamilyId] = useState<Id | null>(null);
+  const [cloudFamilyName, setCloudFamilyName] = useState('Mon arbre');
   const [cloudUser, setCloudUser] = useState<string | null>(null);
+  const [localSeed, setLocalSeed] = useState<FamilyData | null>(null);
   const [relationOpen, setRelationOpen] = useState(false);
   const [relationFrom, setRelationFrom] = useState<Id | null>(null);
-  // Les réglages de lecture sont personnels : clés par compte Auth en ligne,
-  // par profil `local` hors ligne. Les données familiales restent partagées.
-  const [profileId, setProfileId] = useState<Id>(LOCAL_PROFILE_ID);
+  // Les réglages de lecture restent personnels : clés par compte connecté.
+  // Le profil anonyme ne sert qu'avant l'ouverture de la session.
+  const [profileId, setProfileId] = useState<Id>(ANONYMOUS_PROFILE_ID);
   const settingsStore = useMemo(
     () => new LocalSettingsStore(profileId),
     [profileId],
   );
   const [settings, setSettings] = useState<ViewSettings>(() =>
-    new LocalSettingsStore(LOCAL_PROFILE_ID).load(),
+    new LocalSettingsStore(ANONYMOUS_PROFILE_ID).load(),
   );
   const loadedStore = useRef<SettingsStore | null>(null);
   const [data, setData] = useState<FamilyData | null>(null);
@@ -209,27 +207,18 @@ export default function App() {
 
   const [fitSignal, setFitSignal] = useState(0);
   const [search, setSearch] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const focusToken = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const localRepository = useMemo(
-    () =>
-      new LocalFamilyRepository({
-        onSaveError: (message) => setSaveError(message || null),
-        onRecovered: (message) => setToast(message),
-      }),
-    [],
-  );
   const repository = useMemo(
     () =>
       cloudFamilyId
         ? new SupabaseFamilyRepository(cloudFamilyId, {
             onSaveError: (message) => setSaveError(message || null),
           })
-        : localRepository,
-    [cloudFamilyId, localRepository],
+        : null,
+    [cloudFamilyId],
   );
 
   useEffect(() => {
@@ -242,38 +231,73 @@ export default function App() {
     }
   }, [cloudFamilyId]);
 
-  const enterCloud = async (familyId: Id) => {
-    if (!data) return;
-    const online = new SupabaseFamilyRepository(familyId);
-    // Un arbre déjà en ligne est la source de vérité : l'ouvrir depuis un autre
-    // poste ne doit jamais écraser les noms et les photos avec un arbre local vide.
-    const remote = await online.load();
-    if (remote.persons.length > 0) {
-      setCloudFamilyId(familyId);
-      setCloudGateOpen(false);
-      setToast('Arbre en ligne ouvert. Les données du cloud sont conservées ; votre arbre local reste intact.');
-      return;
+  const rememberFamily = (userId: Id, familyId: Id) => {
+    try {
+      window.localStorage.setItem(
+        `simple-family-tree:family:${userId}`,
+        familyId,
+      );
+    } catch {
+      // Mémorisation non critique.
     }
-    let mediaNote = '';
-    // Les octets sont copiés avant le document : même si l'interface recharge
-    // immédiatement après le basculement, aucun portrait ne manque.
-    if (!cloudFamilyId) {
-      const report = await migrateLocalMediaToCloud(familyId, data);
-      mediaNote = `${report.uploaded} média(s) envoyé(s)`;
-      if (report.missing.length) {
-        mediaNote += ` · ${report.missing.length} absent(s) en local`;
-      }
-      if (report.failed.length) {
-        mediaNote += ` · ${report.failed.length} envoi(s) refusé(s)`;
-      }
-    }
-    await online.save(data);
+  };
+
+  const openFamily = async (familyId: Id) => {
+    // On vide d'abord les données : un changement d'arbre ne doit jamais
+    // écrire l'ancien document dans le nouveau dépôt.
+    setData(null);
+    setSelectedId(null);
+    await new SupabaseFamilyRepository(familyId).load();
+    const families = await listFamilies();
+    const name =
+      families.find((family) => family.id === familyId)?.name ?? 'Mon arbre';
+    const user = await currentUser();
+    setCloudFamilyName(name);
     setCloudFamilyId(familyId);
+    setCloudUser(user?.email ?? null);
+    if (user) {
+      setProfileId(user.id);
+      rememberFamily(user.id, familyId);
+    }
     setCloudGateOpen(false);
+    setToast(`Arbre « ${name} » ouvert.`);
+  };
+
+  const importLocalTree = async (name: string) => {
+    if (!localSeed) return;
+    const familyId = await createFamily(name);
+    const report = await migrateLocalMediaToCloud(familyId, localSeed);
+    await new SupabaseFamilyRepository(familyId).save(localSeed);
+    await new LocalFamilyRepository().clear();
+    setLocalSeed(null);
+    await openFamily(familyId);
     setToast(
-      `Arbre en ligne${mediaNote ? ` · ${mediaNote}` : ''}. Vos réglages personnels suivent votre compte.`,
+      `Ancien arbre importé · ${report.uploaded} média(s) transféré(s).`,
     );
   };
+
+  const dismissLocalImport = () => {
+    try {
+      window.localStorage.setItem(
+        'simple-family-tree:local-import-dismissed',
+        '1',
+      );
+    } catch {
+      // Préférence non critique.
+    }
+    setLocalSeed(null);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setCloudFamilyId(null);
+    setData(null);
+    setSelectedId(null);
+    setCloudUser(null);
+    setProfileId(ANONYMOUS_PROFILE_ID);
+    setCloudGateOpen(true);
+  };
+
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [eventDialog, setEventDialog] = useState<{ eventId?: Id } | null>(null);
   const [portraits, setPortraits] = useState<Map<Id, CardPortrait>>(new Map());
@@ -284,6 +308,7 @@ export default function App() {
   const initialFocusApplied = useRef(false);
 
   useEffect(() => {
+    if (!repository) return;
     void repository
       .load()
       .then((loaded) => {
@@ -315,15 +340,85 @@ export default function App() {
     settingsStore.save(settings);
   }, [settings, settingsStore]);
 
+  // Ouverture automatique : sans session, la modale s'impose ; avec une
+  // session, on rouvre le dernier arbre utilisé ou le premier disponible.
   useEffect(() => {
     if (!supabaseConfigured) return;
-    void currentUser().then((user) => {
-      setProfileId(user?.id ?? LOCAL_PROFILE_ID);
+    let cancelled = false;
+    void (async () => {
+      const user = await currentUser();
+      if (cancelled) return;
+      if (!user) {
+        setCloudGateOpen(true);
+        return;
+      }
+      setProfileId(user.id);
+      const families = await listFamilies();
+      if (cancelled) return;
+      if (families.length === 0) {
+        setCloudGateOpen(true);
+        return;
+      }
+      let stored: string | null = null;
+      try {
+        stored = window.localStorage.getItem(
+          `simple-family-tree:family:${user.id}`,
+        );
+      } catch {
+        // Préférence non critique.
+      }
+      const family = families.find((item) => item.id === stored) ?? families[0];
+      await openFamily(family.id);
+    })().catch((error: unknown) => {
+      setToast(error instanceof Error ? error.message : 'Ouverture impossible.');
+      setCloudGateOpen(true);
     });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Le mode local n'existe plus : on ne lit le stockage du navigateur que
+  // pour proposer une migration unique vers le cloud.
+  useEffect(() => {
+    if (!supabaseConfigured) return;
+    try {
+      if (
+        window.localStorage.getItem(
+          'simple-family-tree:local-import-dismissed',
+        ) === '1'
+      ) {
+        return;
+      }
+    } catch {
+      return;
+    }
+    void new LocalFamilyRepository()
+      .load()
+      .then((seed) => {
+        if (seed.persons.length > 0) setLocalSeed(seed);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!data) return;
+    if (!supabase) return;
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) return;
+      setCloudFamilyId(null);
+      setData(null);
+      setSelectedId(null);
+      setCloudUser(null);
+      setProfileId(ANONYMOUS_PROFILE_ID);
+      setCloudGateOpen(true);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!repository || !data) return;
     void repository.save(data).catch(() => {
       // L'erreur est déjà remontée à l'interface via onSaveError.
     });
@@ -452,7 +547,6 @@ export default function App() {
   const chooseSearchResult = (person: Person) => {
     setSelectedId(person.id);
     setSearch(personLabel(person));
-    setSearchOpen(false);
     focusToken.current += 1;
     setFocusRequest({ id: person.id, token: focusToken.current });
   };
@@ -698,22 +792,6 @@ export default function App() {
     setToast('Fichier JSON exporté.');
   };
 
-  const handleOpenBackups = () => {
-    void repository.listBackups?.().then(setBackups);
-    setBackupOpen(true);
-  };
-
-  const handleRestoreBackup = (id: string) => {
-    if (!(repository instanceof LocalFamilyRepository)) return;
-    void repository.restoreBackup(id).then((restored: FamilyData) => {
-      setData(restored);
-      setSelectedId(null);
-      setFitSignal((value) => value + 1);
-      setBackupOpen(false);
-      setToast('Copie de secours restaurée.');
-    });
-  };
-
   const recenterOnMe = () => {
     if (!settings.meId) return;
     focusToken.current += 1;
@@ -741,6 +819,7 @@ export default function App() {
   };
 
   const handleReset = async () => {
+    if (!repository) return;
     if (
       !window.confirm(
         'Supprimer toutes les personnes et toutes les unions ? Cette action est irréversible.',
@@ -930,247 +1009,72 @@ export default function App() {
     };
   }, [data, pending, conflicts]);
 
+  const cloudGate = cloudGateOpen ? (
+    <CloudGate
+      currentFamilyId={cloudFamilyId}
+      localImport={localSeed ? { persons: localSeed.persons.length } : null}
+      onReady={openFamily}
+      onImportLocal={importLocalTree}
+      onDismissImport={dismissLocalImport}
+      onUserChange={(user) => setProfileId(user?.id ?? ANONYMOUS_PROFILE_ID)}
+      onClose={cloudFamilyId ? () => setCloudGateOpen(false) : undefined}
+    />
+  ) : null;
+
+  if (!supabaseConfigured) {
+    return (
+      <div className="app-loading">
+        Configuration en ligne requise pour ouvrir l’arbre.
+      </div>
+    );
+  }
+
   if (!data || !layout) {
-    return <div className="app-loading">Chargement de l’arbre…</div>;
+    return (
+      <>
+        <div className="app-loading">Chargement de l’arbre…</div>
+        {cloudGate}
+      </>
+    );
   }
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
-          <div>
-            <h1>Arbre généalogique</h1>
-            <p>Vue globale · aucune racine</p>
-          </div>
-        </div>
-        <div className="topbar-actions">
-          <div className="search-box">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="10.5" cy="10.5" r="6.5" />
-              <path d="m15.5 15.5 4 4" />
-            </svg>
-            <input
-              ref={searchInputRef}
-              value={search}
-              placeholder="Rechercher une personne…"
-              aria-label="Rechercher une personne dans l’arbre"
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setSearchOpen(true);
-              }}
-              onFocus={() => setSearchOpen(true)}
-              onBlur={() => {
-                // On laisse le temps d'un clic sur un résultat avant de fermer.
-                window.setTimeout(() => setSearchOpen(false), 150);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && searchResults.length > 0) {
-                  event.preventDefault();
-                  chooseSearchResult(searchResults[0]);
-                }
-                if (event.key === 'Escape') {
-                  setSearch('');
-                  setSearchOpen(false);
-                  searchInputRef.current?.blur();
-                }
-              }}
-            />
-            {search && (
-              <button
-                type="button"
-                className="search-clear"
-                aria-label="Effacer la recherche"
-                onClick={() => {
-                  setSearch('');
-                  setSearchOpen(false);
-                  searchInputRef.current?.focus();
-                }}
-              >
-                ×
-              </button>
-            )}
-            {searchOpen && search.trim() !== '' && (
-              <div className="search-results">
-                {searchResults.length === 0 ? (
-                  <p className="search-empty">Aucune personne trouvée.</p>
-                ) : (
-                  <>
-                    <p className="search-help">
-                      Tous les résultats sont surlignés dans l’arbre ; Entrée
-                      recentre sur le premier.
-                    </p>
-                    {searchResults.map((person) => (
-                      <button
-                        key={person.id}
-                        type="button"
-                        className="search-result"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => chooseSearchResult(person)}
-                      >
-                        <strong>{personLabel(person)}</strong>
-                        <span>{personContextLabel(data, person)}</span>
-                      </button>
-                    ))}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-          <label className="grouping-control" title="Vue de l’arbre">
-            <span>Vue</span>
-            <select
-              value={viewMode}
-              onChange={(event) => {
-                setViewMode(event.target.value as TreeViewMode);
-                setFitSignal((value) => value + 1);
-              }}
-              aria-label="Mode de vue de l’arbre"
-            >
-              {VIEW_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {VIEW_LABELS[mode]}
-                </option>
-              ))}
-            </select>
-          </label>
-          {viewMode === 'classic' && (
-          <label className="grouping-control" title={GROUPING_HINTS[grouping]}>
-            <span>Proximité</span>
-            <select
-              value={grouping}
-              onChange={(event) =>
-                setGrouping(event.target.value as GroupingMode)
-              }
-              aria-label="Règle de rapprochement des fratries et des couples"
-            >
-              {GROUPING_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {GROUPING_LABELS[mode]}
-                </option>
-              ))}
-            </select>
-          </label>
-          )}
-          {settings.meId && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={recenterOnMe}
-            >
-              Me recentrer
-            </button>
-          )}
-          {supabaseConfigured && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setCloudGateOpen(true)}
-              title={cloudUser ? `Connecté : ${cloudUser}` : 'Comptes et arbre partagé'}
-            >
-              {cloudFamilyId ? '☁ En ligne' : 'Passer au cloud'}
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => openRelationship()}
-          >
-            Lien de parenté
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setSettingsOpen(true)}
-          >
-            Réglages
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={handleOpenBackups}
-          >
-            Sauvegardes
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setDirectoryOpen(true)}
-          >
-            Lieux &amp; sources
-          </button>
-          <span className="stats-badge">
-            {data.persons.length} personne{data.persons.length > 1 ? 's' : ''} ·{' '}
-            {data.unions.length} union{data.unions.length > 1 ? 's' : ''}
-          </span>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setMediaOpen(true)}
-          >
-            Photos
-            {data.media.length > 0 && <span className="tab-count">{data.media.length}</span>}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => handleAdd('first')}
-          >
-            Nouvelle personne
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Importer
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => void handleExport()}
-            disabled={data.persons.length === 0}
-          >
-            Exporter
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => downloadGedcom(data)}
-            disabled={data.persons.length === 0}
-            title="Exporter au format GEDCOM 5.5.1"
-          >
-            GEDCOM
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setFitSignal((value) => value + 1)}
-          >
-            Ajuster
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => window.print()}
-          >
-            Imprimer
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost-danger"
-            onClick={handleReset}
-            disabled={data.persons.length === 0 && data.unions.length === 0}
-          >
-            Réinitialiser
-          </button>
-        </div>
-      </header>
-
+      <TopBar
+        familyName={cloudFamilyName}
+        userEmail={cloudUser}
+        personCount={data.persons.length}
+        unionCount={data.unions.length}
+        mediaCount={data.media.length}
+        search={search}
+        onSearchChange={setSearch}
+        searchResults={searchResults}
+        personContext={(person) => personContextLabel(data, person)}
+        onChooseSearchResult={chooseSearchResult}
+        searchInputRef={searchInputRef}
+        viewMode={viewMode}
+        onViewModeChange={(mode) => {
+          setViewMode(mode);
+          setFitSignal((value) => value + 1);
+        }}
+        grouping={grouping}
+        onGroupingChange={setGrouping}
+        canRecenter={Boolean(settings.meId)}
+        onRecenter={recenterOnMe}
+        onAddPerson={() => handleAdd('first')}
+        onOpenMedia={() => setMediaOpen(true)}
+        onOpenRelationship={() => openRelationship()}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenDirectory={() => setDirectoryOpen(true)}
+        onImport={() => fileInputRef.current?.click()}
+        onExport={() => void handleExport()}
+        onGedcom={() => downloadGedcom(data)}
+        onFit={() => setFitSignal((value) => value + 1)}
+        onPrint={() => window.print()}
+        onReset={() => void handleReset()}
+        onOpenCloud={() => setCloudGateOpen(true)}
+        onSignOut={() => void handleSignOut()}
+      />
       <main className="workspace">
         <TreeCanvas
           layout={layout}
@@ -1275,14 +1179,7 @@ export default function App() {
         </div>
       )}
 
-      {cloudGateOpen && data && (
-        <CloudGate
-          localData={data}
-          onReady={enterCloud}
-          onCancel={() => setCloudGateOpen(false)}
-          onUserChange={(user) => setProfileId(user?.id ?? LOCAL_PROFILE_ID)}
-        />
-      )}
+      {cloudGate}
 
       {relationOpen && (
         <RelationshipDialog
@@ -1302,15 +1199,6 @@ export default function App() {
             setSettingsOpen(false);
             setBranchStartId(null);
           }}
-        />
-      )}
-
-      {backupOpen && (
-        <BackupDialog
-          backups={backups}
-          onRestore={handleRestoreBackup}
-          onExport={() => void handleExport()}
-          onClose={() => setBackupOpen(false)}
         />
       )}
 
